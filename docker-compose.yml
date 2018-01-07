@@ -1,0 +1,31 @@
+version: '3'
+
+services:
+  # General proxy for the app
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+  # Main umbrella application
+  budget:
+    build: .
+    command: mix phoenix.server
+    environment:
+      - MIX_ENV=dev
+      - PORT=4000
+      - VIRTUAL_HOST=budget.localhost
+      - DB_USER_USERNAME=postgres
+      - DB_USER_PASSWORD=postgres
+      - DB_USER_HOST=db
+    volumes:
+      - .:/app
+
+  # Main database, we can split this up if needed via environment variables
+  db:
+    image: postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
