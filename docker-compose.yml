@@ -10,7 +10,7 @@ services:
       - /var/run/docker.sock:/tmp/docker.sock:ro
 
   # Main umbrella application
-  budget:
+  web:
     build: .
     command: mix phoenix.server
     environment:

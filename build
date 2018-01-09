@@ -1,0 +1,5 @@
+#!/bin/bash
+
+docker-compose rm -fsv web
+docker-compose build web
+./run sh -c "mix deps.get && mix deps.compile && mix compile && mix ecto.create && mix ecto.migrate"

@@ -20,9 +20,13 @@ defmodule User do
       from(
         u in User,
         where: u.email == ^email,
-        select: u.*
+        select: { u.email, u.id }
       )
     Repo.one!(query)
+  end
+
+  def all() do
+    Repo.all(User)
   end
 
   @doc """

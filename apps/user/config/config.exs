@@ -11,6 +11,8 @@ config :user, User.Repo,
   password: System.get_env("DB_USER_PASSWORD") || "${DB_USER_PASSWORD}",
   hostname: System.get_env("DB_USER_HOST") || "${DB_USER_HOST}"
 
+config :bcrypt_elixir, :log_rounds, 4
+
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",

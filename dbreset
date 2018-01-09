@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./run sh -c "mix ecto.drop && mix ecto.create && mix ecto.migrate"
