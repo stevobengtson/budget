@@ -9,6 +9,7 @@ defmodule User.User do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
+  @derive {Phoenix.Param, key: :id}
 
   schema "users" do
     field(:email, :string)
@@ -18,13 +19,28 @@ defmodule User.User do
     timestamps()
   end
 
-  @required_fields ~w(email password)
-  @optional_fields ~w()
-
   def changeset(user, params \\ :empty) do
     user
-    |> cast(params, @required_fields, @optional_fields)
+    |> cast(params, ~w(email), [])
     |> unique_constraint(:email)
-    |> put_change(:password_hash, hashpwsalt(params[:password]))
+    |> validate_length(:email, min: 1, max: 255)
+    |> validate_format(:email, ~r/@/)
+  end
+
+  def registration_changeset(user, params \\ :empty) do
+    user
+    |> changeset(params)
+    |> cast(params, ~w(password), [])
+    |> validate_length(:password, min: 6)
+    |> put_password_hash
+  end
+
+  defp put_password_hash(changeset) do
+    case changeset do
+      %Ecto.Changeset{valid?: true, changes: %{password: pass}} ->
+        put_change(changeset, :password_hash, hashpwsalt(pass))
+      _ ->
+        changeset
+    end
   end
 end

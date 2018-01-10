@@ -8,12 +8,6 @@ defmodule User do
 
   @doc """
   Find a user by email address.
-
-  ## Examples
-
-      iex> User.findByEmail('test@example.com')
-      nil
-
   """
   def findByEmail(email) do
     query =
@@ -31,15 +25,9 @@ defmodule User do
 
   @doc """
   Create a new user.
-
-  ## Examples
-
-      iex> User.create('test@example.com', 'testPass1234', 'testPass1234')
-      {:ok, User}
-
   """
-  def create(email, password, password_confirmation) do
-    changeset = User.changeset(%User{}, %{email: email, password: password, password_confirmation: password_confirmation})
-    Repo.insert(changeset)
+  def create(email, password) do
+    changeset = User.registration_changeset(%User{}, %{email: email, password: password})
+    Repo.insert!(changeset)
   end
 end

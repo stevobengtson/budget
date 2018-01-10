@@ -13,6 +13,7 @@ services:
   web:
     build: .
     command: mix phoenix.server
+    restart: always
     environment:
       - MIX_ENV=dev
       - PORT=4000
@@ -26,6 +27,9 @@ services:
   # Main database, we can split this up if needed via environment variables
   db:
     image: postgres
+    restart: always
+    ports:
+      - "5433:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres

@@ -3,7 +3,7 @@ defmodule UserTest do
   doctest User
 
   test "Creates a user" do
-    case User.create('test_created@example.com', 'testPass1234', 'testPass1234') do
+    case User.create('test_created@example.com', 'testPass1234') do
       {:ok, record}       -> assert true
       {:error, changeset} -> assert false
     end

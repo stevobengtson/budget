@@ -4,7 +4,7 @@ defmodule User.Repo.Migrations.CreateUser do
   def change do
     create table(:users, primary_key: false) do
       add(:id, :uuid, primary_key: true)
-      add(:email, :string, unique: true)
+      add(:email, :string, unique: true, null: false)
       add(:password_hash, :string, null: false)
 
       timestamps()
