@@ -4,8 +4,8 @@ defmodule UserTest do
 
   test "Creates a user" do
     case User.create('test_created@example.com', 'testPass1234') do
-      {:ok, record}       -> assert true
-      {:error, changeset} -> assert false
+      {:ok, _}    -> assert true
+      {:error, _} -> assert false
     end
   end
 end
