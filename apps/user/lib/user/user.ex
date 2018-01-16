@@ -21,9 +21,10 @@ defmodule User.User do
 
   def changeset(user, params \\ :empty) do
     user
-    |> cast(params, ~w(email), [])
+    |> cast(params, ~w(email), required: true)
+    |> validate_required(:email)
     |> unique_constraint(:email)
-    |> validate_length(:email, min: 1, max: 255)
+    |> validate_length(:email, min: 5)
     |> validate_format(:email, ~r/@/)
   end
 
@@ -31,6 +32,7 @@ defmodule User.User do
     user
     |> changeset(params)
     |> cast(params, ~w(password), [])
+    |> validate_required(:password)
     |> validate_length(:password, min: 6)
     |> put_password_hash
   end
