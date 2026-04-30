@@ -1,4 +1,4 @@
-BINARY  := budget
+BINARY  := ./bin/budget
 CMD     := ./cmd/budget
 DB_PATH := ./data/budget.db
 MIGRATIONS := ./internal/db/migrations
