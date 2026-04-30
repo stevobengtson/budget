@@ -15,7 +15,7 @@ import (
 func TestTransactionsPagination(t *testing.T) {
 	zone.NewGlobal()
 	conn, _ := db.Open(":memory:")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()
 	chk, _ := s.CreateAccount(ctx, store.Account{Name: "Chk", Type: store.TypeChecking, StartingBalanceCents: 10_000_000})

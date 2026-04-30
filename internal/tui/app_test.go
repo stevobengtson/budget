@@ -17,7 +17,7 @@ func TestRootViewRenders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	m := New(store.New(conn))
 	mAny, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -40,7 +40,7 @@ func TestHelpPopupToggle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	m := New(store.New(conn))
 	mAny, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = mAny.(Model)
@@ -66,7 +66,7 @@ func TestRowClickMovesCursor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := t.Context()
 	if _, err := s.CreateAccount(ctx, store.Account{Name: "A", Type: store.TypeChecking}); err != nil {

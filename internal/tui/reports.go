@@ -84,8 +84,6 @@ func newReportsModel(s *store.Store) reportsModel {
 	return reportsModel{store: s, mode: rptSpending, period: rptThisMonth, spendPager: pg}
 }
 
-func (m reportsModel) modal() bool { return false }
-
 func (m *reportsModel) Refresh() tea.Cmd {
 	ctx := context.Background()
 	now := time.Now()
@@ -192,9 +190,6 @@ var (
 	rptBlockIncome = lipgloss.NewStyle().
 			Foreground(colorOK).
 			Background(colorOK)
-	rptBlockNet = lipgloss.NewStyle().
-			Foreground(colorHeading).
-			Background(colorHeading)
 	rptAxis  = lipgloss.NewStyle().Foreground(colorMuted)
 	rptLabel = lipgloss.NewStyle().Foreground(colorAccent)
 )
@@ -282,17 +277,17 @@ func (m reportsModel) viewSpending() string {
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("  %s %s   %s\n",
+	fmt.Fprintf(&b, "  %s %s   %s\n",
 		styleHeader.Render("Total"),
 		styleNeg.Render(money.Format(total)),
-		styleDim.Render(fmt.Sprintf("(%d categories)", len(m.spend)))))
+		styleDim.Render(fmt.Sprintf("(%d categories)", len(m.spend))))
 
 	if m.spendPager.TotalPages > 1 {
 		b.WriteString("\n")
-		b.WriteString(fmt.Sprintf("  %s %s · rows %d-%d of %d · pgup/pgdn\n",
+		fmt.Fprintf(&b, "  %s %s · rows %d-%d of %d · pgup/pgdn\n",
 			styleDim.Render("page"),
 			m.spendPager.View(),
-			start+1, end, len(m.spend)))
+			start+1, end, len(m.spend))
 	}
 
 	b.WriteString("\n")
@@ -345,11 +340,11 @@ func (m reportsModel) viewCashflow() string {
 	b.WriteString("\n\n")
 
 	// Totals + per-month detail
-	b.WriteString(fmt.Sprintf("  %s %s   %s %s   %s %s\n",
+	fmt.Fprintf(&b, "  %s %s   %s %s   %s %s\n",
 		styleDim.Render("Income (12m)"), stylePos.Render(money.Format(totalIn)),
 		styleDim.Render("Expense (12m)"), styleNeg.Render(money.Format(totalOut)),
 		styleDim.Render("Net"), netColored(totalIn-totalOut),
-	))
+	)
 	b.WriteString("\n")
 	b.WriteString("  " + styleHeader.Render(padRight("Month", 10)) +
 		styleHeader.Render(padRight("Income", 14)) +

@@ -680,7 +680,7 @@ func (m txModel) updateConfirm(msg tea.Msg) (txModel, tea.Cmd) {
 			} else {
 				cmd = tea.Batch(cmd, flashOK("Deleted"))
 			}
-			_ = m.Refresh()
+			cmd = tea.Batch(cmd, m.Refresh())
 		}
 		m.mode = txList
 	}

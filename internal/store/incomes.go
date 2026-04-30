@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 )
@@ -48,7 +47,7 @@ func (s *Store) ListIncomes(ctx context.Context, month string) ([]Income, error)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []Income
 	for rows.Next() {
 		var i Income
@@ -62,11 +61,8 @@ func (s *Store) ListIncomes(ctx context.Context, month string) ([]Income, error)
 
 // TotalIncome sums amount_cents for the month.
 func (s *Store) TotalIncome(ctx context.Context, month string) (int64, error) {
-	var total sql.NullInt64
+	var total int64
 	err := s.db.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(amount_cents), 0) FROM incomes WHERE month=?`, month).Scan(&total)
-	if err != nil {
-		return 0, err
-	}
-	return total.Int64, nil
+	return total, err
 }

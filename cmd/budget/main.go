@@ -29,7 +29,7 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	zone.NewGlobal()
 

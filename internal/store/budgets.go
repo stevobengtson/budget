@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -30,8 +32,7 @@ func (s *Store) GetAssigned(ctx context.Context, month string, categoryID int64)
 		`SELECT COALESCE(assigned_cents, 0) FROM budgets WHERE month=? AND category_id=?`,
 		month, categoryID).Scan(&c)
 	if err != nil {
-		// Return 0 if no row.
-		if err.Error() == "sql: no rows in result set" {
+		if errors.Is(err, sql.ErrNoRows) {
 			return 0, nil
 		}
 		return 0, err
@@ -71,20 +72,17 @@ ORDER BY g.sort_order, g.name, c.sort_order, c.name`,
 	if err != nil {
 		return nil, fmt.Errorf("month budget: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []CategoryBudget
 	for rows.Next() {
 		var cb CategoryBudget
-		var goal, _ignore any
-		_ = _ignore
 		var goalCents nullableInt64
 		var due nullTime
 		if err := rows.Scan(&cb.CategoryID, &cb.GroupID, &cb.GroupName, &cb.CategoryName,
 			&cb.IsIncome, &goalCents, &due, &cb.AssignedCents, &cb.SpentCents); err != nil {
 			return nil, err
 		}
-		_ = goal
 		if goalCents.Valid {
 			v := goalCents.Int64
 			cb.GoalCents = &v
@@ -236,7 +234,7 @@ ORDER BY a.name`,
 	if err != nil {
 		return nil, fmt.Errorf("credit activity: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []CreditActivity
 	for rows.Next() {
 		var ca CreditActivity
@@ -330,7 +328,7 @@ func (s *Store) PaymentScheduleForCategory(ctx context.Context, categoryID *int6
 				var assigned int64
 				if err := s.db.QueryRowContext(ctx,
 					`SELECT COALESCE(assigned_cents, 0) FROM budgets WHERE month=? AND category_id=?`,
-					key, *categoryID).Scan(&assigned); err != nil && err.Error() != "sql: no rows in result set" {
+					key, *categoryID).Scan(&assigned); err != nil && !errors.Is(err, sql.ErrNoRows) {
 					return nil, err
 				}
 				if assigned > 0 {

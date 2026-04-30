@@ -16,7 +16,7 @@ import (
 func TestPaydownPicksUpAssignedForFutureMonths(t *testing.T) {
 	zone.NewGlobal()
 	conn, _ := db.Open(":memory:")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()
 
@@ -59,7 +59,7 @@ func TestPaydownPicksUpAssignedForFutureMonths(t *testing.T) {
 func TestPaydownWarnsWhenNoCategoryLinked(t *testing.T) {
 	zone.NewGlobal()
 	conn, _ := db.Open(":memory:")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()
 

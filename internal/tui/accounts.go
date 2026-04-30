@@ -272,7 +272,7 @@ func (m accountsModel) updateConfirm(msg tea.Msg) (accountsModel, tea.Cmd) {
 			} else {
 				cmd = tea.Batch(cmd, flashOK("Archived"))
 			}
-			_ = m.Refresh()
+			cmd = tea.Batch(cmd, m.Refresh())
 		}
 		m.mode = acctList
 	}

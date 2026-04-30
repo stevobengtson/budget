@@ -81,9 +81,7 @@ func (m *categoriesModel) Refresh() tea.Cmd {
 
 	rows := make([]catRow, 0, len(gs)+len(cs))
 	for _, g := range gs {
-		gg := g
 		rows = append(rows, catRow{isGroup: true, groupID: g.ID, groupName: g.Name})
-		_ = gg
 		for i := range cs {
 			if cs[i].GroupID == g.ID {
 				c := cs[i]
@@ -393,7 +391,7 @@ func (m categoriesModel) updateConfirm(msg tea.Msg) (categoriesModel, tea.Cmd) {
 			} else {
 				cmd = tea.Batch(cmd, flashOK("Done"))
 			}
-			_ = m.Refresh()
+			cmd = tea.Batch(cmd, m.Refresh())
 		}
 		m.mode = catList
 	}

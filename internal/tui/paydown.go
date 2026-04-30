@@ -462,10 +462,10 @@ func (m paydownModel) viewList() string {
 	}
 
 	if m.pager.TotalPages > 1 {
-		b.WriteString(fmt.Sprintf("  %s page %s\n",
+		fmt.Fprintf(&b, "  %s page %s\n",
 			styleDim.Render("◀ , / pgup · . / pgdown ▶"),
 			m.pager.View(),
-		))
+		)
 	}
 	return b.String()
 }

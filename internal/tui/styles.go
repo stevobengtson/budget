@@ -24,16 +24,6 @@ var (
 	colorHeading = lipgloss.Color("#89b4fa") // Blue
 	colorOnDark  = lipgloss.Color("#1e1e2e") // Base (used as fg on accent bg)
 	colorBgPanel = lipgloss.Color("#313244") // Surface0
-	// Extra Mocha hues, available for future use.
-	colorPink     = lipgloss.Color("#f5c2e7")
-	colorSapphire = lipgloss.Color("#74c7ec")
-	colorTeal     = lipgloss.Color("#94e2d5")
-	colorYellow   = lipgloss.Color("#f9e2af")
-	colorText     = lipgloss.Color("#cdd6f4")
-	colorSubtext  = lipgloss.Color("#bac2de")
-	colorBase     = lipgloss.Color("#1e1e2e")
-	colorMantle   = lipgloss.Color("#181825")
-	colorCrust    = lipgloss.Color("#11111b")
 
 	activeTabBorder = lipgloss.Border{
 		Top: "─", Bottom: " ", Left: "│", Right: "│",

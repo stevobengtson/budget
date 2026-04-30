@@ -55,7 +55,7 @@ func (s *Store) ListGroups(ctx context.Context) ([]CategoryGroup, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []CategoryGroup
 	for rows.Next() {
 		var g CategoryGroup
@@ -137,7 +137,7 @@ func (s *Store) ListCategories(ctx context.Context, includeArchived bool) ([]Cat
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []Category
 	for rows.Next() {
 		var c Category

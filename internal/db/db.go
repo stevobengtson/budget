@@ -39,7 +39,7 @@ func Open(path string) (*sql.DB, error) {
 	}
 
 	if err := migrate(conn); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, err
 	}
 	return conn, nil

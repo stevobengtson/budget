@@ -33,7 +33,7 @@ ORDER BY spent DESC`,
 	if err != nil {
 		return nil, fmt.Errorf("spending by category: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []CategorySpend
 	for rows.Next() {

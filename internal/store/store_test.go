@@ -14,7 +14,7 @@ func newTestStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { _ = conn.Close() })
 	return New(conn)
 }
 
@@ -481,14 +481,11 @@ func TestListTransactionsMonthFilter(t *testing.T) {
 	mkTx(time.Date(2026, 4, 28, 0, 0, 0, 0, time.UTC), 3_000)
 	mkTx(time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), 4_000)
 
-	apr := []Transaction{}
 	rows, err := s.ListTransactions(ctx, TxFilter{Month: "2026-04"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, r := range rows {
-		apr = append(apr, r)
-	}
+	apr := append([]Transaction{}, rows...)
 	if len(apr) != 2 {
 		t.Fatalf("April rows = %d, want 2", len(apr))
 	}

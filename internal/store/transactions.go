@@ -82,7 +82,7 @@ func (s *Store) DeleteTransaction(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	var pair sql.NullInt64
 	if err := tx.QueryRowContext(ctx, `SELECT transfer_pair_id FROM transactions WHERE id=?`, id).Scan(&pair); err != nil {
@@ -117,7 +117,7 @@ func (s *Store) CreateTransfer(ctx context.Context, in TransferInput) (int64, in
 	if err != nil {
 		return 0, 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	dateStr := in.Date.Format("2006-01-02")
 
@@ -183,7 +183,7 @@ func (s *Store) ListTransactions(ctx context.Context, f TxFilter) ([]Transaction
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []Transaction
 	for rows.Next() {
