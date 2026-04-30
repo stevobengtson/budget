@@ -3,7 +3,7 @@ CMD     := ./cmd/budget
 DB_PATH := ./data/budget.db
 MIGRATIONS := ./internal/db/migrations
 
-.PHONY: build run test clean setup db-path db-delete db-migrate db-reset db-status
+.PHONY: build run test clean setup seed db-path db-delete db-migrate db-reset db-status
 
 setup:
 	@command -v go >/dev/null 2>&1 || { echo "ERROR: go not found — install from https://go.dev/dl/"; exit 1; }
@@ -33,6 +33,9 @@ db-migrate:
 	goose -dir $(MIGRATIONS) sqlite3 $(DB_PATH) up
 
 db-reset: db-delete db-migrate
+
+seed: db-migrate
+	go run ./cmd/seed --db $(DB_PATH)
 
 db-status:
 	goose -dir $(MIGRATIONS) sqlite3 $(DB_PATH) status

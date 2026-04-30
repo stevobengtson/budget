@@ -1,124 +1,192 @@
-# Budget
+<div align="center">
 
-A small local terminal budget app: accounts, transactions, monthly envelope budgets, credit-card debt tracking, and sinking-fund savings. SQLite-backed, single user, no auth.
+# budget
 
-## Run
+**A fast, keyboard-driven personal finance app for your terminal.**
+
+Track accounts, assign money to categories each month, project debt paydown, and see where your money goes — all in a local SQLite file with no accounts, no sync, and no subscription.
+
+![Budget TUI screenshot](./asset/demo.png)
+
+</div>
+
+---
+
+## Features
+
+- **Envelope budgeting** — assign money to categories each month; available balance carries forward (positive only)
+- **Multi-account** — checking, savings, cash, credit cards, and loans in one view
+- **Transfers** — move money between accounts; tag the from-leg with a budget category (e.g. paying a credit card)
+- **Debt paydown projector** — real APR daily-compound amortization; links to your budget so actual payments replace forecasts automatically
+- **Reports** — spending by category (horizontal bar chart) and 12-month cashflow (income vs. expense)
+- **Sinking-fund goals** — set a target amount + due date; the app tells you the monthly contribution needed
+- **Income tracking** — estimate income for each month; see estimated vs. actual side-by-side on the Budget tab
+- **Fully local** — one SQLite file, no network access, no accounts, no telemetry
+
+---
+
+## Quick start
+
+**Requirements:** [Go 1.21+](https://go.dev/dl/)
 
 ```bash
-go run ./cmd/budget               # opens ~/.config/budget/budget.db
-go run ./cmd/budget --db ./b.db   # custom DB path
+git clone https://github.com/sbengtson/budget
+cd budget
+make setup    # download deps + install goose
+make seed     # load 3 months of realistic demo data
+make run      # launch the app
 ```
 
-Build a binary:
+To start fresh with your own data:
 
 ```bash
-go build -o budget ./cmd/budget
-./budget
+make db-reset  # wipe the database
+make run       # auto-migrates on first open
 ```
 
-## Tests
+---
+
+## Usage
 
 ```bash
-go test ./...
+make run                           # open ./data/budget.db
+go run ./cmd/budget --db ~/my.db   # custom database path
 ```
+
+The database is created and all migrations are applied automatically on first run.
+
+---
+
+## Development
+
+```bash
+make setup      # install Go module deps + goose CLI
+make build      # compile binary to ./bin/budget
+make test       # run the full test suite
+make seed       # load demo data into ./data/budget.db
+make clean      # remove the compiled binary
+```
+
+Database commands:
+
+```bash
+make db-path    # print the configured database path
+make db-migrate # run pending migrations (goose up)
+make db-reset   # delete the database and re-run migrations
+make db-status  # show goose migration status
+make db-delete  # delete the database file (and WAL/SHM)
+```
+
+---
 
 ## Keymap
 
-Global
+**Global**
 
-| key            | action            |
-|----------------|-------------------|
-| `1`–`7` / click   | switch tabs (mouse on the tab bar works too) |
-| `shift+h` / `shift+l` | prev / next tab                          |
-| `q` / `ctrl+c` | quit              |
-| `esc`          | cancel form/modal |
+| Key | Action |
+|---|---|
+| `1`–`6` / click | switch tabs |
+| `shift+h` / `shift+l` | prev / next tab |
+| `q` / `ctrl+c` | quit |
+| `?` | show / hide help |
+| `esc` | cancel form or modal |
 
-List views (Accounts, Categories, Transactions)
+**List views** (Accounts, Categories, Transactions)
 
-| key   | action                          |
-|-------|---------------------------------|
-| `↑↓`  | move cursor                     |
-| `n`   | new                             |
-| enter | edit selected                   |
-| `d`   | archive / delete (with confirm) |
-| `c`   | (Transactions) toggle cleared   |
-| `f` / `F` | (Transactions) filter by account / clear filter |
-| `<` / `>` | (Transactions) prev / next month filter |
-| `t` / `M` | (Transactions) jump to current month / clear month filter |
-| `pgup` / `pgdn` (or `home` / `end`) | (Transactions) page through long lists |
+| Key | Action |
+|---|---|
+| `↑` `↓` / `j` `k` | move cursor |
+| `n` | new |
+| `enter` | edit selected |
+| `d` | archive / delete (with confirm) |
 
-Budget tab
+**Transactions**
 
-| key   | action                                  |
-|-------|-----------------------------------------|
-| `↑↓`  | move cursor                             |
-| `</>` | prev / next month                       |
-| `t`   | jump to current month                   |
-| `e`   | edit assigned amount                    |
-| `g`   | set goal + due date                     |
-| `i`   | manage income for the month (sub-panel) |
+| Key | Action |
+|---|---|
+| `c` | toggle cleared on selected |
+| `f` / `F` | filter by account / clear filter |
+| `<` / `>` | prev / next month filter |
+| `t` / `M` | jump to current month / clear month filter |
+| `pgup` / `pgdn` | page through long lists |
 
-Income panel: `n` new · enter edit · `d` delete · esc back. Multiple income items per month (e.g. Work, Government, Contract). Banner on the budget view always shows `Income · Budgeted · Remain`.
+**Budget tab**
 
-Paydown tab
+| Key | Action |
+|---|---|
+| `↑` `↓` | move cursor |
+| `enter` | edit assigned amount for selected category |
+| `g` | set goal + due date |
+| `i` | open income panel for the month |
+| `<` / `>` | prev / next month |
+| `t` | jump to current month |
 
-| key   | action                                       |
-|-------|----------------------------------------------|
-| `↑↓`  | select account section (also click)          |
-| `a`   | add an account (must have APR set)           |
-| `e`   | edit monthly payment for selected account    |
-| `r` / `d` | remove selected account from paydown     |
-| `+` / `-` | extend / shrink projection by 12 months  |
-| `,` / `.` (or `pgup` / `pgdn`) | page through projection rows (12 / page) |
-| `home` / `end` | jump to first / last page           |
+Income panel: `n` new · `enter` edit · `d` delete · `esc` back.
+Multiple income lines per month (e.g. Salary, Freelance). The Budget banner shows `Estimated · Actual · Budgeted · Remain · Est−Act`.
 
-Each included account projects monthly amortization at `APR / 365` daily compounding for the days in each calendar month. Starting balance comes from the account's current owed amount (negative running balance for `credit`/`loan` accounts). Banner shows total monthly outflow, total interest, and the longest payoff horizon. If a payment is below the first month's interest the section flags `payment ≤ interest, debt grows`.
+**Paydown tab**
 
-**Variable monthly payments.** Each paydown account can be linked to a budget category (e.g. "Visa Payment"). For every projected month the engine picks the payment in this order:
+| Key | Action |
+|---|---|
+| `↑` `↓` | select account |
+| `a` | add account to plan (must have APR set) |
+| `e` | edit monthly payment for selected account |
+| `c` | link a budget category to selected account |
+| `r` / `d` | remove selected account from plan |
+| `+` / `-` | extend / shrink projection by 12 months |
+| `,` / `.` | page through projection rows |
 
-1. **spent** — actual outflow recorded against that category in that month, if > 0
-2. **assigned** — the assigned budget amount for that month, if > 0
-3. **default** — the account's `monthly_payment_cents` fallback
+Each included account projects monthly amortization at `APR / 365` daily compounding. If a payment is below the first month's interest the row flags `payment ≤ interest, debt grows`.
 
-The `Source` column on each row labels which datum was used (`✓ spent`, `→ assigned`, `· default`). To raise May's Visa payment to $1,000, just assign $1,000 to `Visa Payment` for May on the Budget tab — paydown picks it up immediately. Once the payment lands as a real transaction it switches from `assigned` to `spent`.
+**Variable payments:** for every projected month the engine picks the payment in this order:
+1. **spent** — actual outflow against the linked category that month
+2. **assigned** — the budgeted amount for that month
+3. **default** — the account's fixed monthly payment fallback
 
-Reports tab
+The `Source` column labels each row (`✓ spent`, `→ assigned`, `· default`).
 
-| key       | action                                          |
-|-----------|-------------------------------------------------|
-| `s`       | spending by category (horizontal bar chart)     |
-| `c`       | monthly cashflow (12 months, income vs expense) |
-| `[` / `]` | prev / next period for spending (month / 30d / 90d / YTD) |
-| `r`       | refresh                                         |
+**Reports tab**
 
-Charts render via [ntcharts](https://github.com/NimbleMarkets/ntcharts) `barchart`. Numbers shown beside the chart for precision. Cashflow uses actual transaction inflow when present; falls back to configured incomes for the month otherwise.
+| Key | Action |
+|---|---|
+| `s` | spending by category |
+| `c` | monthly cashflow (12 months) |
+| `[` / `]` | prev / next period (this month / 30d / 90d / YTD) |
+| `pgup` / `pgdn` | page through spending categories |
+| `r` | refresh |
 
-In forms, `tab`/`↑↓` moves between fields, `enter` advances or saves on the last field, and `space` opens a picker on Type/Account/Category fields. In the transaction form, `space` on the **Date** field opens the [bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) calendar — `hjkl`/arrows nav days, `tab` cycles month/year/calendar focus, `enter` commits, `esc` cancels.
+**Forms**
+
+`tab` / `↑↓` moves between fields; `enter` advances or saves on the last field; `space` opens a picker on Type / Account / Category fields. On the **Date** field in the transaction form, `space` opens a calendar picker — `hjkl` / arrows navigate days, `tab` cycles month → year → day focus, `enter` commits, `esc` cancels.
+
+---
 
 ## Concepts
 
-- **Accounts**: `checking`, `savings`, `cash`, `credit`, `loan`. Credit cards have negative balance when you owe (purchases = outflow). Pay a card with a transfer from checking → CC.
-- **Categories** are grouped (`Monthly`, `Annual`, etc.) and can carry a sinking-fund goal (`goal_cents` + `goal_due_date`).
-- **Budget** is per-month: assign a dollar amount per category. `Available = carryover (≥ 0) + assigned − spent`. Sinking-fund categories show the monthly contribution required to hit the goal.
-- **Amounts** are stored as integer cents. The TUI accepts `1234.56`, `$1,234.56`, `-50`, etc.
-- **Liability payments**: a transfer can carry a category. The category attaches to the **from-leg** (the side that represents the spending event) so the budget envelope reflects the payment. Standard pattern for paying down a credit card or line of credit: in the transaction form set both **Category** = `CC Payment` and **Transfer to** = `Visa`. The to-leg stays uncategorized so inflow doesn't double-count. Interest charges that the bank books directly against the card stay as a plain non-transfer outflow on the card with no category.
-- **Liability starting balance**: enter the amount **owed** as a positive number (e.g. `5000` for a $5,000 credit card balance). The form auto-negates it for `credit` and `loan` types so ledger math stays consistent (paying down a card increases the stored balance toward zero).
-- **Income category**: a system-managed `Income` category is seeded automatically. Categorize paycheck inflows here. Cannot be edited or deleted. The Budget tab shows two values — `Estimated` (manual forecasts via `i`) and `Actual` (sum of real inflows categorized as Income for the month). `Remain` = Actual − Budgeted.
+**Accounts** — `checking`, `savings`, `cash`, `credit`, `loan`. Credit and loan accounts carry a negative running balance when in debt; purchases are outflows and payments are inflows (via transfer). Net worth = assets + liabilities.
 
-## UI bits
+**Categories** are grouped and can carry a sinking-fund goal (`goal amount` + `due date`). The Budget tab shows how much to contribute each month to reach the goal on time.
 
-- **Tabs** are real Lipgloss tabs (active tab merges into the body below).
-- **Mouse** is wired via [bubblezone](https://github.com/lrstanley/bubblezone). Click a tab to switch; click any row in Accounts / Transactions / Categories / Budget / Income panel to select it (then `enter` to edit, `d` to delete, etc.). Mouse cell motion is enabled (`tea.WithMouseCellMotion`).
-- **Status bar** at the bottom shows the active mode, a context-specific keymap, and the latest flash on the right. A `bubbles/spinner` ticks for ~700 ms after each save / delete to confirm the action.
-- Forms / pickers / confirms all share styled rounded panels.
+**Envelope budgeting** — each month you assign money to categories. Available = `carryover (≥ 0 from prior month) + assigned − spent`. Unspent money rolls forward; overspending does not.
+
+**Transfers** — moving money between accounts records two linked transactions. A category can be attached to the from-leg (e.g. "CC Payment") so the spending shows in your budget without double-counting the inflow.
+
+**Liability starting balance** — enter the amount owed as a positive number (e.g. `2500` for a $2,500 credit card balance). The form automatically stores it as negative so ledger math stays consistent.
+
+**Income category** — a system-managed `Income` category is seeded automatically on first run. Categorize paycheck inflows here. The Budget tab shows `Estimated` (manual forecasts entered via `i`) vs. `Actual` (real inflows categorised as Income).
+
+**Amounts** — stored as integer cents. The input parser accepts `1234.56`, `$1,234.56`, `1234`, `-50`, `.5`, etc.
+
+---
 
 ## Layout
 
 ```
-cmd/budget/main.go         entrypoint
-internal/db                SQLite open + goose migrations (embedded)
-internal/money             cents <-> human string
-internal/store             persistence layer (one file per aggregate)
-internal/paydown           debt amortization projection (pure Go, no DB)
-internal/tui               Bubble Tea screens
+cmd/budget/main.go          entrypoint, flag parsing
+cmd/seed/main.go            demo data seeder
+internal/db/                SQLite open + embedded goose migrations
+internal/money/             cents ↔ human string parsing and formatting
+internal/store/             persistence layer (one file per aggregate)
+internal/paydown/           debt amortization projection (pure Go, no DB)
+internal/tui/               Bubble Tea screens and components
 ```
