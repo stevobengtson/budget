@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            archive: tar
+          - goos: linux
+            goarch: arm64
+            archive: tar
+          - goos: darwin
+            goarch: amd64
+            archive: tar
+          - goos: darwin
+            goarch: arm64
+            archive: tar
+          - goos: windows
+            goarch: amd64
+            archive: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          EXT=""
+          if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
+          go build -trimpath -ldflags="-s -w" -o "budget${EXT}" ./cmd/budget
+
+      - name: Package (tar)
+        if: matrix.archive == 'tar'
+        env:
+          TAG: ${{ github.ref_name }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          NAME="budget-${TAG}-${GOOS}-${GOARCH}"
+          mkdir "$NAME"
+          mv budget "$NAME/"
+          cp README.md LICENSE "$NAME/" 2>/dev/null || true
+          tar czf "${NAME}.tar.gz" "$NAME"
+          echo "ASSET=${NAME}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package (zip)
+        if: matrix.archive == 'zip'
+        env:
+          TAG: ${{ github.ref_name }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          NAME="budget-${TAG}-${GOOS}-${GOARCH}"
+          mkdir "$NAME"
+          mv budget.exe "$NAME/"
+          cp README.md LICENSE "$NAME/" 2>/dev/null || true
+          zip -r "${NAME}.zip" "$NAME"
+          echo "ASSET=${NAME}.zip" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: budget-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  release:
+    name: Create release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
