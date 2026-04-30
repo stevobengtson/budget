@@ -1,0 +1,621 @@
+package tui
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	zone "github.com/lrstanley/bubblezone"
+	"github.com/sbengtson/budget/internal/money"
+	"github.com/sbengtson/budget/internal/store"
+)
+
+type budMode int
+
+const (
+	budList budMode = iota
+	budAssignForm
+	budGoalForm
+	budIncomeList
+	budIncomeForm
+	budIncomeConfirm
+)
+
+type budgetModel struct {
+	store  *store.Store
+	month  string // YYYY-MM
+	rows   []store.CategoryBudget
+	cursor int
+	mode   budMode
+	form   form
+
+	incomes        []store.Income
+	incomeTotal    int64
+	actualIncome   int64
+	incomeCursor   int
+	editingIncome  *store.Income
+	incomeConfirm  confirmModel
+
+	creditActivity []store.CreditActivity
+}
+
+func newBudgetModel(s *store.Store) budgetModel {
+	return budgetModel{store: s, month: store.MonthKey(time.Now())}
+}
+
+// formatMonth turns "2006-01" into "Jan 2006". Falls back to input on parse fail.
+func formatMonth(m string) string {
+	t, err := time.Parse("2006-01", m)
+	if err != nil {
+		return m
+	}
+	return t.Format("Jan 2006")
+}
+
+func (m budgetModel) modal() bool {
+	return m.mode != budList
+}
+
+func (m *budgetModel) HandleMouse(msg tea.MouseMsg) tea.Cmd {
+	if msg.Action != tea.MouseActionRelease || msg.Button != tea.MouseButtonLeft {
+		return nil
+	}
+	switch m.mode {
+	case budList:
+		for i := range m.rows {
+			if zone.Get("bud-row-" + strconv.Itoa(i)).InBounds(msg) {
+				m.cursor = i
+				return nil
+			}
+		}
+	case budIncomeList:
+		for i := range m.incomes {
+			if zone.Get("inc-row-" + strconv.Itoa(i)).InBounds(msg) {
+				m.incomeCursor = i
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
+func (m budgetModel) Init() tea.Cmd { return m.Refresh() }
+
+func (m *budgetModel) Refresh() tea.Cmd {
+	ctx := context.Background()
+	rows, err := m.store.MonthBudget(ctx, m.month)
+	if err != nil {
+		return flashFail("budget: " + err.Error())
+	}
+	// Hide the system-managed Income category from the list — its data
+	// already surfaces in the actual-income banner above.
+	filtered := rows[:0]
+	for _, r := range rows {
+		if !r.IsIncome {
+			filtered = append(filtered, r)
+		}
+	}
+	m.rows = filtered
+	if m.cursor >= len(m.rows) {
+		m.cursor = max0(len(m.rows) - 1)
+	}
+
+	incs, err := m.store.ListIncomes(ctx, m.month)
+	if err != nil {
+		return flashFail("incomes: " + err.Error())
+	}
+	m.incomes = incs
+	if m.incomeCursor >= len(m.incomes) {
+		m.incomeCursor = max0(len(m.incomes) - 1)
+	}
+	total, err := m.store.TotalIncome(ctx, m.month)
+	if err != nil {
+		return flashFail("income total: " + err.Error())
+	}
+	m.incomeTotal = total
+
+	actual, err := m.store.ActualIncomeForMonth(ctx, m.month)
+	if err != nil {
+		return flashFail("actual income: " + err.Error())
+	}
+	m.actualIncome = actual
+
+	cc, err := m.store.CreditCardActivityForMonth(ctx, m.month)
+	if err != nil {
+		return flashFail("credit activity: " + err.Error())
+	}
+	m.creditActivity = cc
+	return nil
+}
+
+// signedColored renders a money value with green for positive, red for
+// negative, and dim for zero.
+func signedColored(cents int64) string {
+	s := money.Format(cents)
+	switch {
+	case cents > 0:
+		return stylePos.Render(s)
+	case cents < 0:
+		return styleNeg.Render(s)
+	}
+	return styleDim.Render(s)
+}
+
+func (m budgetModel) totalAssigned() int64 {
+	var t int64
+	for _, r := range m.rows {
+		t += r.AssignedCents
+	}
+	return t
+}
+
+func (m budgetModel) Update(msg tea.Msg) (budgetModel, tea.Cmd) {
+	switch m.mode {
+	case budList:
+		return m.updateList(msg)
+	case budAssignForm:
+		return m.updateAssignForm(msg)
+	case budGoalForm:
+		return m.updateGoalForm(msg)
+	case budIncomeList:
+		return m.updateIncomeList(msg)
+	case budIncomeForm:
+		return m.updateIncomeForm(msg)
+	case budIncomeConfirm:
+		return m.updateIncomeConfirm(msg)
+	}
+	return m, nil
+}
+
+func (m budgetModel) updateList(msg tea.Msg) (budgetModel, tea.Cmd) {
+	if km, ok := msg.(tea.KeyMsg); ok {
+		switch km.String() {
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.rows)-1 {
+				m.cursor++
+			}
+		case "<", ",", "h":
+			m.month = store.PrevMonth(m.month)
+			return m, m.Refresh()
+		case ">", ".", "l":
+			t, _ := time.Parse("2006-01", m.month)
+			m.month = t.AddDate(0, 1, 0).Format("2006-01")
+			return m, m.Refresh()
+		case "t":
+			m.month = store.MonthKey(time.Now())
+			return m, m.Refresh()
+		case "enter":
+			if len(m.rows) > 0 {
+				m.startAssignForm()
+			}
+		case "g":
+			if len(m.rows) > 0 {
+				m.startGoalForm()
+			}
+		case "i":
+			m.mode = budIncomeList
+			if m.incomeCursor >= len(m.incomes) {
+				m.incomeCursor = max0(len(m.incomes) - 1)
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m *budgetModel) startAssignForm() {
+	cur := money.Format(m.rows[m.cursor].AssignedCents)
+	m.form = form{fields: []field{newField("Assigned", cur, "dollars; supports negatives")}}
+	m.form.SetValues([]string{cur})
+	m.form.Focus()
+	m.mode = budAssignForm
+}
+
+func (m *budgetModel) startGoalForm() {
+	r := m.rows[m.cursor]
+	goal := ""
+	due := ""
+	if r.GoalCents != nil {
+		goal = money.Format(*r.GoalCents)
+	}
+	if r.GoalDueDate != nil {
+		due = r.GoalDueDate.Format("2006-01-02")
+	}
+	m.form = form{fields: []field{
+		newField("Goal amount", goal, "blank to clear"),
+		newField("Due date", due, "YYYY-MM-DD; blank to clear"),
+	}}
+	m.form.SetValues([]string{goal, due})
+	m.form.Focus()
+	m.mode = budGoalForm
+}
+
+func (m budgetModel) updateAssignForm(msg tea.Msg) (budgetModel, tea.Cmd) {
+	var cmd tea.Cmd
+	m.form, cmd = m.form.Update(msg)
+	if m.form.canceled {
+		m.mode = budList
+		return m, cmd
+	}
+	if m.form.submitted {
+		val := m.form.Values()[0]
+		c := int64(0)
+		if val != "" {
+			parsed, err := money.Parse(val)
+			if err != nil {
+				m.form.err = err.Error()
+				return m, cmd
+			}
+			c = parsed
+		}
+		row := m.rows[m.cursor]
+		if err := m.store.SetAssigned(context.Background(), m.month, row.CategoryID, c); err != nil {
+			m.form.err = err.Error()
+			return m, cmd
+		}
+		m.mode = budList
+		return m, tea.Batch(m.Refresh(), flashOK("Assigned"))
+	}
+	return m, cmd
+}
+
+func (m budgetModel) updateGoalForm(msg tea.Msg) (budgetModel, tea.Cmd) {
+	var cmd tea.Cmd
+	m.form, cmd = m.form.Update(msg)
+	if m.form.canceled {
+		m.mode = budList
+		return m, cmd
+	}
+	if m.form.submitted {
+		vals := m.form.Values()
+		var goalPtr *int64
+		var duePtr *time.Time
+		if vals[0] != "" {
+			c, err := money.Parse(vals[0])
+			if err != nil {
+				m.form.err = "amount: " + err.Error()
+				return m, cmd
+			}
+			goalPtr = &c
+		}
+		if vals[1] != "" {
+			t, err := time.Parse("2006-01-02", vals[1])
+			if err != nil {
+				m.form.err = "date: " + err.Error()
+				return m, cmd
+			}
+			duePtr = &t
+		}
+		row := m.rows[m.cursor]
+		// Re-load full category so we don't drop sort_order/etc.
+		cats, err := m.store.ListCategories(context.Background(), true)
+		if err != nil {
+			m.form.err = err.Error()
+			return m, cmd
+		}
+		for _, c := range cats {
+			if c.ID == row.CategoryID {
+				c.GoalCents = goalPtr
+				c.GoalDueDate = duePtr
+				if err := m.store.UpdateCategory(context.Background(), c); err != nil {
+					m.form.err = err.Error()
+					return m, cmd
+				}
+				break
+			}
+		}
+		m.mode = budList
+		return m, tea.Batch(m.Refresh(), flashOK("Goal updated"))
+	}
+	return m, cmd
+}
+
+func (m budgetModel) View() string {
+	switch m.mode {
+	case budAssignForm:
+		return m.form.View("Assign — " + m.rows[m.cursor].CategoryName + " — " + formatMonth(m.month))
+	case budGoalForm:
+		return m.form.View("Goal — " + m.rows[m.cursor].CategoryName)
+	case budIncomeList:
+		return m.viewIncomeList()
+	case budIncomeForm:
+		title := "New income · " + formatMonth(m.month)
+		if m.editingIncome != nil {
+			title = "Edit income · " + formatMonth(m.month)
+		}
+		return m.form.View(title)
+	case budIncomeConfirm:
+		return m.incomeConfirm.View()
+	}
+	return m.viewList()
+}
+
+// --- Income panel ---
+
+func (m budgetModel) updateIncomeList(msg tea.Msg) (budgetModel, tea.Cmd) {
+	if km, ok := msg.(tea.KeyMsg); ok {
+		switch km.String() {
+		case "esc":
+			m.mode = budList
+			return m, nil
+		case "up", "k":
+			if m.incomeCursor > 0 {
+				m.incomeCursor--
+			}
+		case "down", "j":
+			if m.incomeCursor < len(m.incomes)-1 {
+				m.incomeCursor++
+			}
+		case "n":
+			m.startIncomeForm(nil)
+		case "enter":
+			if len(m.incomes) > 0 {
+				inc := m.incomes[m.incomeCursor]
+				m.startIncomeForm(&inc)
+			}
+		case "d":
+			if len(m.incomes) > 0 {
+				m.incomeConfirm = confirmModel{prompt: fmt.Sprintf("Delete income %q?", m.incomes[m.incomeCursor].Name)}
+				m.mode = budIncomeConfirm
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m *budgetModel) startIncomeForm(existing *store.Income) {
+	m.editingIncome = existing
+	fields := []field{
+		newField("Name", "Work", ""),
+		newField("Amount", "0.00", "estimated $ for "+formatMonth(m.month)),
+	}
+	m.form = form{fields: fields}
+	if existing != nil {
+		m.form.SetValues([]string{existing.Name, money.Format(existing.AmountCents)})
+	}
+	m.form.Focus()
+	m.mode = budIncomeForm
+}
+
+func (m budgetModel) updateIncomeForm(msg tea.Msg) (budgetModel, tea.Cmd) {
+	var cmd tea.Cmd
+	m.form, cmd = m.form.Update(msg)
+	if m.form.canceled {
+		m.mode = budIncomeList
+		return m, cmd
+	}
+	if m.form.submitted {
+		vals := m.form.Values()
+		if vals[0] == "" {
+			m.form.err = "name required"
+			return m, cmd
+		}
+		amt := int64(0)
+		if vals[1] != "" {
+			c, err := money.Parse(vals[1])
+			if err != nil {
+				m.form.err = "amount: " + err.Error()
+				return m, cmd
+			}
+			amt = c
+		}
+		ctx := context.Background()
+		if m.editingIncome != nil {
+			if err := m.store.UpdateIncome(ctx, store.Income{
+				ID: m.editingIncome.ID, Name: vals[0], AmountCents: amt,
+				SortOrder: m.editingIncome.SortOrder,
+			}); err != nil {
+				m.form.err = err.Error()
+				return m, cmd
+			}
+		} else {
+			if _, err := m.store.CreateIncome(ctx, store.Income{
+				Month: m.month, Name: vals[0], AmountCents: amt,
+				SortOrder: int64(len(m.incomes)),
+			}); err != nil {
+				m.form.err = err.Error()
+				return m, cmd
+			}
+		}
+		m.mode = budIncomeList
+		return m, tea.Batch(m.Refresh(), flashOK("Income saved"))
+	}
+	return m, cmd
+}
+
+func (m budgetModel) updateIncomeConfirm(msg tea.Msg) (budgetModel, tea.Cmd) {
+	var cmd tea.Cmd
+	m.incomeConfirm, cmd = m.incomeConfirm.Update(msg)
+	if m.incomeConfirm.answered {
+		if m.incomeConfirm.yes && len(m.incomes) > 0 {
+			id := m.incomes[m.incomeCursor].ID
+			if err := m.store.DeleteIncome(context.Background(), id); err != nil {
+				cmd = tea.Batch(cmd, flashFail(err.Error()))
+			} else {
+				cmd = tea.Batch(cmd, flashOK("Deleted"))
+			}
+			cmd = tea.Batch(cmd, m.Refresh())
+		}
+		m.mode = budIncomeList
+	}
+	return m, cmd
+}
+
+func (m budgetModel) viewIncomeList() string {
+	var b strings.Builder
+	b.WriteString(styleTitle.Render("Income · " + formatMonth(m.month)))
+	b.WriteString("\n\n")
+
+	if len(m.incomes) == 0 {
+		b.WriteString(styleDim.Render("No income entries for this month. Press n to add one."))
+		b.WriteString("\n")
+	} else {
+		headers := []string{"Source", "Amount"}
+		widths := []int{28, 16}
+		hdrCells := make([]string, len(headers))
+		for i, h := range headers {
+			hdrCells[i] = styleHeader.Render(padRight(h, widths[i]))
+		}
+		b.WriteString("  " + strings.Join(hdrCells, ""))
+		b.WriteString("\n")
+		for i, inc := range m.incomes {
+			marker := "  "
+			if i == m.incomeCursor {
+				marker = styleSelected.Render("▸ ")
+			}
+			amt := stylePos.Render(money.Format(inc.AmountCents))
+			line := marker + padRight(inc.Name, widths[0]) + padRight(amt, widths[1])
+			b.WriteString(zone.Mark("inc-row-"+strconv.Itoa(i), line) + "\n")
+		}
+	}
+
+	assigned := m.totalAssigned()
+	remain := m.incomeTotal - assigned
+	b.WriteString("\n")
+	b.WriteString(padRight("  Total income", 28) + stylePos.Render(money.Format(m.incomeTotal)) + "\n")
+	b.WriteString(padRight("  Budgeted", 28) + money.Format(assigned) + "\n")
+	remStyled := stylePos.Render(money.Format(remain))
+	if remain < 0 {
+		remStyled = styleNeg.Render(money.Format(remain))
+	}
+	b.WriteString(padRight("  Remain", 28) + remStyled + "\n")
+
+	b.WriteString("\n")
+	b.WriteString(styleHelp.Render("n: new · enter: edit · d: delete · ↑↓: move · esc: back to budget"))
+	return b.String()
+}
+
+func (m budgetModel) viewList() string {
+	if len(m.rows) == 0 {
+		return styleDim.Render("No categories. Add some on the Categories tab.")
+	}
+
+	headers := []string{"Group / Category", "Assigned", "Spent", "Available", "Goal"}
+	widths := []int{30, 12, 12, 14, 28}
+
+	currentGroup := ""
+	rows := make([][]string, 0, len(m.rows)+8)
+	for _, r := range m.rows {
+		if r.GroupName != currentGroup {
+			rows = append(rows, []string{styleHeader.Render("[" + r.GroupName + "]"), "", "", "", ""})
+			currentGroup = r.GroupName
+		}
+		availStr := money.Format(r.AvailableCents)
+		switch {
+		case r.AvailableCents < 0:
+			availStr = styleNeg.Render(availStr)
+		case r.AvailableCents > 0:
+			availStr = stylePos.Render(availStr)
+		default:
+			availStr = styleDim.Render(availStr)
+		}
+		goalCol := ""
+		if r.GoalCents != nil {
+			goalCol = "goal " + money.Format(*r.GoalCents)
+			if r.GoalDueDate != nil {
+				goalCol += " by " + r.GoalDueDate.Format("Jan 2006")
+			}
+			if r.MonthlyTarget > 0 {
+				goalCol += styleWarn.Render(fmt.Sprintf(" · need %s/mo", money.Format(r.MonthlyTarget)))
+			}
+		}
+		rows = append(rows, []string{
+			"  " + r.CategoryName,
+			money.Format(r.AssignedCents),
+			money.Format(r.SpentCents),
+			availStr,
+			goalCol,
+		})
+	}
+
+	// Build a custom render so cursor lines up with category rows only.
+	var b strings.Builder
+	b.WriteString(styleTitle.Render("Budget · " + formatMonth(m.month)))
+	b.WriteString("\n")
+
+	// Income / budgeted / remain banner. "Estimated" is the user-entered
+	// forecast (Income panel via `i`); "Actual" is the sum of inflows
+	// categorized as Income for the month.
+	assigned := m.totalAssigned()
+	remain := m.incomeTotal - assigned // Estimated − Budgeted
+	gap := m.incomeTotal - m.actualIncome
+	banner := fmt.Sprintf("  %s %s  ·  %s %s  ·  %s %s  ·  %s %s  ·  %s %s",
+		styleDim.Render("Estimated"), stylePos.Render(money.Format(m.incomeTotal)),
+		styleDim.Render("Actual"), stylePos.Render(money.Format(m.actualIncome)),
+		styleDim.Render("Budgeted"), money.Format(assigned),
+		styleDim.Render("Remain"), signedColored(remain),
+		styleDim.Render("Est−Act"), signedColored(gap),
+	)
+	b.WriteString(banner)
+	b.WriteString("\n")
+
+	// Credit section: this-month purchases minus payments per credit
+	// account. Skip cards with zero activity to keep the section tidy.
+	hasCreditActivity := false
+	for _, ca := range m.creditActivity {
+		if ca.PurchasesCents > 0 || ca.PaymentsCents > 0 {
+			hasCreditActivity = true
+			break
+		}
+	}
+	if hasCreditActivity {
+		b.WriteString("\n")
+		b.WriteString(styleHeader.Render("  Credit:"))
+		b.WriteString("\n")
+
+		ccHeaders := []string{"Account", "Purchases", "Payments", "Owing"}
+		ccWidths := []int{20, 14, 14, 14}
+		ccRows := make([][]string, 0, len(m.creditActivity))
+		for _, ca := range m.creditActivity {
+			if ca.PurchasesCents == 0 && ca.PaymentsCents == 0 {
+				continue
+			}
+			ccRows = append(ccRows, []string{
+				ca.AccountName,
+				styleNeg.Render(money.Format(ca.PurchasesCents)),
+				stylePos.Render(money.Format(ca.PaymentsCents)),
+				signedColored(ca.OwingCents),
+			})
+		}
+		// renderTable prefixes each row with "  " when no row is selected,
+		// indenting it cleanly under the "Credit:" header.
+		b.WriteString(renderTable(ccHeaders, ccWidths, ccRows, -1, ""))
+	}
+	b.WriteString("\n")
+
+	hdrCells := make([]string, len(headers))
+	for i, h := range headers {
+		hdrCells[i] = styleHeader.Render(padRight(h, widths[i]))
+	}
+	b.WriteString("  " + strings.Join(hdrCells, ""))
+	b.WriteString("\n")
+
+	categoryIdx := -1
+	for _, row := range rows {
+		isGroup := row[1] == ""
+		var cells []string
+		for j, c := range row {
+			cells = append(cells, padRight(c, widths[j]))
+		}
+		line := strings.Join(cells, "")
+		if isGroup {
+			b.WriteString("  " + line)
+		} else {
+			categoryIdx++
+			marker := "  "
+			if categoryIdx == m.cursor {
+				marker = styleSelected.Render("▸ ")
+			}
+			b.WriteString(zone.Mark("bud-row-"+strconv.Itoa(categoryIdx), marker+line))
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+	return b.String()
+}
