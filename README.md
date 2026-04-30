@@ -6,7 +6,7 @@
 
 Track accounts, assign money to categories each month, project debt paydown, and see where your money goes — all in a local SQLite file with no accounts, no sync, and no subscription.
 
-![Budget TUI screenshot](./asset/demo.png)
+![Budget tab](./screenshots/01-budget.png)
 
 </div>
 
@@ -22,6 +22,68 @@ Track accounts, assign money to categories each month, project debt paydown, and
 - **Sinking-fund goals** — set a target amount + due date; the app tells you the monthly contribution needed
 - **Income tracking** — estimate income for each month; see estimated vs. actual side-by-side on the Budget tab
 - **Fully local** — one SQLite file, no network access, no accounts, no telemetry
+
+---
+
+## Screenshots
+
+**Budget** — assign money to categories each month, track against income, see sinking-fund goals
+
+![Budget](./screenshots/01-budget.png)
+
+**Income panel** — estimate income per source; see estimated vs. actual side-by-side
+
+| Income panel | Edit income | Assign amount |
+|---|---|---|
+| ![Income panel](./screenshots/02-budget-income-panel.png) | ![Edit income](./screenshots/03-budget-income-edit.png) | ![Assign](./screenshots/04-budget-assign.png) |
+
+---
+
+**Transactions** — every account in one list; filter by account or month
+
+| All accounts | Filtered to Chase Sapphire |
+|---|---|
+| ![Transactions](./screenshots/05-transactions.png) | ![Filtered](./screenshots/12-transactions-filtered.png) |
+
+Transaction form with calendar date picker and account/category pickers:
+
+| Edit transaction | New transaction | Date picker |
+|---|---|---|
+| ![Edit](./screenshots/06-transaction-edit.png) | ![New](./screenshots/07-transaction-new.png) | ![Date picker](./screenshots/08-datepicker.png) |
+
+| Account picker | Category picker | Account filter |
+|---|---|---|
+| ![Account picker](./screenshots/09-account-picker.png) | ![Category picker](./screenshots/10-category-picker.png) | ![Account filter](./screenshots/11-account-filter.png) |
+
+---
+
+**Accounts** — net worth at a glance; credit and loan balances with APR
+
+| Account list | Edit account |
+|---|---|
+| ![Accounts](./screenshots/13-accounts.png) | ![Edit account](./screenshots/14-account-edit.png) |
+
+---
+
+**Categories** — grouped categories with optional sinking-fund goals
+
+| Category list | Edit category (goal) | Edit category (sinking fund) |
+|---|---|---|
+| ![Categories](./screenshots/15-categories.png) | ![Goal](./screenshots/17-category-edit-goal.png) | ![Sinking fund](./screenshots/18-category-edit-sinking-fund.png) |
+
+---
+
+**Paydown** — daily-compound debt amortization linked to your budget categories
+
+![Paydown](./screenshots/19-paydown.png)
+
+---
+
+**Reports** — spending by category and 12-month cashflow chart
+
+| Spending by category | Monthly cashflow |
+|---|---|
+| ![Spending](./screenshots/20-reports-spending.png) | ![Cashflow](./screenshots/21-reports-cashflow.png) |
 
 ---
 
