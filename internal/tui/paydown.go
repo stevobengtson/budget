@@ -134,15 +134,12 @@ func convertPaymentSource(s store.PaymentSource) paydown.PaymentSource {
 	return paydown.SourceDefault
 }
 
-// debtCents returns the positive owed-balance for a credit/loan account. For
-// liability accounts the running balance is negative when in debt, so we
-// flip the sign. For other types we use the running balance as-is.
+// debtCents returns the positive owed-balance for any account whose running
+// balance has gone negative — credit / loan in debt, or a checking / savings
+// account in overdraft. Positive-balance accounts have no debt.
 func debtCents(a store.AccountWithBalance) int64 {
-	if a.Type.IsLiability() && a.BalanceCents < 0 {
+	if a.BalanceCents < 0 {
 		return -a.BalanceCents
-	}
-	if a.BalanceCents > 0 {
-		return a.BalanceCents
 	}
 	return 0
 }

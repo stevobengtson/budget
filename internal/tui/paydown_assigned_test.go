@@ -54,6 +54,42 @@ func TestPaydownPicksUpAssignedForFutureMonths(t *testing.T) {
 	}
 }
 
+// Verifies that overdraft on a checking account flows through paydown when
+// the account is included and has APR set.
+func TestPaydownTreatsOverdraftCheckingAsDebt(t *testing.T) {
+	zone.NewGlobal()
+	conn, _ := db.Open(":memory:")
+	defer func() { _ = conn.Close() }()
+	s := store.New(conn)
+	ctx := context.Background()
+
+	apr := int64(800) // 8% overdraft
+	limit := int64(100_000)
+	pay := int64(10_000)
+	_, _ = s.CreateAccount(ctx, store.Account{
+		Name: "Chk", Type: store.TypeChecking,
+		StartingBalanceCents: -50_000, // overdrawn $500
+		CreditLimitCents:     &limit,
+		AprBps:               &apr,
+		MonthlyPaymentCents:  &pay,
+		IncludeInPaydown:     true,
+	})
+
+	m := New(s)
+	mAny, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 60})
+	m = mAny.(Model)
+	mAny, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("5")})
+	m = mAny.(Model)
+
+	out := m.View()
+	if !strings.Contains(out, "$500.00") {
+		t.Errorf("expected overdraft start of $500.00 in projection; got:\n%s", out)
+	}
+	if !strings.Contains(out, "8.00% APR") {
+		t.Errorf("expected 8%% APR in header; got:\n%s", out)
+	}
+}
+
 // Verifies the paydown screen warns when an account is included but has no
 // payment category linked (so all rows use fallback).
 func TestPaydownWarnsWhenNoCategoryLinked(t *testing.T) {
