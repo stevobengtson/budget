@@ -403,8 +403,8 @@ func (m accountsModel) viewList() string {
 	if len(m.rows) == 0 {
 		return styleDim.Render("No accounts yet. Press n to add your first one.")
 	}
-	headers := []string{"Name", "Type", "Balance", "Limit", "APR"}
-	widths := []int{24, 10, 14, 14, 10}
+	headers := []string{"Name", "Type", "Balance", "Limit", "APR", "Available"}
+	widths := []int{24, 10, 14, 14, 10, 14}
 	rows := make([][]string, len(m.rows))
 	for i, r := range m.rows {
 		bal := money.Format(r.BalanceCents)
@@ -421,7 +421,12 @@ func (m accountsModel) viewList() string {
 		if r.AprBps != nil {
 			apr = fmt.Sprintf("%.2f%%", float64(*r.AprBps)/100.0)
 		}
-		rows[i] = []string{r.Name, string(r.Type), bal, limit, apr}
+		avail := ""
+		if r.CreditLimitCents != nil {
+			a := availableCredit(r)
+			avail = stylePos.Render(money.Format(a))
+		}
+		rows[i] = []string{r.Name, string(r.Type), bal, limit, apr, avail}
 	}
 	body := renderTable(headers, widths, rows, m.cursor, "acct-row-")
 
@@ -436,14 +441,45 @@ func (m accountsModel) viewList() string {
 		}
 	}
 	diff := assets + liabs
-	labelW := 14
-	summary := strings.Join([]string{
+
+	// Sum available credit across every account that has a limit set.
+	// `balance + limit` works for both directions: a credit card with a
+	// $5,000 limit and −$1,000 balance has $4,000 left to spend; a checking
+	// account with a $1,000 overdraft limit and a $500 balance can draw up
+	// to $1,500 before hitting the floor.
+	var availCredit int64
+	for _, r := range m.rows {
+		if a := availableCredit(r); a > 0 {
+			availCredit += a
+		}
+	}
+
+	labelW := 20
+	summaryLines := []string{
 		"  " + padRight(styleHeader.Render("Assets:"), labelW) + stylePos.Render(money.Format(assets)),
 		"  " + padRight(styleHeader.Render("Liabilities:"), labelW) + styleNeg.Render(money.Format(liabs)),
 		"  " + padRight(styleHeader.Render("Difference:"), labelW) + diffColored(diff),
-	}, "\n")
+	}
+	if availCredit > 0 {
+		summaryLines = append(summaryLines,
+			"  "+padRight(styleHeader.Render("Available credit:"), labelW)+stylePos.Render(money.Format(availCredit)))
+	}
+	summary := strings.Join(summaryLines, "\n")
 
 	return strings.Join([]string{styleTitle.Render("Accounts"), body, summary}, "\n")
+}
+
+// availableCredit reports how much room is left under an account's limit.
+// Returns 0 for accounts with no limit set.
+func availableCredit(a store.AccountWithBalance) int64 {
+	if a.CreditLimitCents == nil {
+		return 0
+	}
+	v := a.BalanceCents + *a.CreditLimitCents
+	if v < 0 {
+		return 0
+	}
+	return v
 }
 
 func diffColored(cents int64) string {

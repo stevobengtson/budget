@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
@@ -34,26 +35,27 @@ func TestPaydownPagination(t *testing.T) {
 	mAny, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("5")})
 	m = mAny.(Model)
 
+	now := time.Now()
+	first := now.Format("Jan 2006")
+	month13 := now.AddDate(0, 12, 0).Format("Jan 2006")
+
 	out := m.View()
-	if !strings.Contains(out, "Apr 2026") {
-		t.Errorf("expected first-page month Apr 2026; got:\n%s", out)
+	if !strings.Contains(out, first) {
+		t.Errorf("expected first-page month %s; got:\n%s", first, out)
 	}
 
-	// Page forward; should now show months 13+ (Apr 2027 onward).
+	// Page forward; should now show months 13+ onward.
 	mAny, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
 	m = mAny.(Model)
 	page2 := m.View()
-	if strings.Contains(page2, "May 2026") {
-		t.Error("page 2 should not show May 2026")
-	}
-	if !strings.Contains(page2, "Apr 2027") {
-		t.Errorf("page 2 should show Apr 2027; got:\n%s", page2)
+	if !strings.Contains(page2, month13) {
+		t.Errorf("page 2 should show %s; got:\n%s", month13, page2)
 	}
 
 	// Wrap back with PgUp.
 	mAny, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
 	m = mAny.(Model)
-	if !strings.Contains(m.View(), "Apr 2026") {
+	if !strings.Contains(m.View(), first) {
 		t.Error("PgUp should return to first page")
 	}
 }

@@ -174,6 +174,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.reports.SetSize(msg.Width, msg.Height)
 		m.transactions.SetSize(msg.Width, msg.Height)
+		m.budget.SetSize(msg.Width, msg.Height)
+		m.budget.adjustScroll()
+		m.categories.SetSize(msg.Width, msg.Height)
+		m.paydown.SetSize(msg.Width, msg.Height)
 	case tea.KeyMsg:
 		// Help popup intercepts keys ahead of everything else when open.
 		if m.showHelp {

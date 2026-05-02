@@ -40,10 +40,90 @@ type budgetModel struct {
 	incomeConfirm  confirmModel
 
 	creditActivity []store.CreditActivity
+
+	width, height int
+	scrollOffset  int // top index into m.rows for scrollable category list
 }
 
 func newBudgetModel(s *store.Store) budgetModel {
 	return budgetModel{store: s, month: store.MonthKey(time.Now())}
+}
+
+func (m *budgetModel) SetSize(w, h int) { m.width, m.height = w, h }
+
+// linesAvailable returns how many body lines the category list can use
+// (categories AND group headers combined). Subtracts tab bar, title,
+// banner, credit section, category column header, scroll indicators,
+// status bar, and outer padding.
+func (m budgetModel) linesAvailable() int {
+	creditLines := 0
+	for _, ca := range m.creditActivity {
+		if ca.PurchasesCents != 0 || ca.PaymentsCents != 0 {
+			creditLines++
+		}
+	}
+	if creditLines > 0 {
+		creditLines += 3 // "Credit:" header + cc table header + blank line
+	}
+	// chrome: tab bar (3) + title (1) + banner (1) + blank (1) + credit
+	// (creditLines) + cat header (1) + ↑more (1) + ↓more (1) + blank (1)
+	// + status (1) + safety (1)
+	chrome := 12 + creditLines
+	avail := m.height - chrome
+	if avail < 5 {
+		avail = 5
+	}
+	return avail
+}
+
+// endForStart returns the exclusive end index of the visible window
+// starting at start, accounting for group-header lines emitted between
+// category rows.
+func (m budgetModel) endForStart(start int) int {
+	avail := m.linesAvailable()
+	end := start
+	used := 0
+	lastGroup := ""
+	for end < len(m.rows) && used < avail {
+		r := m.rows[end]
+		cost := 1
+		if r.GroupName != lastGroup {
+			cost++ // group header line
+		}
+		if used+cost > avail {
+			break
+		}
+		used += cost
+		lastGroup = r.GroupName
+		end++
+	}
+	if end == start && start < len(m.rows) {
+		end = start + 1 // always show at least the cursor row
+	}
+	return end
+}
+
+// adjustScroll keeps the cursor visible inside the windowed range.
+func (m *budgetModel) adjustScroll() {
+	if len(m.rows) == 0 {
+		m.scrollOffset = 0
+		return
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.cursor >= len(m.rows) {
+		m.cursor = len(m.rows) - 1
+	}
+	if m.scrollOffset > m.cursor {
+		m.scrollOffset = m.cursor
+	}
+	for m.endForStart(m.scrollOffset) <= m.cursor && m.scrollOffset < m.cursor {
+		m.scrollOffset++
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
 }
 
 // formatMonth turns "2006-01" into "Jan 2006". Falls back to input on parse fail.
@@ -128,6 +208,9 @@ func (m *budgetModel) Refresh() tea.Cmd {
 		return flashFail("credit activity: " + err.Error())
 	}
 	m.creditActivity = cc
+
+	// Clamp scroll after data refresh in case rows shrank.
+	m.adjustScroll()
 	return nil
 }
 
@@ -176,11 +259,41 @@ func (m budgetModel) updateList(msg tea.Msg) (budgetModel, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				m.adjustScroll()
 			}
 		case "down", "j":
 			if m.cursor < len(m.rows)-1 {
 				m.cursor++
+				m.adjustScroll()
 			}
+		case "pgup":
+			end := m.endForStart(m.scrollOffset)
+			pageSize := end - m.scrollOffset
+			if pageSize < 1 {
+				pageSize = 1
+			}
+			m.cursor -= pageSize
+			if m.cursor < 0 {
+				m.cursor = 0
+			}
+			m.adjustScroll()
+		case "pgdown", "pgdn":
+			end := m.endForStart(m.scrollOffset)
+			pageSize := end - m.scrollOffset
+			if pageSize < 1 {
+				pageSize = 1
+			}
+			m.cursor += pageSize
+			if m.cursor >= len(m.rows) {
+				m.cursor = len(m.rows) - 1
+			}
+			m.adjustScroll()
+		case "home":
+			m.cursor = 0
+			m.adjustScroll()
+		case "end":
+			m.cursor = len(m.rows) - 1
+			m.adjustScroll()
 		case "<", ",", "h":
 			m.month = store.PrevMonth(m.month)
 			return m, m.Refresh()
@@ -499,41 +612,6 @@ func (m budgetModel) viewList() string {
 	headers := []string{"Group / Category", "Assigned", "Spent", "Available", "Goal"}
 	widths := []int{30, 12, 12, 14, 28}
 
-	currentGroup := ""
-	rows := make([][]string, 0, len(m.rows)+8)
-	for _, r := range m.rows {
-		if r.GroupName != currentGroup {
-			rows = append(rows, []string{styleHeader.Render("[" + r.GroupName + "]"), "", "", "", ""})
-			currentGroup = r.GroupName
-		}
-		availStr := money.Format(r.AvailableCents)
-		switch {
-		case r.AvailableCents < 0:
-			availStr = styleNeg.Render(availStr)
-		case r.AvailableCents > 0:
-			availStr = stylePos.Render(availStr)
-		default:
-			availStr = styleDim.Render(availStr)
-		}
-		goalCol := ""
-		if r.GoalCents != nil {
-			goalCol = "goal " + money.Format(*r.GoalCents)
-			if r.GoalDueDate != nil {
-				goalCol += " by " + r.GoalDueDate.Format("Jan 2006")
-			}
-			if r.MonthlyTarget > 0 {
-				goalCol += styleWarn.Render(fmt.Sprintf(" · need %s/mo", money.Format(r.MonthlyTarget)))
-			}
-		}
-		rows = append(rows, []string{
-			"  " + r.CategoryName,
-			money.Format(r.AssignedCents),
-			money.Format(r.SpentCents),
-			availStr,
-			goalCol,
-		})
-	}
-
 	// Build a custom render so cursor lines up with category rows only.
 	var b strings.Builder
 	b.WriteString(styleTitle.Render("Budget · " + formatMonth(m.month)))
@@ -596,26 +674,73 @@ func (m budgetModel) viewList() string {
 	b.WriteString("  " + strings.Join(hdrCells, ""))
 	b.WriteString("\n")
 
-	categoryIdx := -1
-	for _, row := range rows {
-		isGroup := row[1] == ""
-		var cells []string
-		for j, c := range row {
-			cells = append(cells, padRight(c, widths[j]))
+	// Compute scroll window using line-budget. Group headers consume one
+	// line each — the window sizer accounts for them.
+	start := m.scrollOffset
+	if start < 0 {
+		start = 0
+	}
+	if start >= len(m.rows) {
+		start = max0(len(m.rows) - 1)
+	}
+	end := m.endForStart(start)
+
+	if start > 0 {
+		b.WriteString(styleDim.Render(fmt.Sprintf("  ↑ %d more above\n", start)))
+	}
+
+	lastGroup := ""
+	for i := start; i < end; i++ {
+		r := m.rows[i]
+
+		// Emit group header when the group changes (and always above the
+		// first row of the window).
+		if r.GroupName != lastGroup {
+			groupLine := padRight(styleHeader.Render("["+r.GroupName+"]"), widths[0]) +
+				strings.Repeat(" ", widths[1]+widths[2]+widths[3]+widths[4])
+			b.WriteString("  " + groupLine + "\n")
+			lastGroup = r.GroupName
+		}
+
+		availStr := money.Format(r.AvailableCents)
+		switch {
+		case r.AvailableCents < 0:
+			availStr = styleNeg.Render(availStr)
+		case r.AvailableCents > 0:
+			availStr = stylePos.Render(availStr)
+		default:
+			availStr = styleDim.Render(availStr)
+		}
+		goalCol := ""
+		if r.GoalCents != nil {
+			goalCol = "goal " + money.Format(*r.GoalCents)
+			if r.GoalDueDate != nil {
+				goalCol += " by " + r.GoalDueDate.Format("Jan 2006")
+			}
+			if r.MonthlyTarget > 0 {
+				goalCol += styleWarn.Render(fmt.Sprintf(" · need %s/mo", money.Format(r.MonthlyTarget)))
+			}
+		}
+		cells := []string{
+			padRight("  "+r.CategoryName, widths[0]),
+			padRight(money.Format(r.AssignedCents), widths[1]),
+			padRight(money.Format(r.SpentCents), widths[2]),
+			padRight(availStr, widths[3]),
+			padRight(goalCol, widths[4]),
 		}
 		line := strings.Join(cells, "")
-		if isGroup {
-			b.WriteString("  " + line)
-		} else {
-			categoryIdx++
-			marker := "  "
-			if categoryIdx == m.cursor {
-				marker = styleSelected.Render("▸ ")
-			}
-			b.WriteString(zone.Mark("bud-row-"+strconv.Itoa(categoryIdx), marker+line))
+		marker := "  "
+		if i == m.cursor {
+			marker = styleSelected.Render("▸ ")
 		}
+		b.WriteString(zone.Mark("bud-row-"+strconv.Itoa(i), marker+line))
 		b.WriteString("\n")
 	}
+
+	if end < len(m.rows) {
+		b.WriteString(styleDim.Render(fmt.Sprintf("  ↓ %d more below\n", len(m.rows)-end)))
+	}
+
 	b.WriteString("\n")
 	return b.String()
 }

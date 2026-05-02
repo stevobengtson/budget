@@ -43,9 +43,53 @@ type categoriesModel struct {
 	confirm   confirmModel
 	editing   *store.Category
 	editingGrp *store.CategoryGroup
+
+	width, height int
+	scrollOffset  int
 }
 
 func newCategoriesModel(s *store.Store) categoriesModel { return categoriesModel{store: s} }
+
+func (m *categoriesModel) SetSize(w, h int) {
+	m.width, m.height = w, h
+	m.adjustScroll()
+}
+
+// linesAvailable returns rows allowed for the category list (rows are 1
+// line each: group headers and categories alike).
+func (m categoriesModel) linesAvailable() int {
+	// chrome: tab bar (3) + title (1) + blank (1) + ↑more (1) + ↓more (1)
+	// + blank (1) + status (1) + safety (3)
+	chrome := 12
+	avail := m.height - chrome
+	if avail < 5 {
+		avail = 5
+	}
+	return avail
+}
+
+func (m *categoriesModel) adjustScroll() {
+	if len(m.rows) == 0 {
+		m.scrollOffset = 0
+		return
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.cursor >= len(m.rows) {
+		m.cursor = len(m.rows) - 1
+	}
+	avail := m.linesAvailable()
+	if m.scrollOffset > m.cursor {
+		m.scrollOffset = m.cursor
+	}
+	if m.cursor >= m.scrollOffset+avail {
+		m.scrollOffset = m.cursor - avail + 1
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+}
 
 func (m categoriesModel) modal() bool { return m.mode != catList }
 
@@ -93,6 +137,7 @@ func (m *categoriesModel) Refresh() tea.Cmd {
 	if m.cursor >= len(rows) {
 		m.cursor = max0(len(rows) - 1)
 	}
+	m.adjustScroll()
 	return nil
 }
 
@@ -120,11 +165,33 @@ func (m categoriesModel) updateList(msg tea.Msg) (categoriesModel, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				m.adjustScroll()
 			}
 		case "down", "j":
 			if m.cursor < len(m.rows)-1 {
 				m.cursor++
+				m.adjustScroll()
 			}
+		case "pgup":
+			avail := m.linesAvailable()
+			m.cursor -= avail
+			if m.cursor < 0 {
+				m.cursor = 0
+			}
+			m.adjustScroll()
+		case "pgdown", "pgdn":
+			avail := m.linesAvailable()
+			m.cursor += avail
+			if m.cursor >= len(m.rows) {
+				m.cursor = len(m.rows) - 1
+			}
+			m.adjustScroll()
+		case "home":
+			m.cursor = 0
+			m.adjustScroll()
+		case "end":
+			m.cursor = len(m.rows) - 1
+			m.adjustScroll()
 		case "n":
 			items := []string{"New group", "New category"}
 			m.picker = newPicker("Add what?", items, 0)
@@ -427,7 +494,23 @@ func (m categoriesModel) viewList() string {
 	var b strings.Builder
 	b.WriteString(styleTitle.Render("Categories"))
 	b.WriteString("\n\n")
-	for i, r := range m.rows {
+
+	avail := m.linesAvailable()
+	start := m.scrollOffset
+	if start < 0 {
+		start = 0
+	}
+	end := start + avail
+	if end > len(m.rows) {
+		end = len(m.rows)
+	}
+
+	if start > 0 {
+		b.WriteString(styleDim.Render(fmt.Sprintf("  ↑ %d more above\n", start)))
+	}
+
+	for i := start; i < end; i++ {
+		r := m.rows[i]
 		marker := "  "
 		if i == m.cursor {
 			marker = styleSelected.Render("▸ ")
@@ -452,5 +535,10 @@ func (m categoriesModel) viewList() string {
 		b.WriteString(zone.Mark("cat-row-"+strconv.Itoa(i), line))
 		b.WriteString("\n")
 	}
+
+	if end < len(m.rows) {
+		b.WriteString(styleDim.Render(fmt.Sprintf("  ↓ %d more below\n", len(m.rows)-end)))
+	}
+
 	return b.String()
 }

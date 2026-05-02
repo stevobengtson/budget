@@ -49,6 +49,83 @@ type paydownModel struct {
 	confirm  confirmModel
 
 	pager paginator.Model
+
+	width, height       int
+	sectionScrollOffset int // index of first visible account section
+}
+
+func (m *paydownModel) SetSize(w, h int) {
+	m.width, m.height = w, h
+	m.adjustSectionScroll()
+}
+
+// linesPerSection returns the number of lines a single account section
+// will emit (header + table header + page rows + ellipsis + blank).
+func (m paydownModel) linesPerSection(p paydown.Plan) int {
+	if len(p.Rows) == 0 {
+		return 3 // header + "(already paid off)" + blank
+	}
+	page := pdPageSize
+	rowsOnPage := len(p.Rows) - m.pager.Page*pdPageSize
+	if rowsOnPage > page {
+		rowsOnPage = page
+	}
+	if rowsOnPage < 0 {
+		rowsOnPage = 0
+	}
+	// header + table header + rowsOnPage + ellipsis (1 if remaining) + blank
+	lines := 2 + rowsOnPage + 1
+	return lines
+}
+
+// adjustSectionScroll keeps the cursor's section in the visible area.
+func (m *paydownModel) adjustSectionScroll() {
+	if len(m.plans) == 0 {
+		m.sectionScrollOffset = 0
+		return
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.cursor >= len(m.plans) {
+		m.cursor = len(m.plans) - 1
+	}
+	if m.sectionScrollOffset > m.cursor {
+		m.sectionScrollOffset = m.cursor
+	}
+	avail := m.linesAvailable()
+	for {
+		used := 0
+		end := m.sectionScrollOffset
+		for end < len(m.plans) && used < avail {
+			cost := m.linesPerSection(m.plans[end])
+			if used+cost > avail && end > m.sectionScrollOffset {
+				break
+			}
+			used += cost
+			end++
+		}
+		if m.cursor < end {
+			break
+		}
+		m.sectionScrollOffset++
+		if m.sectionScrollOffset >= len(m.plans) {
+			m.sectionScrollOffset = len(m.plans) - 1
+			break
+		}
+	}
+}
+
+// linesAvailable for paydown sections.
+func (m paydownModel) linesAvailable() int {
+	// chrome: tab bar (3) + title (1) + banner (1) + blank (1) + ↑more (1)
+	// + ↓more (1) + pager line (1) + status (1) + safety (2)
+	chrome := 12
+	avail := m.height - chrome
+	if avail < 6 {
+		avail = 6
+	}
+	return avail
 }
 
 func newPaydownModel(s *store.Store) paydownModel {
@@ -121,6 +198,7 @@ func (m *paydownModel) Refresh() tea.Cmd {
 	if m.pager.Page >= m.pager.TotalPages {
 		m.pager.Page = max0(m.pager.TotalPages - 1)
 	}
+	m.adjustSectionScroll()
 	return nil
 }
 
@@ -219,10 +297,12 @@ func (m paydownModel) updateList(msg tea.Msg) (paydownModel, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				m.adjustSectionScroll()
 			}
 		case "down", "j":
 			if m.cursor < len(m.included)-1 {
 				m.cursor++
+				m.adjustSectionScroll()
 			}
 		case "a":
 			candidates := m.eligibleToAdd()
@@ -452,10 +532,39 @@ func (m paydownModel) viewList() string {
 	b.WriteString(banner)
 	b.WriteString("\n\n")
 
-	for i, p := range m.plans {
+	// Determine the visible range of sections based on line budget.
+	avail := m.linesAvailable()
+	start := m.sectionScrollOffset
+	if start < 0 {
+		start = 0
+	}
+	if start >= len(m.plans) {
+		start = max0(len(m.plans) - 1)
+	}
+	end := start
+	used := 0
+	for end < len(m.plans) {
+		cost := m.linesPerSection(m.plans[end])
+		if used+cost > avail && end > start {
+			break
+		}
+		used += cost
+		end++
+	}
+
+	if start > 0 {
+		fmt.Fprintf(&b, "  %s\n", styleDim.Render(fmt.Sprintf("↑ %d more above", start)))
+	}
+
+	for i := start; i < end; i++ {
+		p := m.plans[i]
 		acct := m.included[i]
 		b.WriteString(zone.Mark("pd-row-"+strconv.Itoa(i), m.renderAccountSection(i, p, acct)))
 		b.WriteString("\n")
+	}
+
+	if end < len(m.plans) {
+		fmt.Fprintf(&b, "  %s\n", styleDim.Render(fmt.Sprintf("↓ %d more below", len(m.plans)-end)))
 	}
 
 	if m.pager.TotalPages > 1 {

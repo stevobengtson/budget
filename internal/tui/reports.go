@@ -308,6 +308,15 @@ func (m reportsModel) viewCashflow() string {
 	}
 
 	w, h := m.chartArea()
+	// Reserve space for totals (1) + blank (1) + table header (1) + 12 rows
+	// + bottom blank (1) + chrome (~6) = ~22. Cap chart height accordingly.
+	maxChart := m.height - 22
+	if maxChart < 8 {
+		maxChart = 8
+	}
+	if h > maxChart {
+		h = maxChart
+	}
 	values := make([]barchart.BarData, 0, len(m.cash))
 	var totalIn, totalOut int64
 	for _, r := range m.cash {
