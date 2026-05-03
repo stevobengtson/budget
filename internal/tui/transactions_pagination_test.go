@@ -14,7 +14,7 @@ import (
 
 func TestTransactionsPagination(t *testing.T) {
 	zone.NewGlobal()
-	conn, _ := db.Open(":memory:")
+	conn, _, _ := db.Open(":memory:")
 	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()

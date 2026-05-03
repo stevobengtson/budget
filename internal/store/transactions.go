@@ -51,7 +51,7 @@ func (s *Store) CreateTransaction(ctx context.Context, t Transaction) (int64, er
 	if t.TransferAccountID != nil {
 		return 0, errors.New("use CreateTransfer for transfers")
 	}
-	res, err := s.db.ExecContext(ctx,
+	id, err := s.insertReturningID(ctx,
 		`INSERT INTO transactions(date, account_id, category_id, payee, notes, outflow_cents, inflow_cents, cleared)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.Date.Format("2006-01-02"), t.AccountID, nullInt(t.CategoryID),
@@ -59,14 +59,14 @@ func (s *Store) CreateTransaction(ctx context.Context, t Transaction) (int64, er
 	if err != nil {
 		return 0, fmt.Errorf("create transaction: %w", err)
 	}
-	return res.LastInsertId()
+	return id, nil
 }
 
 func (s *Store) UpdateTransaction(ctx context.Context, t Transaction) error {
 	if t.TransferPairID != nil {
 		return errors.New("update transfers via DeleteTransaction + CreateTransfer")
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.run(ctx,
 		`UPDATE transactions
 		 SET date=?, account_id=?, category_id=?, payee=?, notes=?, outflow_cents=?, inflow_cents=?, cleared=?
 		 WHERE id=?`,
@@ -85,19 +85,19 @@ func (s *Store) DeleteTransaction(ctx context.Context, id int64) error {
 	defer func() { _ = tx.Rollback() }()
 
 	var pair sql.NullInt64
-	if err := tx.QueryRowContext(ctx, `SELECT transfer_pair_id FROM transactions WHERE id=?`, id).Scan(&pair); err != nil {
+	if err := s.txQueryOne(ctx, tx, `SELECT transfer_pair_id FROM transactions WHERE id=?`, id).Scan(&pair); err != nil {
 		return err
 	}
 	if pair.Valid {
 		// Break the cycle so neither row references the other before deletion.
-		if _, err := tx.ExecContext(ctx, `UPDATE transactions SET transfer_pair_id=NULL WHERE id IN (?, ?)`, id, pair.Int64); err != nil {
+		if _, err := s.txExec(ctx, tx, `UPDATE transactions SET transfer_pair_id=NULL WHERE id IN (?, ?)`, id, pair.Int64); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM transactions WHERE id=?`, pair.Int64); err != nil {
+		if _, err := s.txExec(ctx, tx, `DELETE FROM transactions WHERE id=?`, pair.Int64); err != nil {
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM transactions WHERE id=?`, id); err != nil {
+	if _, err := s.txExec(ctx, tx, `DELETE FROM transactions WHERE id=?`, id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -121,25 +121,23 @@ func (s *Store) CreateTransfer(ctx context.Context, in TransferInput) (int64, in
 
 	dateStr := in.Date.Format("2006-01-02")
 
-	resOut, err := tx.ExecContext(ctx,
+	outID, err := s.txInsertReturningID(ctx, tx,
 		`INSERT INTO transactions(date, account_id, transfer_account_id, category_id, notes, outflow_cents, cleared)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		dateStr, in.FromAccountID, in.ToAccountID, nullInt(in.CategoryID), nullStr(in.Notes), in.AmountCents, in.Cleared)
 	if err != nil {
 		return 0, 0, fmt.Errorf("transfer out leg: %w", err)
 	}
-	outID, _ := resOut.LastInsertId()
 
-	resIn, err := tx.ExecContext(ctx,
+	inID, err := s.txInsertReturningID(ctx, tx,
 		`INSERT INTO transactions(date, account_id, transfer_account_id, transfer_pair_id, notes, inflow_cents, cleared)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		dateStr, in.ToAccountID, in.FromAccountID, outID, nullStr(in.Notes), in.AmountCents, in.Cleared)
 	if err != nil {
 		return 0, 0, fmt.Errorf("transfer in leg: %w", err)
 	}
-	inID, _ := resIn.LastInsertId()
 
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`UPDATE transactions SET transfer_pair_id=? WHERE id=?`, inID, outID); err != nil {
 		return 0, 0, err
 	}
@@ -171,7 +169,7 @@ func (s *Store) ListTransactions(ctx context.Context, f TxFilter) ([]Transaction
 		args = append(args, *f.CategoryID)
 	}
 	if f.Month != "" {
-		q += ` AND strftime('%Y-%m', date) = ?`
+		q += ` AND ` + s.dialect.MonthExpr("date") + ` = ?`
 		args = append(args, f.Month)
 	}
 	q += ` ORDER BY date DESC, id DESC`
@@ -179,7 +177,7 @@ func (s *Store) ListTransactions(ctx context.Context, f TxFilter) ([]Transaction
 		q += fmt.Sprintf(` LIMIT %d`, f.Limit)
 	}
 
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	rows, err := s.queryAll(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}

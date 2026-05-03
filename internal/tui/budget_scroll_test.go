@@ -15,7 +15,7 @@ import (
 // visible window.
 func TestBudgetScrollsCategoryList(t *testing.T) {
 	zone.NewGlobal()
-	conn, _ := db.Open(":memory:")
+	conn, _, _ := db.Open(":memory:")
 	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()
@@ -73,7 +73,7 @@ func TestBudgetScrollsCategoryList(t *testing.T) {
 // the tab bar off screen) when many groups + categories combine.
 func TestBudgetBodyFitsInHeight(t *testing.T) {
 	zone.NewGlobal()
-	conn, _ := db.Open(":memory:")
+	conn, _, _ := db.Open(":memory:")
 	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()

@@ -15,7 +15,7 @@ import (
 // Verifies that assigned values in future months flow into the projection.
 func TestPaydownPicksUpAssignedForFutureMonths(t *testing.T) {
 	zone.NewGlobal()
-	conn, _ := db.Open(":memory:")
+	conn, _, _ := db.Open(":memory:")
 	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()
@@ -58,7 +58,7 @@ func TestPaydownPicksUpAssignedForFutureMonths(t *testing.T) {
 // the account is included and has APR set.
 func TestPaydownTreatsOverdraftCheckingAsDebt(t *testing.T) {
 	zone.NewGlobal()
-	conn, _ := db.Open(":memory:")
+	conn, _, _ := db.Open(":memory:")
 	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()
@@ -94,7 +94,7 @@ func TestPaydownTreatsOverdraftCheckingAsDebt(t *testing.T) {
 // payment category linked (so all rows use fallback).
 func TestPaydownWarnsWhenNoCategoryLinked(t *testing.T) {
 	zone.NewGlobal()
-	conn, _ := db.Open(":memory:")
+	conn, _, _ := db.Open(":memory:")
 	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()

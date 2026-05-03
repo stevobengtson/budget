@@ -15,7 +15,7 @@ import (
 // pushes the tab bar off the top.
 func TestCategoriesScrolls(t *testing.T) {
 	zone.NewGlobal()
-	conn, _ := db.Open(":memory:")
+	conn, _, _ := db.Open(":memory:")
 	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()
@@ -62,7 +62,7 @@ func TestCategoriesScrolls(t *testing.T) {
 // Paydown sections respect terminal height when many accounts are included.
 func TestPaydownSectionsScroll(t *testing.T) {
 	zone.NewGlobal()
-	conn, _ := db.Open(":memory:")
+	conn, _, _ := db.Open(":memory:")
 	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()

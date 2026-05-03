@@ -1,4 +1,6 @@
-// Package store is the persistence layer over the budget SQLite database.
+// Package store is the persistence layer over the budget database
+// (SQLite or Postgres). All SQL is written using `?` placeholders and a
+// small dialect helper rebinds them as needed.
 package store
 
 import (
@@ -7,12 +9,18 @@ import (
 )
 
 type Store struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect Dialect
 }
 
-func New(db *sql.DB) *Store { return &Store{db: db} }
+func New(db *sql.DB) *Store { return &Store{db: db, dialect: DialectSQLite} }
 
-func (s *Store) DB() *sql.DB { return s.db }
+func NewWithDialect(db *sql.DB, d Dialect) *Store {
+	return &Store{db: db, dialect: d}
+}
+
+func (s *Store) DB() *sql.DB        { return s.db }
+func (s *Store) Dialect() Dialect   { return s.dialect }
 
 // nullTime scans NULL DATETIME into *time.Time.
 type nullTime struct{ sql.NullTime }

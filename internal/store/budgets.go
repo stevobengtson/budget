@@ -19,7 +19,7 @@ func PrevMonth(m string) string {
 
 // SetAssigned upserts the assigned amount for (month, category).
 func (s *Store) SetAssigned(ctx context.Context, month string, categoryID, cents int64) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.run(ctx,
 		`INSERT INTO budgets(month, category_id, assigned_cents) VALUES (?, ?, ?)
 		 ON CONFLICT(month, category_id) DO UPDATE SET assigned_cents=excluded.assigned_cents`,
 		month, categoryID, cents)
@@ -28,7 +28,7 @@ func (s *Store) SetAssigned(ctx context.Context, month string, categoryID, cents
 
 func (s *Store) GetAssigned(ctx context.Context, month string, categoryID int64) (int64, error) {
 	var c int64
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryOne(ctx,
 		`SELECT COALESCE(assigned_cents, 0) FROM budgets WHERE month=? AND category_id=?`,
 		month, categoryID).Scan(&c)
 	if err != nil {
@@ -58,17 +58,17 @@ type CategoryBudget struct {
 // MonthBudget computes assigned/spent/available for every active category in the month.
 // Available = (carryover from prior months, ≥0) + assigned − spent.
 func (s *Store) MonthBudget(ctx context.Context, month string) ([]CategoryBudget, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	q := fmt.Sprintf(`
 SELECT c.id, c.group_id, g.name, c.name, c.is_income, c.goal_cents, c.goal_due_date,
        COALESCE(b.assigned_cents, 0)                                              AS assigned,
        COALESCE((SELECT SUM(t.outflow_cents) FROM transactions t
-                 WHERE t.category_id = c.id AND strftime('%Y-%m', t.date) = ?), 0) AS spent
+                 WHERE t.category_id = c.id AND %s = ?), 0) AS spent
 FROM categories c
 JOIN category_groups g ON g.id = c.group_id
 LEFT JOIN budgets b ON b.category_id = c.id AND b.month = ?
 WHERE c.archived_at IS NULL
-ORDER BY g.sort_order, g.name, c.sort_order, c.name`,
-		month, month)
+ORDER BY g.sort_order, g.name, c.sort_order, c.name`, s.dialect.MonthExpr("t.date"))
+	rows, err := s.queryAll(ctx, q, month, month)
 	if err != nil {
 		return nil, fmt.Errorf("month budget: %w", err)
 	}
@@ -116,12 +116,13 @@ ORDER BY g.sort_order, g.name, c.sort_order, c.name`,
 func (s *Store) categoryAvailable(ctx context.Context, categoryID int64, month string) (int64, error) {
 	// Find the earliest month that has either an assignment or a transaction.
 	var earliest string
-	err := s.db.QueryRowContext(ctx, `
+	q := fmt.Sprintf(`
 SELECT MIN(m) FROM (
   SELECT month AS m FROM budgets WHERE category_id=?
   UNION
-  SELECT strftime('%Y-%m', date) AS m FROM transactions WHERE category_id=?
-)`, categoryID, categoryID).Scan(&earliest)
+  SELECT %s AS m FROM transactions WHERE category_id=?
+) AS sub`, s.dialect.MonthExpr("date"))
+	err := s.queryOne(ctx, q, categoryID, categoryID).Scan(&earliest)
 	if err != nil || earliest == "" {
 		// No data: available is just this month's assigned − spent (likely both 0).
 		return monthAssignedMinusSpent(ctx, s, categoryID, month)
@@ -154,15 +155,16 @@ SELECT MIN(m) FROM (
 
 func monthAssignedMinusSpent(ctx context.Context, s *Store, categoryID int64, month string) (int64, error) {
 	var assigned, spent int64
-	if err := s.db.QueryRowContext(ctx,
+	if err := s.queryOne(ctx,
 		`SELECT COALESCE((SELECT assigned_cents FROM budgets WHERE month=? AND category_id=?), 0)`,
 		month, categoryID).Scan(&assigned); err != nil {
 		return 0, err
 	}
-	if err := s.db.QueryRowContext(ctx,
+	q := fmt.Sprintf(
 		`SELECT COALESCE(SUM(outflow_cents) - SUM(inflow_cents), 0)
-		 FROM transactions WHERE category_id=? AND strftime('%Y-%m', date)=?`,
-		categoryID, month).Scan(&spent); err != nil {
+		 FROM transactions WHERE category_id=? AND %s=?`,
+		s.dialect.MonthExpr("date"))
+	if err := s.queryOne(ctx, q, categoryID, month).Scan(&spent); err != nil {
 		return 0, err
 	}
 	return assigned - spent, nil
@@ -218,19 +220,20 @@ type CreditActivity struct {
 // inflows). Loans are excluded — they typically have a fixed payment plan
 // rather than a revolving "what to pay this month" amount.
 func (s *Store) CreditCardActivityForMonth(ctx context.Context, month string) ([]CreditActivity, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	q := fmt.Sprintf(`
 SELECT a.id, a.name,
   COALESCE((SELECT SUM(t.outflow_cents) FROM transactions t
             WHERE t.account_id = a.id
-              AND strftime('%Y-%m', t.date) = ?), 0) AS purchases,
+              AND %s = ?), 0) AS purchases,
   COALESCE((SELECT SUM(t.inflow_cents)  FROM transactions t
             WHERE t.account_id = a.id
               AND t.transfer_account_id IS NOT NULL
-              AND strftime('%Y-%m', t.date) = ?), 0) AS payments
+              AND %s = ?), 0) AS payments
 FROM accounts a
 WHERE a.type = 'credit' AND a.archived_at IS NULL
 ORDER BY a.name`,
-		month, month)
+		s.dialect.MonthExpr("t.date"), s.dialect.MonthExpr("t.date"))
+	rows, err := s.queryAll(ctx, q, month, month)
 	if err != nil {
 		return nil, fmt.Errorf("credit activity: %w", err)
 	}
@@ -252,13 +255,14 @@ ORDER BY a.name`,
 // real income).
 func (s *Store) ActualIncomeForMonth(ctx context.Context, month string) (int64, error) {
 	var v int64
-	err := s.db.QueryRowContext(ctx, `
+	q := fmt.Sprintf(`
 SELECT COALESCE(SUM(t.inflow_cents) - SUM(t.outflow_cents), 0)
 FROM transactions t
 JOIN categories c ON c.id = t.category_id
-WHERE c.is_income = 1
+WHERE c.is_income = ?
   AND t.transfer_account_id IS NULL
-  AND strftime('%Y-%m', t.date) = ?`, month).Scan(&v)
+  AND %s = ?`, s.dialect.MonthExpr("t.date"))
+	err := s.queryOne(ctx, q, true, month).Scan(&v)
 	if err != nil {
 		return 0, err
 	}
@@ -315,18 +319,18 @@ func (s *Store) PaymentScheduleForCategory(ctx context.Context, categoryID *int6
 
 		if categoryID != nil {
 			var spent int64
-			if err := s.db.QueryRowContext(ctx,
+			q := fmt.Sprintf(
 				`SELECT COALESCE(SUM(outflow_cents) - SUM(inflow_cents), 0)
 				 FROM transactions
-				 WHERE category_id = ? AND strftime('%Y-%m', date) = ?`,
-				*categoryID, key).Scan(&spent); err != nil {
+				 WHERE category_id = ? AND %s = ?`, s.dialect.MonthExpr("date"))
+			if err := s.queryOne(ctx, q, *categoryID, key).Scan(&spent); err != nil {
 				return nil, err
 			}
 			if spent > 0 {
 				mp = MonthPayment{Month: key, Cents: spent, Source: PaymentSpent}
 			} else {
 				var assigned int64
-				if err := s.db.QueryRowContext(ctx,
+				if err := s.queryOne(ctx,
 					`SELECT COALESCE(assigned_cents, 0) FROM budgets WHERE month=? AND category_id=?`,
 					key, *categoryID).Scan(&assigned); err != nil && !errors.Is(err, sql.ErrNoRows) {
 					return nil, err

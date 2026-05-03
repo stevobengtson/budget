@@ -13,7 +13,7 @@ import (
 func TestRootViewRenders(t *testing.T) {
 	zone.NewGlobal()
 
-	conn, err := db.Open(":memory:")
+	conn, _, err := db.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestRootViewRenders(t *testing.T) {
 
 func TestHelpPopupToggle(t *testing.T) {
 	zone.NewGlobal()
-	conn, err := db.Open(":memory:")
+	conn, _, err := db.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestHelpPopupToggle(t *testing.T) {
 
 func TestRowClickMovesCursor(t *testing.T) {
 	zone.NewGlobal()
-	conn, err := db.Open(":memory:")
+	conn, _, err := db.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,7 +18,7 @@ type CategorySpend struct {
 // until (both inclusive on the date column). Excludes transfers (rows where
 // transfer_account_id is set). Sorted by outflow descending.
 func (s *Store) SpendingByCategory(ctx context.Context, since, until time.Time) ([]CategorySpend, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.queryAll(ctx, `
 SELECT c.id, c.name, g.name, COALESCE(SUM(t.outflow_cents), 0) AS spent
 FROM categories c
 JOIN category_groups g ON g.id = c.group_id
@@ -68,17 +68,17 @@ func (s *Store) MonthlyCashflow(ctx context.Context, months int) ([]MonthCashflo
 		key := m.Format("2006-01")
 		row := MonthCashflow{Month: key}
 
-		if err := s.db.QueryRowContext(ctx,
+		if err := s.queryOne(ctx,
 			`SELECT COALESCE(SUM(amount_cents), 0) FROM incomes WHERE month = ?`,
 			key).Scan(&row.IncomeCents); err != nil {
 			return nil, err
 		}
-		if err := s.db.QueryRowContext(ctx,
+		q := fmt.Sprintf(
 			`SELECT COALESCE(SUM(inflow_cents), 0), COALESCE(SUM(outflow_cents), 0)
 			 FROM transactions
-			 WHERE strftime('%Y-%m', date) = ?
-			   AND transfer_account_id IS NULL`,
-			key).Scan(&row.InflowCents, &row.OutflowCents); err != nil {
+			 WHERE %s = ?
+			   AND transfer_account_id IS NULL`, s.dialect.MonthExpr("date"))
+		if err := s.queryOne(ctx, q, key).Scan(&row.InflowCents, &row.OutflowCents); err != nil {
 			return nil, err
 		}
 		out = append(out, row)

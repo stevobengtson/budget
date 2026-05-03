@@ -111,11 +111,25 @@ make run       # auto-migrates on first open
 ## Usage
 
 ```bash
-make run                           # open ./data/budget.db
-go run ./cmd/budget --db ~/my.db   # custom database path
+make run                                                   # SQLite at ./data/budget.db
+go run ./cmd/budget --db ~/my.db                           # custom SQLite path
+go run ./cmd/budget --db postgres://user:pw@host:5432/db   # Postgres
 ```
 
 The database is created and all migrations are applied automatically on first run.
+The `--db` flag accepts either a SQLite file path or a `postgres://` / `postgresql://` URL.
+
+### Migrating between SQLite and Postgres
+
+To copy data from one database to another (in either direction):
+
+```bash
+go run ./cmd/budget \
+  --migrate-from ./data/budget.db \
+  --migrate-to   postgres://postgres:postgres@127.0.0.1:5432/budget?sslmode=disable
+```
+
+The destination is wiped (TRUNCATE on Postgres / DELETE on SQLite) and primary keys are preserved. Postgres sequences are advanced past the imported max id so future inserts continue from there.
 
 ---
 

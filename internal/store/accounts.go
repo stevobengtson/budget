@@ -43,7 +43,7 @@ type AccountWithBalance struct {
 }
 
 func (s *Store) CreateAccount(ctx context.Context, a Account) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
+	id, err := s.insertReturningID(ctx,
 		`INSERT INTO accounts(name, type, starting_balance_cents, credit_limit_cents, apr_bps,
 		                     monthly_payment_cents, include_in_paydown, payment_category_id)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -54,11 +54,11 @@ func (s *Store) CreateAccount(ctx context.Context, a Account) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("create account: %w", err)
 	}
-	return res.LastInsertId()
+	return id, nil
 }
 
 func (s *Store) UpdateAccount(ctx context.Context, a Account) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.run(ctx,
 		`UPDATE accounts
 		 SET name=?, type=?, starting_balance_cents=?, credit_limit_cents=?, apr_bps=?,
 		     monthly_payment_cents=?, include_in_paydown=?, payment_category_id=?
@@ -74,17 +74,17 @@ func (s *Store) UpdateAccount(ctx context.Context, a Account) error {
 }
 
 func (s *Store) ArchiveAccount(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE accounts SET archived_at=CURRENT_TIMESTAMP WHERE id=?`, id)
+	_, err := s.run(ctx, `UPDATE accounts SET archived_at=CURRENT_TIMESTAMP WHERE id=?`, id)
 	return err
 }
 
 func (s *Store) UnarchiveAccount(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE accounts SET archived_at=NULL WHERE id=?`, id)
+	_, err := s.run(ctx, `UPDATE accounts SET archived_at=NULL WHERE id=?`, id)
 	return err
 }
 
 func (s *Store) DeleteAccount(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM accounts WHERE id=?`, id)
+	_, err := s.run(ctx, `DELETE FROM accounts WHERE id=?`, id)
 	return err
 }
 
@@ -104,7 +104,7 @@ FROM accounts a`
 	}
 	q += ` ORDER BY a.archived_at IS NOT NULL, a.name`
 
-	rows, err := s.db.QueryContext(ctx, q)
+	rows, err := s.queryAll(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}
@@ -134,7 +134,7 @@ FROM accounts a`
 }
 
 func (s *Store) GetAccount(ctx context.Context, id int64) (Account, error) {
-	row := s.db.QueryRowContext(ctx,
+	row := s.queryOne(ctx,
 		`SELECT id, name, type, starting_balance_cents, credit_limit_cents, apr_bps,
 		        monthly_payment_cents, include_in_paydown, payment_category_id,
 		        archived_at, created_at

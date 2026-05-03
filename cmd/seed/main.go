@@ -16,14 +16,18 @@ func main() {
 	flag.StringVar(&dbPath, "db", "./data/budget.db", "path to SQLite database")
 	flag.Parse()
 
-	conn, err := db.Open(dbPath)
+	conn, dialect, err := db.Open(dbPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "seed:", err)
 		os.Exit(1)
 	}
 	defer func() { _ = conn.Close() }()
 
-	s := store.New(conn)
+	sd := store.DialectSQLite
+	if dialect == db.DialectPostgres {
+		sd = store.DialectPostgres
+	}
+	s := store.NewWithDialect(conn, sd)
 	ctx := context.Background()
 
 	groups, _ := s.ListGroups(ctx)

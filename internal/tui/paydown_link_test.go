@@ -14,7 +14,7 @@ import (
 // Reproduces user issue: press `c` on Paydown, pick a category, expect linkage.
 func TestPaydownLinkCategoryViaCKey(t *testing.T) {
 	zone.NewGlobal()
-	conn, _ := db.Open(":memory:")
+	conn, _, _ := db.Open(":memory:")
 	defer func() { _ = conn.Close() }()
 	s := store.New(conn)
 	ctx := context.Background()

@@ -30,27 +30,27 @@ type Category struct {
 // --- Groups ---
 
 func (s *Store) CreateGroup(ctx context.Context, name string, sortOrder int64) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
+	id, err := s.insertReturningID(ctx,
 		`INSERT INTO category_groups(name, sort_order) VALUES (?, ?)`, name, sortOrder)
 	if err != nil {
 		return 0, fmt.Errorf("create group: %w", err)
 	}
-	return res.LastInsertId()
+	return id, nil
 }
 
 func (s *Store) UpdateGroup(ctx context.Context, g CategoryGroup) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.run(ctx,
 		`UPDATE category_groups SET name=?, sort_order=? WHERE id=?`, g.Name, g.SortOrder, g.ID)
 	return err
 }
 
 func (s *Store) DeleteGroup(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM category_groups WHERE id=?`, id)
+	_, err := s.run(ctx, `DELETE FROM category_groups WHERE id=?`, id)
 	return err
 }
 
 func (s *Store) ListGroups(ctx context.Context) ([]CategoryGroup, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.queryAll(ctx,
 		`SELECT id, name, sort_order FROM category_groups ORDER BY sort_order, name`)
 	if err != nil {
 		return nil, err
@@ -74,14 +74,14 @@ func (s *Store) CreateCategory(ctx context.Context, c Category) (int64, error) {
 	if c.GoalDueDate != nil {
 		due = sql.NullTime{Time: *c.GoalDueDate, Valid: true}
 	}
-	res, err := s.db.ExecContext(ctx,
+	id, err := s.insertReturningID(ctx,
 		`INSERT INTO categories(group_id, name, goal_cents, goal_due_date, sort_order)
 		 VALUES (?, ?, ?, ?, ?)`,
 		c.GroupID, c.Name, nullInt(c.GoalCents), due, c.SortOrder)
 	if err != nil {
 		return 0, fmt.Errorf("create category: %w", err)
 	}
-	return res.LastInsertId()
+	return id, nil
 }
 
 func (s *Store) UpdateCategory(ctx context.Context, c Category) error {
@@ -89,7 +89,7 @@ func (s *Store) UpdateCategory(ctx context.Context, c Category) error {
 	if c.GoalDueDate != nil {
 		due = sql.NullTime{Time: *c.GoalDueDate, Valid: true}
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.run(ctx,
 		`UPDATE categories
 		 SET group_id=?, name=?, goal_cents=?, goal_due_date=?, sort_order=?
 		 WHERE id=?`,
@@ -101,7 +101,7 @@ func (s *Store) ArchiveCategory(ctx context.Context, id int64) error {
 	if err := s.checkNotIncome(ctx, id); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.run(ctx,
 		`UPDATE categories SET archived_at=CURRENT_TIMESTAMP WHERE id=?`, id)
 	return err
 }
@@ -110,13 +110,13 @@ func (s *Store) DeleteCategory(ctx context.Context, id int64) error {
 	if err := s.checkNotIncome(ctx, id); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `DELETE FROM categories WHERE id=?`, id)
+	_, err := s.run(ctx, `DELETE FROM categories WHERE id=?`, id)
 	return err
 }
 
 func (s *Store) checkNotIncome(ctx context.Context, id int64) error {
 	var isIncome bool
-	if err := s.db.QueryRowContext(ctx,
+	if err := s.queryOne(ctx,
 		`SELECT is_income FROM categories WHERE id=?`, id).Scan(&isIncome); err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func (s *Store) ListCategories(ctx context.Context, includeArchived bool) ([]Cat
 		q += ` WHERE archived_at IS NULL`
 	}
 	q += ` ORDER BY sort_order, name`
-	rows, err := s.db.QueryContext(ctx, q)
+	rows, err := s.queryAll(ctx, q)
 	if err != nil {
 		return nil, err
 	}
