@@ -20,8 +20,7 @@ type AccountsData struct {
 templ AccountsPage(d AccountsData) {
 	@Layout("Accounts", "accounts") {
 		<h1 class="title">Accounts</h1>
-		<a class="btn btn--primary" hx-get="/accounts/new" hx-target="#acct-form" hx-swap="innerHTML">+ new</a>
-		<div id="acct-form"></div>
+		<a class="btn btn--primary" hx-get="/accounts/new" hx-target="#modal" hx-swap="innerHTML">+ new</a>
 		<table>
 			<thead>
 				<tr>
@@ -68,7 +67,7 @@ templ AccountRow(a store.AccountWithBalance) {
 			}
 		</td>
 		<td>
-			<a class="btn btn--small" hx-get={ fmt.Sprintf("/accounts/%d/edit", a.ID) } hx-target="#acct-form" hx-swap="innerHTML">edit</a>
+			<a class="btn btn--small" hx-get={ fmt.Sprintf("/accounts/%d/edit", a.ID) } hx-target="#modal" hx-swap="innerHTML">edit</a>
 			<button class="btn btn--small btn--danger" hx-post={ fmt.Sprintf("/accounts/%d/archive", a.ID) } hx-target={ fmt.Sprintf("#acct-%d", a.ID) } hx-swap="outerHTML" hx-confirm="Archive this account?">archive</button>
 		</td>
 	</tr>
@@ -89,13 +88,13 @@ type AccountFormData struct {
 }
 
 templ AccountForm(d AccountFormData) {
-	<form id="acct-form-inner" class="card"
+	<div class="modal-card"><form id="acct-form-inner"
 	      if d.Editing {
 	        hx-put={ fmt.Sprintf("/accounts/%d", d.ID) }
 	      } else {
 	        hx-post="/accounts"
 	      }
-	      hx-target="body" hx-swap="outerHTML">
+	      hx-target="#modal" hx-swap="innerHTML">
 		<h3 class="title">
 			if d.Editing {
 			Edit account
@@ -140,9 +139,9 @@ templ AccountForm(d AccountFormData) {
 		</div>
 		<div class="form-actions">
 			<button class="btn btn--primary">save</button>
-			<button type="button" class="btn" hx-get="/accounts" hx-target="body" hx-swap="outerHTML">cancel</button>
+			<button type="button" class="btn" hx-on:click="document.getElementById('modal').innerHTML=''">cancel</button>
 		</div>
-	</form>
+	</form></div>
 }
 
 func availableCredit(a store.AccountWithBalance) int64 {

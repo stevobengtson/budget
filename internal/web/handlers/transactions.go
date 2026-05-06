@@ -23,7 +23,13 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 			acctPtr = &v
 		}
 	}
+	// Default to current month unless ?all=1 is set. This matches the
+	// Budget tab's behavior where the user lands on the current month
+	// and navigates with prev/next links.
 	month := c.Query("month")
+	if month == "" && c.Query("all") != "1" {
+		month = store.MonthKey(time.Now())
+	}
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page < 1 {
 		page = 1
@@ -51,6 +57,12 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 	cats, _ := h.store.ListCategories(ctx, true)
 	groups, _ := h.store.ListGroups(ctx)
 
+	prev, next := "", ""
+	if month != "" {
+		prev = store.PrevMonth(month)
+		t, _ := time.Parse("2006-01", month)
+		next = t.AddDate(0, 1, 0).Format("2006-01")
+	}
 	data := views.TransactionsData{
 		Rows:          rows,
 		Accounts:      accts,
@@ -58,6 +70,9 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 		Groups:        groups,
 		FilterAccount: acctPtr,
 		FilterMonth:   month,
+		PrevMonth:     prev,
+		NextMonth:     next,
+		Today:         store.MonthKey(time.Now()),
 		Page:          page,
 		PageSize:      txPageSize,
 		Total:         total,
@@ -261,7 +276,7 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 	for _, t := range rows {
 		_ = views.TransactionRow(t, accts, cats).Render(ctx, c.Writer)
 	}
-	_, _ = c.Writer.WriteString(`<div id="tx-form" hx-swap-oob="true"></div>`)
+	_, _ = c.Writer.WriteString(`<div id="modal" class="modal-mount" hx-swap-oob="true"></div>`)
 }
 
 type errInvalid string

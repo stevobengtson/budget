@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/sbengtson/budget/internal/money"
 	"github.com/sbengtson/budget/internal/store"
@@ -14,8 +15,11 @@ type TransactionsData struct {
 	Categories     []store.Category
 	Groups         []store.CategoryGroup
 	FilterAccount  *int64
-	FilterMonth    string
-	Page           int // 1-based
+	FilterMonth    string // "YYYY-MM" or "" when viewing all months
+	PrevMonth      string
+	NextMonth      string
+	Today          string // current month key, for the "today" jump button
+	Page           int    // 1-based
 	PageSize       int
 	Total          int
 }
@@ -29,26 +33,35 @@ templ TransactionsPage(d TransactionsData) {
 templ TransactionsBody(d TransactionsData) {
 	<h1 class="title">Transactions ({ strconv.Itoa(d.Total) })</h1>
 
-	<form class="filters" method="get" action="/transactions">
-		<label>Account
-			<select name="account">
-				<option value="">All accounts</option>
-				for _, a := range d.Accounts {
-					if d.FilterAccount != nil && *d.FilterAccount == a.ID {
-						<option value={ strconv.FormatInt(a.ID, 10) } selected>{ a.Name }</option>
-					} else {
-						<option value={ strconv.FormatInt(a.ID, 10) }>{ a.Name }</option>
+	<div class="filters">
+		<a class="btn btn--small" href={ templ.URL(txMonthHref(d, d.PrevMonth)) }>‹ prev</a>
+		<a class="btn btn--small" href={ templ.URL(txMonthHref(d, d.Today)) }>today</a>
+		<a class="btn btn--small" href={ templ.URL(txMonthHref(d, d.NextMonth)) }>next ›</a>
+		<span class="dim">·</span>
+		<strong>{ txMonthLabel(d.FilterMonth) }</strong>
+		<span class="dim">·</span>
+		<form method="get" action="/transactions" style="display:flex;gap:6px;align-items:center;">
+			if d.FilterMonth != "" {
+				<input type="hidden" name="month" value={ d.FilterMonth }/>
+			} else {
+				<input type="hidden" name="all" value="1"/>
+			}
+			<label>Account
+				<select name="account" onchange="this.form.submit()">
+					<option value="">All accounts</option>
+					for _, a := range d.Accounts {
+						if d.FilterAccount != nil && *d.FilterAccount == a.ID {
+							<option value={ strconv.FormatInt(a.ID, 10) } selected>{ a.Name }</option>
+						} else {
+							<option value={ strconv.FormatInt(a.ID, 10) }>{ a.Name }</option>
+						}
 					}
-				}
-			</select>
-		</label>
-		<label>Month <input type="month" name="month" value={ d.FilterMonth }/></label>
-		<button type="submit" class="btn">filter</button>
-		<a class="btn" href="/transactions">clear</a>
-		<a class="btn btn--primary" href="/transactions/new" hx-get="/transactions/new" hx-target="#tx-form" hx-swap="innerHTML">+ new</a>
-	</form>
-
-	<div id="tx-form"></div>
+				</select>
+			</label>
+			<noscript><button type="submit" class="btn">filter</button></noscript>
+		</form>
+		<a class="btn btn--primary" href="/transactions/new" hx-get="/transactions/new" hx-target="#modal" hx-swap="innerHTML">+ new</a>
+	</div>
 
 	<table>
 		<thead>
@@ -107,7 +120,7 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 			</form>
 		</td>
 		<td>
-			<a class="btn btn--small" hx-get={ fmt.Sprintf("/transactions/%d/edit", t.ID) } hx-target="#tx-form" hx-swap="innerHTML">edit</a>
+			<a class="btn btn--small" hx-get={ fmt.Sprintf("/transactions/%d/edit", t.ID) } hx-target="#modal" hx-swap="innerHTML">edit</a>
 			<button class="btn btn--small btn--danger" hx-delete={ fmt.Sprintf("/transactions/%d", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" hx-confirm="Delete?">×</button>
 		</td>
 	</tr>
@@ -132,7 +145,7 @@ templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats
 }
 
 templ TransactionForm(d TxFormData) {
-	<form id="tx-form-inner" class="card"
+	<div class="modal-card"><form id="tx-form-inner"
 	      if d.Editing {
 	        hx-put={ fmt.Sprintf("/transactions/%d", d.ID) }
 	      } else {
@@ -190,9 +203,9 @@ templ TransactionForm(d TxFormData) {
 		</div>
 		<div class="form-actions">
 			<button type="submit" class="btn btn--primary">save</button>
-			<button type="button" class="btn" hx-on:click="document.getElementById('tx-form').innerHTML=''">cancel</button>
+			<button type="button" class="btn" hx-on:click="document.getElementById('modal').innerHTML=''">cancel</button>
 		</div>
-	</form>
+	</form></div>
 }
 
 type TxFormData struct {
@@ -231,10 +244,39 @@ func categoryName(cats []store.Category, id int64) string {
 func transactionsPageHref(d TransactionsData, page int) string {
 	q := fmt.Sprintf("/transactions?page=%d", page)
 	if d.FilterMonth != "" {
-			q += "&month=" + d.FilterMonth
-		}
+		q += "&month=" + d.FilterMonth
+	} else {
+		q += "&all=1"
+	}
 	if d.FilterAccount != nil {
-			q += fmt.Sprintf("&account=%d", *d.FilterAccount)
-		}
+		q += fmt.Sprintf("&account=%d", *d.FilterAccount)
+	}
 	return q
+}
+
+// txMonthHref builds a /transactions URL pointing at the given month
+// (or "all months" when month is empty), preserving the active account
+// filter.
+func txMonthHref(d TransactionsData, month string) string {
+	q := "/transactions"
+	if month != "" {
+		q += "?month=" + month
+	} else {
+		q += "?all=1"
+	}
+	if d.FilterAccount != nil {
+		q += fmt.Sprintf("&account=%d", *d.FilterAccount)
+	}
+	return q
+}
+
+func txMonthLabel(month string) string {
+	if month == "" {
+		return "All months"
+	}
+	t, err := time.Parse("2006-01", month)
+	if err != nil {
+		return month
+	}
+	return t.Format("January 2006")
 }
