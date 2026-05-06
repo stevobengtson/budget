@@ -1,0 +1,157 @@
+package views
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/sbengtson/budget/internal/money"
+	"github.com/sbengtson/budget/internal/store"
+)
+
+type AccountsData struct {
+	Rows         []store.AccountWithBalance
+	Categories   []store.Category
+	Assets       int64
+	Liabilities  int64
+	Difference   int64
+	AvailCredit  int64
+}
+
+templ AccountsPage(d AccountsData) {
+	@Layout("Accounts", "accounts") {
+		<h1 class="title">Accounts</h1>
+		<a class="btn btn--primary" hx-get="/accounts/new" hx-target="#acct-form" hx-swap="innerHTML">+ new</a>
+		<div id="acct-form"></div>
+		<table>
+			<thead>
+				<tr>
+					<th>Name</th><th>Type</th><th>Balance</th><th>Limit</th><th>APR</th>
+					<th>Available</th><th></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, a := range d.Rows {
+					@AccountRow(a)
+				}
+			</tbody>
+		</table>
+
+		<div class="banner" style="margin-top:24px">
+			<div class="banner__item"><span class="banner__label">Assets</span><span class="money-pos">{ money.Format(d.Assets) }</span></div>
+			<div class="banner__item"><span class="banner__label">Liabilities</span><span class="money-neg">{ money.Format(d.Liabilities) }</span></div>
+			<div class="banner__item"><span class="banner__label">Difference</span>@SignedMoney(d.Difference)</div>
+			if d.AvailCredit > 0 {
+				<div class="banner__item"><span class="banner__label">Available credit</span><span class="money-pos">{ money.Format(d.AvailCredit) }</span></div>
+			}
+		</div>
+	}
+}
+
+templ AccountRow(a store.AccountWithBalance) {
+	<tr id={ fmt.Sprintf("acct-%d", a.ID) }>
+		<td>{ a.Name }</td>
+		<td>{ string(a.Type) }</td>
+		<td>@SignedMoney(a.BalanceCents)</td>
+		<td>
+			if a.CreditLimitCents != nil {
+			{ money.Format(*a.CreditLimitCents)
+		} }
+		</td>
+		<td>
+			if a.AprBps != nil {
+			{ fmt.Sprintf("%.2f%%", float64(*a.AprBps)/100.0)
+		} }
+		</td>
+		<td>
+			if a.CreditLimitCents != nil {
+				<span class="money-pos">{ money.Format(availableCredit(a)) }</span>
+			}
+		</td>
+		<td>
+			<a class="btn btn--small" hx-get={ fmt.Sprintf("/accounts/%d/edit", a.ID) } hx-target="#acct-form" hx-swap="innerHTML">edit</a>
+			<button class="btn btn--small btn--danger" hx-post={ fmt.Sprintf("/accounts/%d/archive", a.ID) } hx-target={ fmt.Sprintf("#acct-%d", a.ID) } hx-swap="outerHTML" hx-confirm="Archive this account?">archive</button>
+		</td>
+	</tr>
+}
+
+type AccountFormData struct {
+	Editing             bool
+	ID                  int64
+	Name                string
+	Type                string
+	StartingBalance     string
+	CreditLimit         string
+	APR                 string
+	MonthlyPayment      string
+	IncludeInPaydown    bool
+	PaymentCategoryID   *int64
+	Categories          []store.Category
+}
+
+templ AccountForm(d AccountFormData) {
+	<form id="acct-form-inner" class="card"
+	      if d.Editing {
+	        hx-put={ fmt.Sprintf("/accounts/%d", d.ID) }
+	      } else {
+	        hx-post="/accounts"
+	      }
+	      hx-target="body" hx-swap="outerHTML">
+		<h3 class="title">
+			if d.Editing {
+			Edit account
+		} else { New account }
+		</h3>
+		<div class="form-row"><label>Name</label><input name="name" value={ d.Name } required/></div>
+		<div class="form-row">
+			<label>Type</label>
+			<select name="type">
+				for _, t := range []string{"checking","savings","cash","credit","loan"} {
+					if t == d.Type {
+						<option value={ t } selected>{ t }</option>
+					} else {
+						<option value={ t }>{ t }</option>
+					}
+				}
+			</select>
+		</div>
+		<div class="form-row"><label>Starting balance</label><input name="starting_balance" value={ d.StartingBalance } placeholder="0.00"/></div>
+		<div class="form-row"><label>Credit limit</label><input name="credit_limit" value={ d.CreditLimit } placeholder="(optional)"/></div>
+		<div class="form-row"><label>APR %</label><input name="apr" value={ d.APR } placeholder="19.99"/></div>
+		<div class="form-row"><label>Monthly payment</label><input name="monthly_payment" value={ d.MonthlyPayment } placeholder="(optional)"/></div>
+		<div class="form-row"><label>Include in paydown</label>
+			if d.IncludeInPaydown {
+				<input type="checkbox" name="include_in_paydown" value="1" checked/>
+			} else {
+				<input type="checkbox" name="include_in_paydown" value="1"/>
+			}
+		</div>
+		<div class="form-row">
+			<label>Payment category</label>
+			<select name="payment_category_id">
+				<option value="">(none)</option>
+				for _, c := range d.Categories {
+					if d.PaymentCategoryID != nil && *d.PaymentCategoryID == c.ID {
+						<option value={ strconv.FormatInt(c.ID, 10) } selected>{ c.Name }</option>
+					} else {
+						<option value={ strconv.FormatInt(c.ID, 10) }>{ c.Name }</option>
+					}
+				}
+			</select>
+		</div>
+		<div class="form-actions">
+			<button class="btn btn--primary">save</button>
+			<button type="button" class="btn" hx-get="/accounts" hx-target="body" hx-swap="outerHTML">cancel</button>
+		</div>
+	</form>
+}
+
+func availableCredit(a store.AccountWithBalance) int64 {
+	if a.CreditLimitCents == nil {
+			return 0
+		}
+	v := a.BalanceCents + *a.CreditLimitCents
+	if v < 0 {
+			return 0
+		}
+	return v
+}

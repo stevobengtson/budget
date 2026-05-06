@@ -1,0 +1,138 @@
+package views
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/sbengtson/budget/internal/money"
+	"github.com/sbengtson/budget/internal/store"
+)
+
+type BudgetData struct {
+	Month         string // "YYYY-MM"
+	PrevMonth     string
+	NextMonth     string
+	Estimated     int64
+	Actual        int64
+	Budgeted      int64
+	Remain        int64
+	EstAct        int64
+	CreditRows    []store.CreditActivity
+	GroupedRows   [][]store.CategoryBudget // grouped by GroupName order, no Income
+}
+
+templ BudgetPage(d BudgetData) {
+	@Layout("Budget", "budget") {
+		@BudgetBody(d)
+	}
+}
+
+templ BudgetBody(d BudgetData) {
+	<h1 class="title">Budget · { formatMonth(d.Month) }</h1>
+	<div class="filters">
+		<a class="btn btn--small" href={ templ.URL("/budget?month=" + d.PrevMonth) }>‹ prev</a>
+		<a class="btn btn--small" href={ templ.URL("/budget?month=" + nowMonth()) }>today</a>
+		<a class="btn btn--small" href={ templ.URL("/budget?month=" + d.NextMonth) }>next ›</a>
+	</div>
+
+	<div class="banner">
+		<div class="banner__item"><span class="banner__label">Estimated</span><span class="money-pos">{ money.Format(d.Estimated) }</span></div>
+		<div class="banner__item"><span class="banner__label">Actual</span><span class="money-pos">{ money.Format(d.Actual) }</span></div>
+		<div class="banner__item"><span class="banner__label">Budgeted</span><span>{ money.Format(d.Budgeted) }</span></div>
+		<div class="banner__item"><span class="banner__label">Remain</span>@SignedMoney(d.Remain)</div>
+		<div class="banner__item"><span class="banner__label">Est−Act</span>@SignedMoney(d.EstAct)</div>
+	</div>
+
+	if len(d.CreditRows) > 0 {
+		<h2 class="header">Credit</h2>
+		<table>
+			<thead><tr><th>Account</th><th>Purchases</th><th>Payments</th><th>Owing</th></tr></thead>
+			<tbody>
+				for _, ca := range d.CreditRows {
+					<tr>
+						<td>{ ca.AccountName }</td>
+						<td class="money-neg">{ money.Format(ca.PurchasesCents) }</td>
+						<td class="money-pos">{ money.Format(ca.PaymentsCents) }</td>
+						<td>@SignedMoney(ca.OwingCents)</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
+
+	<table>
+		<thead>
+			<tr>
+				<th style="width:30%">Group / Category</th>
+				<th>Assigned</th>
+				<th>Spent</th>
+				<th>Available</th>
+				<th>Goal</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			for _, group := range d.GroupedRows {
+				if len(group) > 0 {
+					<tr class="group-row"><td colspan="6">[{ group[0].GroupName }]</td></tr>
+					for _, r := range group {
+						@BudgetRow(d.Month, r)
+					}
+				}
+			}
+		</tbody>
+	</table>
+
+	<p class="footnote">Tip: <a href="/budget/income">manage income</a> in this month.</p>
+}
+
+templ BudgetRow(month string, r store.CategoryBudget) {
+	<tr id={ fmt.Sprintf("cat-%d", r.CategoryID) }>
+		<td>&nbsp;&nbsp;{ r.CategoryName }</td>
+		<td>
+			<form hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
+			      hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
+			      hx-swap="outerHTML"
+			      style="display:flex;gap:4px;">
+				<input type="text" name="amount" value={ money.Format(r.AssignedCents) } size="10"/>
+				<button type="submit" class="btn btn--small btn--primary">save</button>
+			</form>
+		</td>
+		<td>{ money.Format(r.SpentCents) }</td>
+		<td>@SignedMoney(r.AvailableCents)</td>
+		<td>@GoalCell(r)</td>
+		<td></td>
+	</tr>
+}
+
+templ GoalCell(r store.CategoryBudget) {
+	if r.GoalCents != nil {
+		<span class="dim">goal { money.Format(*r.GoalCents) }</span>
+		if r.GoalDueDate != nil {
+			<span class="dim"> by { r.GoalDueDate.Format("Jan 2006") }</span>
+		}
+		if r.MonthlyTarget > 0 {
+			<span class="warn"> · need { money.Format(r.MonthlyTarget) }/mo</span>
+		}
+	}
+}
+
+templ SignedMoney(cents int64) {
+	if cents > 0 {
+		<span class="money-pos">{ money.Format(cents) }</span>
+	} else if cents < 0 {
+		<span class="money-neg">{ money.Format(cents) }</span>
+	} else {
+		<span class="money-dim">{ money.Format(cents) }</span>
+	}
+}
+
+func formatMonth(m string) string {
+	t, err := time.Parse("2006-01", m)
+	if err != nil {
+		return m
+	}
+	return t.Format("Jan 2006")
+}
+
+func nowMonth() string { return time.Now().Format("2006-01") }

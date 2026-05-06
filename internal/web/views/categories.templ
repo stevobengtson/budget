@@ -1,0 +1,82 @@
+package views
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/sbengtson/budget/internal/store"
+)
+
+type CategoriesData struct {
+	Groups []store.CategoryGroup
+	Cats   []store.Category
+}
+
+templ CategoriesPage(d CategoriesData) {
+	@Layout("Categories", "categories") {
+		<h1 class="title">Categories</h1>
+
+		<div class="filters">
+			<form hx-post="/categories/group" hx-target="body" hx-swap="outerHTML" style="display:flex;gap:6px;align-items:center;">
+				<input name="name" placeholder="New group name" required/>
+				<button class="btn btn--primary">+ group</button>
+			</form>
+		</div>
+
+		for _, g := range d.Groups {
+			<h2 class="header">[{ g.Name }]</h2>
+			<table>
+				<thead><tr><th>Name</th><th>Goal</th><th>Due</th><th></th></tr></thead>
+				<tbody>
+					for _, c := range d.Cats {
+						if c.GroupID == g.ID {
+							@CategoryRow(c)
+						}
+					}
+				</tbody>
+			</table>
+			<form hx-post="/categories" hx-target="body" hx-swap="outerHTML" style="display:flex;gap:6px;margin-bottom:16px;">
+				<input type="hidden" name="group_id" value={ strconv.FormatInt(g.ID, 10) }/>
+				<input name="name" placeholder="new category name" required/>
+				<input name="goal_cents" placeholder="goal $ (optional)"/>
+				<input name="goal_due" type="date"/>
+				<button class="btn">+ add</button>
+			</form>
+		}
+	}
+}
+
+templ CategoryRow(c store.Category) {
+	<tr id={ fmt.Sprintf("cat-row-%d", c.ID) }>
+		<td>
+			{ c.Name }
+			if c.IsIncome {
+				<span class="chip chip--lock">🔒 system</span>
+			}
+		</td>
+		<td>
+			if c.GoalCents != nil {
+				<span class="dim">${ formatCents(*c.GoalCents) }</span>
+			}
+		</td>
+		<td>
+			if c.GoalDueDate != nil {
+				<span class="dim">{ c.GoalDueDate.Format("2006-01-02") }</span>
+			}
+		</td>
+		<td>
+			if !c.IsIncome {
+				<button class="btn btn--small btn--danger" hx-post={ fmt.Sprintf("/categories/%d/archive", c.ID) } hx-confirm="Archive this category?" hx-target={ fmt.Sprintf("#cat-row-%d", c.ID) } hx-swap="outerHTML">archive</button>
+			}
+		</td>
+	</tr>
+}
+
+func formatCents(cents int64) string {
+	dollars := cents / 100
+	c := cents % 100
+	if c < 0 {
+			c = -c
+		}
+	return fmt.Sprintf("%d.%02d", dollars, c)
+}

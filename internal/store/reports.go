@@ -18,6 +18,11 @@ type CategorySpend struct {
 // until (both inclusive on the date column). Excludes transfers (rows where
 // transfer_account_id is set). Sorted by outflow descending.
 func (s *Store) SpendingByCategory(ctx context.Context, since, until time.Time) ([]CategorySpend, error) {
+	// HAVING / ORDER BY repeat the SUM() expression instead of using the
+	// "spent" alias — Postgres rejects aliases in HAVING (SQLSTATE 42703).
+	// SQLite happily accepts the repeated form too.
+	// GROUP BY enumerates every selected non-aggregate column (Postgres
+	// requires this; SQLite ignores the extras).
 	rows, err := s.queryAll(ctx, `
 SELECT c.id, c.name, g.name, COALESCE(SUM(t.outflow_cents), 0) AS spent
 FROM categories c
@@ -26,9 +31,9 @@ LEFT JOIN transactions t
        ON t.category_id = c.id
       AND t.transfer_account_id IS NULL
       AND t.date BETWEEN ? AND ?
-GROUP BY c.id
-HAVING spent > 0
-ORDER BY spent DESC`,
+GROUP BY c.id, c.name, g.name
+HAVING COALESCE(SUM(t.outflow_cents), 0) > 0
+ORDER BY COALESCE(SUM(t.outflow_cents), 0) DESC`,
 		since.Format("2006-01-02"), until.Format("2006-01-02"))
 	if err != nil {
 		return nil, fmt.Errorf("spending by category: %w", err)

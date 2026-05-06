@@ -1,49 +1,52 @@
-package main
+package cmd
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/sbengtson/budget/internal/db"
 	"github.com/sbengtson/budget/internal/store"
 )
 
-func main() {
-	var dbPath string
-	flag.StringVar(&dbPath, "db", "./data/budget.db", "path to SQLite database")
-	flag.Parse()
-
-	conn, dialect, err := db.Open(dbPath)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "seed:", err)
-		os.Exit(1)
-	}
-	defer func() { _ = conn.Close() }()
-
-	sd := store.DialectSQLite
-	if dialect == db.DialectPostgres {
-		sd = store.DialectPostgres
-	}
-	s := store.NewWithDialect(conn, sd)
-	ctx := context.Background()
-
-	groups, _ := s.ListGroups(ctx)
-	for _, g := range groups {
-		if g.Name != "Income" {
-			fmt.Println("database already has data — run 'make db-reset' first")
-			os.Exit(1)
+var seedCmd = &cobra.Command{
+	Use:   "seed",
+	Short: "Populate the database with three months of demo data",
+	RunE: func(c *cobra.Command, args []string) error {
+		cfg, err := resolvedConfig()
+		if err != nil {
+			return err
 		}
-	}
+		conn, dialect, err := db.Open(cfg.DB.DSN)
+		if err != nil {
+			return fmt.Errorf("open db: %w", err)
+		}
+		defer func() { _ = conn.Close() }()
 
-	if err := seed(ctx, s); err != nil {
-		fmt.Fprintln(os.Stderr, "seed:", err)
-		os.Exit(1)
-	}
-	fmt.Println("seeded successfully")
+		sd := store.DialectSQLite
+		if dialect == db.DialectPostgres {
+			sd = store.DialectPostgres
+		}
+		s := store.NewWithDialect(conn, sd)
+		ctx := context.Background()
+
+		groups, _ := s.ListGroups(ctx)
+		for _, g := range groups {
+			if g.Name != "Income" {
+				return fmt.Errorf("database already has data — wipe it first")
+			}
+		}
+		if err := seed(ctx, s); err != nil {
+			return err
+		}
+		fmt.Println("seeded successfully")
+		return nil
+	},
 }
+
+func init() { dbCmd.AddCommand(seedCmd) }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

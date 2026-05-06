@@ -110,26 +110,76 @@ make run       # auto-migrates on first open
 
 ## Usage
 
+The `budget` binary uses Cobra subcommands. With no subcommand, it launches the TUI.
+
 ```bash
-make run                                                   # SQLite at ./data/budget.db
-go run ./cmd/budget --db ~/my.db                           # custom SQLite path
-go run ./cmd/budget --db postgres://user:pw@host:5432/db   # Postgres
+budget                       # TUI (default)
+budget tui                   # explicit TUI
+budget web                   # HTTP server on :8080 (HTMX + Templ)
+budget migrate --from <a> --to <b>   # copy data SQLite ↔ Postgres
+budget config show           # print resolved config
+
+# Schema + seed (under `db` group):
+budget db up                 # apply all pending up migrations
+budget db up-one             # apply just the next pending migration
+budget db down               # roll back the most recent migration
+budget db reset              # roll back to zero + re-apply (DESTRUCTIVE)
+budget db status             # one line per migration (applied / pending)
+budget db version            # current migration version
+budget db seed               # populate demo data
 ```
 
-The database is created and all migrations are applied automatically on first run.
-The `--db` flag accepts either a SQLite file path or a `postgres://` / `postgresql://` URL.
+> Note the two different "migrate" verbs:
+> - `budget db ...` runs **schema** migrations (the goose up/down/status workflow).
+> - `budget migrate --from --to` copies **data** between two databases.
+
+Persistent flags on the root command:
+
+| flag           | meaning                                               |
+|----------------|-------------------------------------------------------|
+| `--db <dsn>`   | SQLite path or `postgres://...` URL                   |
+| `--config <f>` | explicit config file (overrides search path)          |
+| `--log-level`  | `debug` / `info` / `warn` / `error`                   |
+
+### Configuration
+
+Settings are resolved (highest precedence first) from CLI flag → `BUDGET_*` env var → config file → defaults. The config file is YAML and looked up in:
+
+1. `./budget.yaml`
+2. `$XDG_CONFIG_HOME/budget/config.yaml`
+3. `~/.config/budget/config.yaml`
+
+Sample (`budget.example.yaml`):
+
+```yaml
+db:
+  dsn: "./data/budget.db"     # or postgres://user:pw@host:5432/db
+web:
+  addr: ":8080"
+log:
+  level: "info"
+```
+
+### Web frontend
+
+`budget web` serves an HTMX + Templ + Gin frontend that mirrors every TUI tab — Budget, Transactions, Accounts, Categories, Paydown, Reports. Real URLs (e.g. `/budget?month=2026-05`) so the browser back button works; forms swap individual rows / sections via HTMX. Catppuccin Mocha theme matches the TUI.
+
+```bash
+budget web --addr :8080
+open http://localhost:8080/budget
+```
+
+The web app reads its DB from the same config the TUI uses.
 
 ### Migrating between SQLite and Postgres
 
-To copy data from one database to another (in either direction):
-
 ```bash
-go run ./cmd/budget \
-  --migrate-from ./data/budget.db \
-  --migrate-to   postgres://postgres:postgres@127.0.0.1:5432/budget?sslmode=disable
+budget migrate \
+  --from ./data/budget.db \
+  --to   postgres://postgres:postgres@127.0.0.1:5432/budget?sslmode=disable
 ```
 
-The destination is wiped (TRUNCATE on Postgres / DELETE on SQLite) and primary keys are preserved. Postgres sequences are advanced past the imported max id so future inserts continue from there.
+The destination is wiped (TRUNCATE on Postgres / DELETE on SQLite) and primary keys are preserved. Postgres sequences advance past the imported max id so future inserts continue from there.
 
 ---
 

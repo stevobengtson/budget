@@ -1,0 +1,144 @@
+package views
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/sbengtson/budget/internal/money"
+	"github.com/sbengtson/budget/internal/paydown"
+	"github.com/sbengtson/budget/internal/store"
+)
+
+type PaydownData struct {
+	Plans         []paydown.Plan
+	Accounts      []store.AccountWithBalance
+	AllAccounts   []store.AccountWithBalance
+	Categories    []store.Category
+	Horizon       int
+	TotalMonthly  int64
+	TotalInterest int64
+}
+
+templ PaydownPage(d PaydownData) {
+	@Layout("Paydown", "paydown") {
+		<h1 class="title">Debt Paydown · { strconv.Itoa(d.Horizon) } month horizon</h1>
+
+		<div class="filters">
+			<form method="get" action="/paydown" style="display:flex;gap:8px;align-items:center;">
+				<label>Horizon (months) <input name="horizon" type="number" min="12" max="360" step="12" value={ strconv.Itoa(d.Horizon) }/></label>
+				<button class="btn">apply</button>
+			</form>
+		</div>
+
+		<div class="banner">
+			<div class="banner__item"><span class="banner__label">Monthly outflow</span><span class="money-pos">{ money.Format(d.TotalMonthly) }</span></div>
+			<div class="banner__item"><span class="banner__label">Total interest</span><span class="money-neg">{ money.Format(d.TotalInterest) }</span></div>
+		</div>
+
+		if len(d.Plans) == 0 {
+			<p class="dim">No accounts in the paydown plan yet. Open <a href="/accounts">Accounts</a>, edit one with APR, and check "include in paydown".</p>
+		}
+
+		for i, p := range d.Plans {
+			@PaydownSection(p, d.Accounts[i])
+		}
+	}
+}
+
+templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance) {
+	<section style="margin-bottom:24px">
+		<h3>
+			[{ acct.Name }] { fmt.Sprintf("%.2f%% APR", float64(p.AprBps)/100.0) } · payment <span class="money-pos">{ money.Format(p.PaymentCents) }/mo</span> · start { money.Format(p.StartCents) }
+			if !p.PayoffMonth.IsZero() {
+				· clears { p.PayoffMonth.Format("Jan 2006") }
+			}
+			if p.Diverging {
+				· <span class="money-neg">payment ≤ interest, debt grows</span>
+			}
+			<button class="btn btn--small" hx-get={ fmt.Sprintf("/paydown/%d/payment-form", acct.ID) } hx-target="#modal" hx-swap="innerHTML" style="margin-left:8px">edit payment</button>
+			<button class="btn btn--small" hx-get={ fmt.Sprintf("/paydown/%d/category-form", acct.ID) } hx-target="#modal" hx-swap="innerHTML">link category</button>
+			<button class="btn btn--small btn--danger" hx-post={ fmt.Sprintf("/paydown/%d/exclude", acct.ID) } hx-confirm="Remove from paydown?">remove</button>
+		</h3>
+		<table>
+			<thead><tr><th>Month</th><th>Interest</th><th>Payment</th><th>Source</th><th>Balance</th></tr></thead>
+			<tbody>
+				for _, r := range p.Rows {
+					<tr>
+						<td>{ r.Month.Format("Jan 2006") }</td>
+						<td class="money-neg">{ money.Format(r.InterestCents) }</td>
+						<td class="money-pos">{ money.Format(r.PaymentCents) }</td>
+						<td>@PaydownSource(r.PaymentSource)</td>
+						<td>{ money.Format(r.BalanceCents) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</section>
+}
+
+templ PaydownSource(s paydown.PaymentSource) {
+	if s == paydown.SourceSpent {
+		<span class="money-pos">✓ spent</span>
+	} else if s == paydown.SourceAssigned {
+		<span class="warn">→ assigned</span>
+	} else {
+		<span class="dim">· default</span>
+	}
+}
+
+// PaymentModal renders a centered card with a single-input form for
+// updating the fallback monthly payment on an account.
+templ PaymentModal(acct store.AccountWithBalance) {
+	<div class="modal-card">
+		<h3>Edit monthly payment — { acct.Name }</h3>
+		<form hx-post={ fmt.Sprintf("/paydown/%d/payment", acct.ID) } hx-target="body" hx-swap="outerHTML">
+			<div class="form-row">
+				<label>Monthly payment</label>
+				<input name="amount" type="text" placeholder="200.00" autofocus
+					if acct.MonthlyPaymentCents != nil {
+						value={ money.Format(*acct.MonthlyPaymentCents) }
+					}
+				/>
+			</div>
+			<p class="dim">Leave blank to clear. The amount is used for any month that has no spent or assigned data in the linked category.</p>
+			<div class="modal-actions">
+				<button type="button" class="btn" hx-on:click="document.getElementById('modal').innerHTML=''">cancel</button>
+				<button type="submit" class="btn btn--primary">save</button>
+			</div>
+		</form>
+	</div>
+}
+
+// CategoryModal renders the modal for linking / unlinking a budget
+// category that drives this account's per-month payment override.
+templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups []store.CategoryGroup) {
+	<div class="modal-card">
+		<h3>Link payment category — { acct.Name }</h3>
+		<form hx-post={ fmt.Sprintf("/paydown/%d/category", acct.ID) } hx-target="body" hx-swap="outerHTML">
+			<div class="form-row">
+				<label>Category</label>
+				<select name="category_id">
+					<option value="">(none — fall back to default)</option>
+					for _, g := range groups {
+						<optgroup label={ g.Name }>
+							for _, c := range cats {
+								if c.GroupID == g.ID {
+									if acct.PaymentCategoryID != nil && *acct.PaymentCategoryID == c.ID {
+										<option value={ strconv.FormatInt(c.ID, 10) } selected>{ c.Name }</option>
+									} else {
+										<option value={ strconv.FormatInt(c.ID, 10) }>{ c.Name }</option>
+									}
+								}
+							}
+						</optgroup>
+					}
+				</select>
+			</div>
+			<p class="dim">For each projected month the engine picks <strong>spent</strong> in this category, then <strong>assigned</strong>, then the default monthly payment.</p>
+			<div class="modal-actions">
+				<button type="button" class="btn" hx-on:click="document.getElementById('modal').innerHTML=''">cancel</button>
+				<button type="submit" class="btn btn--primary">save</button>
+			</div>
+		</form>
+	</div>
+}

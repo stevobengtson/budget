@@ -1,10 +1,4 @@
 # Binaries
-budget
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
 bin/*
 
 # Test binary, built with go test -c
@@ -19,15 +13,10 @@ go.work
 go.work.sum
 
 # SQLite databases
-*.db
-*.db-shm
-*.db-wal
-*.sqlite
-*.sqlite3
+data/*
 
 # Environment
-.env
-.env.local
+budget.yaml
 
 # OS
 .DS_Store

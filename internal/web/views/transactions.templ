@@ -1,0 +1,240 @@
+package views
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/sbengtson/budget/internal/money"
+	"github.com/sbengtson/budget/internal/store"
+)
+
+type TransactionsData struct {
+	Rows           []store.Transaction
+	Accounts       []store.AccountWithBalance
+	Categories     []store.Category
+	Groups         []store.CategoryGroup
+	FilterAccount  *int64
+	FilterMonth    string
+	Page           int // 1-based
+	PageSize       int
+	Total          int
+}
+
+templ TransactionsPage(d TransactionsData) {
+	@Layout("Transactions", "transactions") {
+		@TransactionsBody(d)
+	}
+}
+
+templ TransactionsBody(d TransactionsData) {
+	<h1 class="title">Transactions ({ strconv.Itoa(d.Total) })</h1>
+
+	<form class="filters" method="get" action="/transactions">
+		<label>Account
+			<select name="account">
+				<option value="">All accounts</option>
+				for _, a := range d.Accounts {
+					if d.FilterAccount != nil && *d.FilterAccount == a.ID {
+						<option value={ strconv.FormatInt(a.ID, 10) } selected>{ a.Name }</option>
+					} else {
+						<option value={ strconv.FormatInt(a.ID, 10) }>{ a.Name }</option>
+					}
+				}
+			</select>
+		</label>
+		<label>Month <input type="month" name="month" value={ d.FilterMonth }/></label>
+		<button type="submit" class="btn">filter</button>
+		<a class="btn" href="/transactions">clear</a>
+		<a class="btn btn--primary" href="/transactions/new" hx-get="/transactions/new" hx-target="#tx-form" hx-swap="innerHTML">+ new</a>
+	</form>
+
+	<div id="tx-form"></div>
+
+	<table>
+		<thead>
+			<tr>
+				<th>Date</th><th>Account</th><th>Category / Transfer</th><th>Payee</th>
+				<th>Outflow</th><th>Inflow</th><th>✓</th><th></th>
+			</tr>
+		</thead>
+		<tbody id="tx-rows">
+			for _, t := range d.Rows {
+				@TransactionRow(t, d.Accounts, d.Categories)
+			}
+		</tbody>
+	</table>
+
+	if d.Total > d.PageSize {
+		<div class="pager">
+			if d.Page > 1 {
+				<a class="btn btn--small" href={ templ.URL(transactionsPageHref(d, d.Page-1)) }>‹ prev</a>
+			}
+			<span>page { strconv.Itoa(d.Page) } of { strconv.Itoa((d.Total + d.PageSize - 1) / d.PageSize) }</span>
+			if d.Page * d.PageSize < d.Total {
+				<a class="btn btn--small" href={ templ.URL(transactionsPageHref(d, d.Page+1)) }>next ›</a>
+			}
+		</div>
+	}
+}
+
+templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
+	<tr id={ fmt.Sprintf("tx-%d", t.ID) }>
+		<td>{ t.Date.Format("Jan 2, 2006") }</td>
+		<td>{ accountName(accts, t.AccountID) }</td>
+		<td>@TxCategoryCell(t, accts, cats)</td>
+		<td>
+			if t.Payee != nil {
+			{ *t.Payee
+		} }
+		</td>
+		<td>
+			if t.OutflowCents > 0 {
+			<span class="money-neg">{ money.Format(t.OutflowCents)
+		}</span> }
+		</td>
+		<td>
+			if t.InflowCents > 0 {
+			<span class="money-pos">{ money.Format(t.InflowCents)
+		}</span> }
+		</td>
+		<td>
+			<form hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" style="display:inline">
+				if t.Cleared {
+					<button class="btn btn--small money-pos" type="submit">✓</button>
+				} else {
+					<button class="btn btn--small dim" type="submit">·</button>
+				}
+			</form>
+		</td>
+		<td>
+			<a class="btn btn--small" hx-get={ fmt.Sprintf("/transactions/%d/edit", t.ID) } hx-target="#tx-form" hx-swap="innerHTML">edit</a>
+			<button class="btn btn--small btn--danger" hx-delete={ fmt.Sprintf("/transactions/%d", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" hx-confirm="Delete?">×</button>
+		</td>
+	</tr>
+}
+
+templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
+	if t.TransferAccountID != nil {
+		<span class="dim">
+			if t.OutflowCents > 0 {
+			→
+		} else { ← }
+			{ accountName(accts, *t.TransferAccountID) }
+		</span>
+		if t.CategoryID != nil {
+			 · { categoryName(cats, *t.CategoryID) }
+		}
+	} else if t.CategoryID != nil {
+		{ categoryName(cats, *t.CategoryID) }
+	} else {
+		<span class="dim">(uncategorized)</span>
+	}
+}
+
+templ TransactionForm(d TxFormData) {
+	<form id="tx-form-inner" class="card"
+	      if d.Editing {
+	        hx-put={ fmt.Sprintf("/transactions/%d", d.ID) }
+	      } else {
+	        hx-post="/transactions"
+	      }
+	      hx-target="#tx-rows" hx-swap="innerHTML">
+		<h3 class="title">
+			if d.Editing {
+			Edit
+		} else { New }
+			 transaction
+		</h3>
+		<div class="form-row"><label>Date</label><input type="date" name="date" value={ d.Date } required/></div>
+		<div class="form-row">
+			<label>Account</label>
+			<select name="account_id" required>
+				for _, a := range d.Accounts {
+					if d.AccountID == a.ID {
+						<option value={ strconv.FormatInt(a.ID, 10) } selected>{ a.Name }</option>
+					} else {
+						<option value={ strconv.FormatInt(a.ID, 10) }>{ a.Name }</option>
+					}
+				}
+			</select>
+		</div>
+		<div class="form-row">
+			<label>Category</label>
+			<select name="category_id">
+				<option value="">(none)</option>
+				for _, c := range d.Categories {
+					if d.CategoryID != nil && *d.CategoryID == c.ID {
+						<option value={ strconv.FormatInt(c.ID, 10) } selected>{ c.Name }</option>
+					} else {
+						<option value={ strconv.FormatInt(c.ID, 10) }>{ c.Name }</option>
+					}
+				}
+			</select>
+		</div>
+		<div class="form-row"><label>Payee</label><input type="text" name="payee" value={ d.Payee }/></div>
+		<div class="form-row"><label>Notes</label><input type="text" name="notes" value={ d.Notes }/></div>
+		<div class="form-row"><label>Outflow</label><input type="text" name="outflow" value={ d.Outflow } placeholder="0.00"/></div>
+		<div class="form-row"><label>Inflow</label><input type="text" name="inflow" value={ d.Inflow } placeholder="0.00"/></div>
+		<div class="form-row">
+			<label>Transfer to</label>
+			<select name="transfer_to">
+				<option value="">(none)</option>
+				for _, a := range d.Accounts {
+					if d.TransferAccountID != nil && *d.TransferAccountID == a.ID {
+						<option value={ strconv.FormatInt(a.ID, 10) } selected>{ a.Name }</option>
+					} else {
+						<option value={ strconv.FormatInt(a.ID, 10) }>{ a.Name }</option>
+					}
+				}
+			</select>
+		</div>
+		<div class="form-actions">
+			<button type="submit" class="btn btn--primary">save</button>
+			<button type="button" class="btn" hx-on:click="document.getElementById('tx-form').innerHTML=''">cancel</button>
+		</div>
+	</form>
+}
+
+type TxFormData struct {
+	Editing           bool
+	ID                int64
+	Date              string // YYYY-MM-DD
+	AccountID         int64
+	CategoryID        *int64
+	TransferAccountID *int64
+	Payee             string
+	Notes             string
+	Outflow           string
+	Inflow            string
+	Accounts          []store.AccountWithBalance
+	Categories        []store.Category
+}
+
+func accountName(accts []store.AccountWithBalance, id int64) string {
+	for _, a := range accts {
+		if a.ID == id {
+			return a.Name
+		}
+	}
+	return ""
+}
+
+func categoryName(cats []store.Category, id int64) string {
+	for _, c := range cats {
+		if c.ID == id {
+			return c.Name
+		}
+	}
+	return ""
+}
+
+func transactionsPageHref(d TransactionsData, page int) string {
+	q := fmt.Sprintf("/transactions?page=%d", page)
+	if d.FilterMonth != "" {
+			q += "&month=" + d.FilterMonth
+		}
+	if d.FilterAccount != nil {
+			q += fmt.Sprintf("&account=%d", *d.FilterAccount)
+		}
+	return q
+}

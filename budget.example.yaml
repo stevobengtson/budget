@@ -1,0 +1,18 @@
+# Sample budget configuration. Copy to ./budget.yaml or
+# $XDG_CONFIG_HOME/budget/config.yaml.
+#
+# Resolution order: CLI flag > BUDGET_* env > this file > defaults.
+
+db:
+  # SQLite path or Postgres URL. Examples:
+  #   ./data/budget.db
+  #   /Users/me/.config/budget/budget.db
+  #   postgres://postgres:postgres@127.0.0.1:5432/budget?sslmode=disable
+  dsn: "./data/budget.db"
+
+web:
+  # Listen address for `budget web`.
+  addr: ":8080"
+
+log:
+  level: "info"
