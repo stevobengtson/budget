@@ -14,9 +14,13 @@ go.work.sum
 
 # SQLite databases
 data/*
+*.db
 
 # Environment
 budget.yaml
+
+# Other
+docs/*
 
 # OS
 .DS_Store
