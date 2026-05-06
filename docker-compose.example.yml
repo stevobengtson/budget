@@ -1,0 +1,36 @@
+# Example docker-compose for running budget on Synology (or anywhere).
+#
+# Drop this next to your Synology Postgres compose file or merge the
+# `budget` service into it. Update the BUDGET_DB_DSN to match your
+# Postgres container's hostname / credentials / database name.
+
+services:
+  budget:
+    build: .                  # or: image: ghcr.io/yourname/budget:latest
+    container_name: budget
+    ports:
+      - "8080:8080"
+    environment:
+      # SQLite path inside the container, OR a Postgres URL. The container
+      # already exposes /data as a volume for SQLite users.
+      BUDGET_DB_DSN: "postgres://postgres:postgres@postgres:5432/budget?sslmode=disable"
+      BUDGET_WEB_ADDR: ":8080"
+      TZ: "America/Vancouver"
+    restart: unless-stopped
+    depends_on:
+      - postgres              # remove if Postgres lives in a separate compose file
+
+  # Optional — shown for completeness. Comment out if you already have
+  # Postgres running elsewhere.
+  postgres:
+    image: postgres:16-alpine
+    container_name: budget-postgres
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: budget
+    volumes:
+      - budget-pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  budget-pgdata:

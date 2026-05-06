@@ -1,0 +1,28 @@
+# Build artifacts
+bin/
+data/
+tmp/
+*.exe
+
+# Generated Templ Go files (rebuilt inside the image to avoid stale state).
+internal/web/views/*_templ.go
+
+# Local SQLite databases
+*.db
+*.db-wal
+*.db-shm
+
+# Editor / VCS noise
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+
+# Local docs / screenshots not needed at runtime.
+screenshots/
+docs/
+
+# Test caches
+*.test
+*.out

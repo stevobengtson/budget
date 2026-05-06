@@ -1,0 +1,113 @@
+package views
+
+import (
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/sbengtson/budget/internal/money"
+	"github.com/sbengtson/budget/internal/store"
+)
+
+type IncomeData struct {
+	Month     string // YYYY-MM
+	PrevMonth string
+	NextMonth string
+	Today     string
+	Rows      []store.Income
+	Total     int64
+	Actual    int64
+	Budgeted  int64
+}
+
+templ IncomePage(d IncomeData) {
+	@Layout("Income · Budget", "budget") {
+		<h1 class="title">Income · { incomeMonthLabel(d.Month) }</h1>
+		<div class="filters">
+			<a class="btn btn--small" href={ templ.URL("/budget/income?month=" + d.PrevMonth) }>‹ prev</a>
+			<a class="btn btn--small" href={ templ.URL("/budget/income?month=" + d.Today) }>today</a>
+			<a class="btn btn--small" href={ templ.URL("/budget/income?month=" + d.NextMonth) }>next ›</a>
+			<span class="dim">·</span>
+			<a class="btn btn--small" href={ templ.URL("/budget?month=" + d.Month) }>← back to budget</a>
+			<a class="btn btn--primary" hx-get={ "/budget/income/new?month=" + d.Month } hx-target="#modal" hx-swap="innerHTML">+ new</a>
+		</div>
+
+		if len(d.Rows) == 0 {
+			<p class="dim">No income entries yet for this month. Add one with the <strong>+ new</strong> button.</p>
+		} else {
+			<table>
+				<thead><tr><th>Source</th><th>Amount</th><th></th></tr></thead>
+				<tbody id="income-rows">
+					for _, r := range d.Rows {
+						@IncomeRow(d.Month, r)
+					}
+				</tbody>
+			</table>
+		}
+
+		<div class="banner" style="margin-top:24px">
+			<div class="banner__item"><span class="banner__label">Estimated</span><span class="money-pos">{ money.Format(d.Total) }</span></div>
+			<div class="banner__item"><span class="banner__label">Actual</span><span class="money-pos">{ money.Format(d.Actual) }</span></div>
+			<div class="banner__item"><span class="banner__label">Budgeted</span><span>{ money.Format(d.Budgeted) }</span></div>
+			<div class="banner__item"><span class="banner__label">Remain</span>@SignedMoney(d.Total - d.Budgeted)</div>
+		</div>
+	}
+}
+
+templ IncomeRow(month string, r store.Income) {
+	<tr id={ fmt.Sprintf("income-%d", r.ID) }>
+		<td>{ r.Name }</td>
+		<td class="money-pos">{ money.Format(r.AmountCents) }</td>
+		<td>
+			<a class="btn btn--small" hx-get={ fmt.Sprintf("/budget/income/%d/edit?month=%s", r.ID, month) } hx-target="#modal" hx-swap="innerHTML">edit</a>
+			<button class="btn btn--small btn--danger" hx-delete={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" hx-confirm="Delete?">×</button>
+		</td>
+	</tr>
+}
+
+type IncomeFormData struct {
+	Editing bool
+	ID      int64
+	Month   string
+	Name    string
+	Amount  string
+}
+
+templ IncomeForm(d IncomeFormData) {
+	<div class="modal-card">
+		<form
+			if d.Editing {
+				hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", d.ID, d.Month) }
+			} else {
+				hx-post={ "/budget/income?month=" + d.Month }
+			}
+			hx-target="#modal" hx-swap="innerHTML">
+			<h3 class="title">
+				if d.Editing {
+					Edit income
+				} else {
+					New income
+				}
+				 · { incomeMonthLabel(d.Month) }
+			</h3>
+			<div class="form-row"><label>Source</label><input name="name" value={ d.Name } required autofocus placeholder="Salary"/></div>
+			<div class="form-row"><label>Amount</label><input name="amount" value={ d.Amount } placeholder="0.00"/></div>
+			<div class="modal-actions">
+				<button type="button" class="btn" hx-on:click="document.getElementById('modal').innerHTML=''">cancel</button>
+				<button type="submit" class="btn btn--primary">save</button>
+			</div>
+		</form>
+	</div>
+}
+
+func incomeMonthLabel(m string) string {
+	t, err := time.Parse("2006-01", m)
+	if err != nil {
+		return m
+	}
+	return t.Format("January 2006")
+}
+
+// stringIDs is a helper that converts an int64 to a string for templ
+// expressions; kept here so income.templ stays self-contained.
+func stringIDs(v int64) string { return strconv.FormatInt(v, 10) }

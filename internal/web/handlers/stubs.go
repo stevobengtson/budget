@@ -15,10 +15,6 @@ func placeholder(c *gin.Context, page string) {
 
 // --- Budget ---
 func (h *Handlers) BudgetGoal(c *gin.Context)          { placeholder(c, "BudgetGoal") }
-func (h *Handlers) BudgetIncomePanel(c *gin.Context)   { placeholder(c, "BudgetIncomePanel") }
-func (h *Handlers) BudgetIncomeCreate(c *gin.Context)  { placeholder(c, "BudgetIncomeCreate") }
-func (h *Handlers) BudgetIncomeUpdate(c *gin.Context)  { placeholder(c, "BudgetIncomeUpdate") }
-func (h *Handlers) BudgetIncomeDelete(c *gin.Context)  { placeholder(c, "BudgetIncomeDelete") }
 
 // --- Transactions ---
 

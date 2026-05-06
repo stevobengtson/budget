@@ -171,6 +171,31 @@ open http://localhost:8080/budget
 
 The web app reads its DB from the same config the TUI uses.
 
+### Docker / Apple Containers
+
+A multi-stage `Dockerfile` is included. The image runs `budget web` by default and listens on `:8080`. Both database drivers are pure Go so the binary is fully static — no extra packages required at runtime.
+
+```bash
+# Build (Apple `container` CLI shown; works the same with docker / podman)
+container build -t budget:latest .
+
+# Postgres connection (Synology layout, where postgres lives in another container)
+container run --rm -p 8080:8080 \
+  -e BUDGET_DB_DSN='postgres://postgres:postgres@postgres:5432/budget?sslmode=disable' \
+  -e BUDGET_WEB_ADDR=':8080' \
+  budget:latest
+
+# SQLite — bind a local directory at /data and point the DSN at it
+container run --rm -p 8080:8080 \
+  -v /volume1/budget:/data \
+  -e BUDGET_DB_DSN=/data/budget.db \
+  budget:latest
+```
+
+A starter `docker-compose.example.yml` is also included with both the `budget` service and an optional Postgres sidecar — drop it next to your existing Synology compose stack and adjust the DSN to match your Postgres container's hostname.
+
+Migrations apply automatically on first connect, so a fresh Postgres database becomes a fully-set-up budget DB on first request. Use `container run ... budget db status` (or any other `db ...` subcommand) to inspect or roll back schema changes.
+
 ### Migrating between SQLite and Postgres
 
 ```bash
