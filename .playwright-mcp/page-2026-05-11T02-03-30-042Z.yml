@@ -1,0 +1,352 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - link "💰 budget" [ref=e3] [cursor=pointer]:
+      - /url: /budget
+    - navigation [ref=e4]:
+      - link "💰 Budget" [ref=e5] [cursor=pointer]:
+        - /url: /budget
+        - generic [ref=e6]: 💰
+        - generic [ref=e7]: Budget
+      - link "📒 Transactions" [ref=e8] [cursor=pointer]:
+        - /url: /transactions
+        - generic [ref=e9]: 📒
+        - generic [ref=e10]: Transactions
+      - link "🏦 Accounts" [ref=e11] [cursor=pointer]:
+        - /url: /accounts
+        - generic [ref=e12]: 🏦
+        - generic [ref=e13]: Accounts
+      - link "🗂 Categories" [ref=e14] [cursor=pointer]:
+        - /url: /categories
+        - generic [ref=e15]: 🗂
+        - generic [ref=e16]: Categories
+      - link "📉 Paydown" [ref=e17] [cursor=pointer]:
+        - /url: /paydown
+        - generic [ref=e18]: 📉
+        - generic [ref=e19]: Paydown
+      - link "📊 Reports" [ref=e20] [cursor=pointer]:
+        - /url: /reports
+        - generic [ref=e21]: 📊
+        - generic [ref=e22]: Reports
+  - main [ref=e23]:
+    - heading "Transactions (24)" [level=1] [ref=e24]
+    - generic [ref=e25]:
+      - link "‹ prev" [ref=e26] [cursor=pointer]:
+        - /url: /transactions?month=2026-04
+      - link "today" [ref=e27] [cursor=pointer]:
+        - /url: /transactions?month=2026-05
+      - link "next ›" [ref=e28] [cursor=pointer]:
+        - /url: /transactions?month=2026-06
+      - generic [ref=e29]: ·
+      - strong [ref=e30]: May 2026
+      - generic [ref=e31]: ·
+      - generic [ref=e33]:
+        - text: Account
+        - combobox "Account" [ref=e34]:
+          - option "All accounts" [selected]
+          - option "Chase Sapphire"
+          - option "High-Yield Savings"
+          - option "Honda Car Loan"
+          - option "Main Checking"
+          - option "Visa"
+      - link "+ new" [ref=e35] [cursor=pointer]:
+        - /url: /transactions/new
+    - table [ref=e36]:
+      - rowgroup [ref=e37]:
+        - row "Date Account Category / Transfer Payee Outflow Inflow ✓" [ref=e38]:
+          - columnheader "Date" [ref=e39]
+          - columnheader "Account" [ref=e40]
+          - columnheader "Category / Transfer" [ref=e41]
+          - columnheader "Payee" [ref=e42]
+          - columnheader "Outflow" [ref=e43]
+          - columnheader "Inflow" [ref=e44]
+          - columnheader "✓" [ref=e45]
+          - columnheader [ref=e46]
+      - rowgroup [ref=e47]:
+        - row "May 25, 2026 High-Yield Savings ← Main Checking $300.00 ✓ edit ×" [ref=e48]:
+          - cell "May 25, 2026" [ref=e49]
+          - cell "High-Yield Savings" [ref=e50]
+          - cell "← Main Checking" [ref=e51]
+          - cell [ref=e52]
+          - cell [ref=e53]
+          - cell "$300.00" [ref=e54]
+          - cell "✓" [ref=e55]:
+            - button "✓" [ref=e57] [cursor=pointer]
+          - cell "edit ×" [ref=e58]:
+            - text: edit
+            - button "×" [ref=e59] [cursor=pointer]
+        - row "May 25, 2026 Main Checking → High-Yield Savings $300.00 ✓ edit ×" [ref=e60]:
+          - cell "May 25, 2026" [ref=e61]
+          - cell "Main Checking" [ref=e62]
+          - cell "→ High-Yield Savings" [ref=e63]
+          - cell [ref=e64]
+          - cell "$300.00" [ref=e65]
+          - cell [ref=e66]
+          - cell "✓" [ref=e67]:
+            - button "✓" [ref=e69] [cursor=pointer]
+          - cell "edit ×" [ref=e70]:
+            - text: edit
+            - button "×" [ref=e71] [cursor=pointer]
+        - row "May 23, 2026 Main Checking Gas Chevron $52.10 · edit ×" [ref=e72]:
+          - cell "May 23, 2026" [ref=e73]
+          - cell "Main Checking" [ref=e74]
+          - cell "Gas" [ref=e75]
+          - cell "Chevron" [ref=e76]
+          - cell "$52.10" [ref=e77]
+          - cell [ref=e78]
+          - cell "·" [ref=e79]:
+            - button "·" [ref=e81] [cursor=pointer]
+          - cell "edit ×" [ref=e82]:
+            - text: edit
+            - button "×" [ref=e83] [cursor=pointer]
+        - row "May 22, 2026 Chase Sapphire ← Main Checking $200.00 ✓ edit ×" [ref=e84]:
+          - cell "May 22, 2026" [ref=e85]
+          - cell "Chase Sapphire" [ref=e86]
+          - cell "← Main Checking" [ref=e87]
+          - cell [ref=e88]
+          - cell [ref=e89]
+          - cell "$200.00" [ref=e90]
+          - cell "✓" [ref=e91]:
+            - button "✓" [ref=e93] [cursor=pointer]
+          - cell "edit ×" [ref=e94]:
+            - text: edit
+            - button "×" [ref=e95] [cursor=pointer]
+        - row "May 22, 2026 Main Checking → Chase Sapphire · Credit Card Payment $200.00 ✓ edit ×" [ref=e96]:
+          - cell "May 22, 2026" [ref=e97]
+          - cell "Main Checking" [ref=e98]
+          - cell "→ Chase Sapphire · Credit Card Payment" [ref=e99]
+          - cell [ref=e100]
+          - cell "$200.00" [ref=e101]
+          - cell [ref=e102]
+          - cell "✓" [ref=e103]:
+            - button "✓" [ref=e105] [cursor=pointer]
+          - cell "edit ×" [ref=e106]:
+            - text: edit
+            - button "×" [ref=e107] [cursor=pointer]
+        - row "May 20, 2026 Chase Sapphire Coffee & Drinks Dutch Bros $11.80 ✓ edit ×" [ref=e108]:
+          - cell "May 20, 2026" [ref=e109]
+          - cell "Chase Sapphire" [ref=e110]
+          - cell "Coffee & Drinks" [ref=e111]
+          - cell "Dutch Bros" [ref=e112]
+          - cell "$11.80" [ref=e113]
+          - cell [ref=e114]
+          - cell "✓" [ref=e115]:
+            - button "✓" [ref=e117] [cursor=pointer]
+          - cell "edit ×" [ref=e118]:
+            - text: edit
+            - button "×" [ref=e119] [cursor=pointer]
+        - row "May 20, 2026 Main Checking Gym Planet Fitness $40.00 ✓ edit ×" [ref=e120]:
+          - cell "May 20, 2026" [ref=e121]
+          - cell "Main Checking" [ref=e122]
+          - cell "Gym" [ref=e123]
+          - cell "Planet Fitness" [ref=e124]
+          - cell "$40.00" [ref=e125]
+          - cell [ref=e126]
+          - cell "✓" [ref=e127]:
+            - button "✓" [ref=e129] [cursor=pointer]
+          - cell "edit ×" [ref=e130]:
+            - text: edit
+            - button "×" [ref=e131] [cursor=pointer]
+        - row "May 19, 2026 Chase Sapphire Restaurants Panera Bread $61.50 ✓ edit ×" [ref=e132]:
+          - cell "May 19, 2026" [ref=e133]
+          - cell "Chase Sapphire" [ref=e134]
+          - cell "Restaurants" [ref=e135]
+          - cell "Panera Bread" [ref=e136]
+          - cell "$61.50" [ref=e137]
+          - cell [ref=e138]
+          - cell "✓" [ref=e139]:
+            - button "✓" [ref=e141] [cursor=pointer]
+          - cell "edit ×" [ref=e142]:
+            - text: edit
+            - button "×" [ref=e143] [cursor=pointer]
+        - row "May 17, 2026 Main Checking Groceries Whole Foods $104.20 ✓ edit ×" [ref=e144]:
+          - cell "May 17, 2026" [ref=e145]
+          - cell "Main Checking" [ref=e146]
+          - cell "Groceries" [ref=e147]
+          - cell "Whole Foods" [ref=e148]
+          - cell "$104.20" [ref=e149]
+          - cell [ref=e150]
+          - cell "✓" [ref=e151]:
+            - button "✓" [ref=e153] [cursor=pointer]
+          - cell "edit ×" [ref=e154]:
+            - text: edit
+            - button "×" [ref=e155] [cursor=pointer]
+        - row "May 16, 2026 Main Checking Income Upwork $750.00 ✓ edit ×" [ref=e156]:
+          - cell "May 16, 2026" [ref=e157]
+          - cell "Main Checking" [ref=e158]
+          - cell "Income" [ref=e159]
+          - cell "Upwork" [ref=e160]
+          - cell [ref=e161]
+          - cell "$750.00" [ref=e162]
+          - cell "✓" [ref=e163]:
+            - button "✓" [ref=e165] [cursor=pointer]
+          - cell "edit ×" [ref=e166]:
+            - text: edit
+            - button "×" [ref=e167] [cursor=pointer]
+        - row "May 15, 2026 Chase Sapphire Streaming Hulu $17.98 ✓ edit ×" [ref=e168]:
+          - cell "May 15, 2026" [ref=e169]
+          - cell "Chase Sapphire" [ref=e170]
+          - cell "Streaming" [ref=e171]
+          - cell "Hulu" [ref=e172]
+          - cell "$17.98" [ref=e173]
+          - cell [ref=e174]
+          - cell "✓" [ref=e175]:
+            - button "✓" [ref=e177] [cursor=pointer]
+          - cell "edit ×" [ref=e178]:
+            - text: edit
+            - button "×" [ref=e179] [cursor=pointer]
+        - row "May 15, 2026 Chase Sapphire Streaming Spotify $10.99 ✓ edit ×" [ref=e180]:
+          - cell "May 15, 2026" [ref=e181]
+          - cell "Chase Sapphire" [ref=e182]
+          - cell "Streaming" [ref=e183]
+          - cell "Spotify" [ref=e184]
+          - cell "$10.99" [ref=e185]
+          - cell [ref=e186]
+          - cell "✓" [ref=e187]:
+            - button "✓" [ref=e189] [cursor=pointer]
+          - cell "edit ×" [ref=e190]:
+            - text: edit
+            - button "×" [ref=e191] [cursor=pointer]
+        - row "May 15, 2026 Chase Sapphire Streaming Netflix $15.00 ✓ edit ×" [ref=e192]:
+          - cell "May 15, 2026" [ref=e193]
+          - cell "Chase Sapphire" [ref=e194]
+          - cell "Streaming" [ref=e195]
+          - cell "Netflix" [ref=e196]
+          - cell "$15.00" [ref=e197]
+          - cell [ref=e198]
+          - cell "✓" [ref=e199]:
+            - button "✓" [ref=e201] [cursor=pointer]
+          - cell "edit ×" [ref=e202]:
+            - text: edit
+            - button "×" [ref=e203] [cursor=pointer]
+        - row "May 15, 2026 Main Checking Car Loan Payment Honda Financial Services $285.00 ✓ edit ×" [ref=e204]:
+          - cell "May 15, 2026" [ref=e205]
+          - cell "Main Checking" [ref=e206]
+          - cell "Car Loan Payment" [ref=e207]
+          - cell "Honda Financial Services" [ref=e208]
+          - cell "$285.00" [ref=e209]
+          - cell [ref=e210]
+          - cell "✓" [ref=e211]:
+            - button "✓" [ref=e213] [cursor=pointer]
+          - cell "edit ×" [ref=e214]:
+            - text: edit
+            - button "×" [ref=e215] [cursor=pointer]
+        - row "May 12, 2026 Main Checking Renter's Insurance State Farm $18.00 ✓ edit ×" [ref=e216]:
+          - cell "May 12, 2026" [ref=e217]
+          - cell "Main Checking" [ref=e218]
+          - cell "Renter's Insurance" [ref=e219]
+          - cell "State Farm" [ref=e220]
+          - cell "$18.00" [ref=e221]
+          - cell [ref=e222]
+          - cell "✓" [ref=e223]:
+            - button "✓" [ref=e225] [cursor=pointer]
+          - cell "edit ×" [ref=e226]:
+            - text: edit
+            - button "×" [ref=e227] [cursor=pointer]
+        - row "May 10, 2026 Main Checking Electricity City Electric Co $72.40 ✓ edit ×" [ref=e228]:
+          - cell "May 10, 2026" [ref=e229]
+          - cell "Main Checking" [ref=e230]
+          - cell "Electricity" [ref=e231]
+          - cell "City Electric Co" [ref=e232]
+          - cell "$72.40" [ref=e233]
+          - cell [ref=e234]
+          - cell "✓" [ref=e235]:
+            - button "✓" [ref=e237] [cursor=pointer]
+          - cell "edit ×" [ref=e238]:
+            - text: edit
+            - button "×" [ref=e239] [cursor=pointer]
+        - row "May 9, 2026 Main Checking Gas Shell $58.40 ✓ edit ×" [ref=e240]:
+          - cell "May 9, 2026" [ref=e241]
+          - cell "Main Checking" [ref=e242]
+          - cell "Gas" [ref=e243]
+          - cell "Shell" [ref=e244]
+          - cell "$58.40" [ref=e245]
+          - cell [ref=e246]
+          - cell "✓" [ref=e247]:
+            - button "✓" [ref=e249] [cursor=pointer]
+          - cell "edit ×" [ref=e250]:
+            - text: edit
+            - button "×" [ref=e251] [cursor=pointer]
+        - row "May 6, 2026 Chase Sapphire Coffee & Drinks Starbucks $14.20 ✓ edit ×" [ref=e252]:
+          - cell "May 6, 2026" [ref=e253]
+          - cell "Chase Sapphire" [ref=e254]
+          - cell "Coffee & Drinks" [ref=e255]
+          - cell "Starbucks" [ref=e256]
+          - cell "$14.20" [ref=e257]
+          - cell [ref=e258]
+          - cell "✓" [ref=e259]:
+            - button "✓" [ref=e261] [cursor=pointer]
+          - cell "edit ×" [ref=e262]:
+            - text: edit
+            - button "×" [ref=e263] [cursor=pointer]
+        - row "May 5, 2026 Chase Sapphire Restaurants Bonefish Grill $84.30 ✓ edit ×" [ref=e264]:
+          - cell "May 5, 2026" [ref=e265]
+          - cell "Chase Sapphire" [ref=e266]
+          - cell "Restaurants" [ref=e267]
+          - cell "Bonefish Grill" [ref=e268]
+          - cell "$84.30" [ref=e269]
+          - cell [ref=e270]
+          - cell "✓" [ref=e271]:
+            - button "✓" [ref=e273] [cursor=pointer]
+          - cell "edit ×" [ref=e274]:
+            - text: edit
+            - button "×" [ref=e275] [cursor=pointer]
+        - row "May 5, 2026 Main Checking Internet Comcast $55.00 ✓ edit ×" [ref=e276]:
+          - cell "May 5, 2026" [ref=e277]
+          - cell "Main Checking" [ref=e278]
+          - cell "Internet" [ref=e279]
+          - cell "Comcast" [ref=e280]
+          - cell "$55.00" [ref=e281]
+          - cell [ref=e282]
+          - cell "✓" [ref=e283]:
+            - button "✓" [ref=e285] [cursor=pointer]
+          - cell "edit ×" [ref=e286]:
+            - text: edit
+            - button "×" [ref=e287] [cursor=pointer]
+        - row "May 3, 2026 Main Checking Groceries Kroger $155.80 ✓ edit ×" [ref=e288]:
+          - cell "May 3, 2026" [ref=e289]
+          - cell "Main Checking" [ref=e290]
+          - cell "Groceries" [ref=e291]
+          - cell "Kroger" [ref=e292]
+          - cell "$155.80" [ref=e293]
+          - cell [ref=e294]
+          - cell "✓" [ref=e295]:
+            - button "✓" [ref=e297] [cursor=pointer]
+          - cell "edit ×" [ref=e298]:
+            - text: edit
+            - button "×" [ref=e299] [cursor=pointer]
+        - row "May 1, 2026 Main Checking Car Insurance Progressive $142.00 ✓ edit ×" [ref=e300]:
+          - cell "May 1, 2026" [ref=e301]
+          - cell "Main Checking" [ref=e302]
+          - cell "Car Insurance" [ref=e303]
+          - cell "Progressive" [ref=e304]
+          - cell "$142.00" [ref=e305]
+          - cell [ref=e306]
+          - cell "✓" [ref=e307]:
+            - button "✓" [ref=e309] [cursor=pointer]
+          - cell "edit ×" [ref=e310]:
+            - text: edit
+            - button "×" [ref=e311] [cursor=pointer]
+        - row "May 1, 2026 Main Checking Rent Westside Properties $1,850.00 ✓ edit ×" [ref=e312]:
+          - cell "May 1, 2026" [ref=e313]
+          - cell "Main Checking" [ref=e314]
+          - cell "Rent" [ref=e315]
+          - cell "Westside Properties" [ref=e316]
+          - cell "$1,850.00" [ref=e317]
+          - cell [ref=e318]
+          - cell "✓" [ref=e319]:
+            - button "✓" [ref=e321] [cursor=pointer]
+          - cell "edit ×" [ref=e322]:
+            - text: edit
+            - button "×" [ref=e323] [cursor=pointer]
+        - row "May 1, 2026 Main Checking Income Acme Corp $5,400.00 ✓ edit ×" [ref=e324]:
+          - cell "May 1, 2026" [ref=e325]
+          - cell "Main Checking" [ref=e326]
+          - cell "Income" [ref=e327]
+          - cell "Acme Corp" [ref=e328]
+          - cell [ref=e329]
+          - cell "$5,400.00" [ref=e330]
+          - cell "✓" [ref=e331]:
+            - button "✓" [ref=e333] [cursor=pointer]
+          - cell "edit ×" [ref=e334]:
+            - text: edit
+            - button "×" [ref=e335] [cursor=pointer]

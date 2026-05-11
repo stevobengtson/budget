@@ -2,13 +2,30 @@
 
 # budget
 
-**A fast, keyboard-driven personal finance app for your terminal.**
+**A local-first personal finance app — use it in your terminal or your browser.**
 
-Track accounts, assign money to categories each month, project debt paydown, and see where your money goes — all in a local SQLite file with no accounts, no sync, and no subscription.
+Track accounts, assign money to categories each month, project debt paydown, and see where your money goes — all backed by a local SQLite file (or Postgres) with no accounts, no sync, and no subscription.
 
 ![Budget tab](./screenshots/01-budget.png)
 
 </div>
+
+---
+
+## Two interfaces, one database
+
+`budget` ships with two fully-featured interfaces that read and write the same database:
+
+| | TUI | Web |
+|---|---|---|
+| **Launch** | `budget` or `budget tui` | `budget web` |
+| **Access** | Terminal | Browser at `http://localhost:8080` |
+| **Best for** | Local daily use, keyboard power users | Remote access, Docker/Synology, mouse-friendly use |
+| **Navigation** | Keyboard shortcuts | Click tabs, real URLs (browser back button works) |
+| **Updates** | Full screen redraws | HTMX partial swaps — only changed rows update |
+| **Theme** | Catppuccin Mocha (terminal colors) | Catppuccin Mocha (CSS) |
+
+Both interfaces cover all tabs: Budget · Transactions · Accounts · Categories · Paydown · Reports.
 
 ---
 
@@ -25,7 +42,7 @@ Track accounts, assign money to categories each month, project debt paydown, and
 
 ---
 
-## Screenshots
+## Screenshots — TUI
 
 **Budget** — assign money to categories each month, track against income, see sinking-fund goals
 
@@ -87,6 +104,48 @@ Transaction form with calendar date picker and account/category pickers:
 
 ---
 
+## Screenshots — Web
+
+The web interface mirrors every TUI tab with the same Catppuccin Mocha theme. Each page has a real URL so the browser back button and bookmarks work.
+
+**Budget** — same envelope view; click a category row to assign or set a goal
+
+![Web Budget](./screenshots/web-01-budget.png)
+
+---
+
+**Transactions** — sortable list with account and month filters; inline cleared toggle
+
+![Web Transactions](./screenshots/web-02-transactions.png)
+
+---
+
+**Accounts** — net worth summary; edit or archive accounts inline
+
+![Web Accounts](./screenshots/web-03-accounts.png)
+
+---
+
+**Categories** — grouped list; edit names, goals, and sinking-fund targets
+
+![Web Categories](./screenshots/web-04-categories.png)
+
+---
+
+**Paydown** — include/exclude accounts, set payments, link budget categories
+
+![Web Paydown](./screenshots/web-05-paydown.png)
+
+---
+
+**Reports** — spending by category and 12-month cashflow
+
+| Spending | Cashflow |
+|---|---|
+| ![Web Spending](./screenshots/web-06-reports-spending.png) | ![Web Cashflow](./screenshots/web-07-reports-cashflow.png) |
+
+---
+
 ## Quick start
 
 **Requirements:** [Go 1.21+](https://go.dev/dl/)
@@ -96,14 +155,23 @@ git clone https://github.com/sbengtson/budget
 cd budget
 make setup    # download deps + install goose
 make seed     # load 3 months of realistic demo data
-make run      # launch the app
+make run      # launch the TUI
+```
+
+To open the web interface instead:
+
+```bash
+make seed     # if you haven't already
+./bin/budget web          # serves http://localhost:8080
 ```
 
 To start fresh with your own data:
 
 ```bash
 make db-reset  # wipe the database
-make run       # auto-migrates on first open
+make run       # TUI — auto-migrates on first open
+# or
+./bin/budget web  # web — auto-migrates on first request
 ```
 
 ---
@@ -160,16 +228,16 @@ log:
   level: "info"
 ```
 
-### Web frontend
+### Web interface
 
-`budget web` serves an HTMX + Templ + Gin frontend that mirrors every TUI tab — Budget, Transactions, Accounts, Categories, Paydown, Reports. Real URLs (e.g. `/budget?month=2026-05`) so the browser back button works; forms swap individual rows / sections via HTMX. Catppuccin Mocha theme matches the TUI.
+`budget web` serves an HTMX + Templ + Gin frontend. It mirrors every TUI tab and uses real URLs (e.g. `/budget?month=2026-05`) so the browser back button works. Forms swap individual rows and sections via HTMX — the page never fully reloads. The Catppuccin Mocha theme matches the TUI.
 
 ```bash
 budget web --addr :8080
-open http://localhost:8080/budget
+open http://localhost:8080
 ```
 
-The web app reads its DB from the same config the TUI uses.
+The web app reads its database from the same config the TUI uses. You can run both simultaneously against the same SQLite file; each request reads fresh data.
 
 ### Docker / Apple Containers
 
@@ -340,4 +408,5 @@ internal/money/             cents ↔ human string parsing and formatting
 internal/store/             persistence layer (one file per aggregate)
 internal/paydown/           debt amortization projection (pure Go, no DB)
 internal/tui/               Bubble Tea screens and components
+internal/web/               Gin + Templ + HTMX web server and handlers
 ```

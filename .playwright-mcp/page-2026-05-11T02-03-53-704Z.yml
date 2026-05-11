@@ -1,0 +1,115 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - link "💰 budget" [ref=e3] [cursor=pointer]:
+      - /url: /budget
+    - navigation [ref=e4]:
+      - link "💰 Budget" [ref=e5] [cursor=pointer]:
+        - /url: /budget
+        - generic [ref=e6]: 💰
+        - generic [ref=e7]: Budget
+      - link "📒 Transactions" [ref=e8] [cursor=pointer]:
+        - /url: /transactions
+        - generic [ref=e9]: 📒
+        - generic [ref=e10]: Transactions
+      - link "🏦 Accounts" [ref=e11] [cursor=pointer]:
+        - /url: /accounts
+        - generic [ref=e12]: 🏦
+        - generic [ref=e13]: Accounts
+      - link "🗂 Categories" [ref=e14] [cursor=pointer]:
+        - /url: /categories
+        - generic [ref=e15]: 🗂
+        - generic [ref=e16]: Categories
+      - link "📉 Paydown" [ref=e17] [cursor=pointer]:
+        - /url: /paydown
+        - generic [ref=e18]: 📉
+        - generic [ref=e19]: Paydown
+      - link "📊 Reports" [ref=e20] [cursor=pointer]:
+        - /url: /reports
+        - generic [ref=e21]: 📊
+        - generic [ref=e22]: Reports
+  - main [ref=e23]:
+    - heading "Reports · Monthly cashflow" [level=1] [ref=e24]
+    - link "← Spending" [ref=e26] [cursor=pointer]:
+      - /url: /reports/spending
+    - paragraph [ref=e27]: 12 months · income (green) vs expense (red)
+    - img [ref=e28]:
+      - generic [ref=e30]: Jun
+      - generic [ref=e32]: Jul
+      - generic [ref=e34]: Aug
+      - generic [ref=e36]: Sep
+      - generic [ref=e38]: Oct
+      - generic [ref=e40]: Nov
+      - generic [ref=e42]: Dec
+      - generic [ref=e44]: Jan
+      - generic [ref=e46]: Feb
+      - generic [ref=e50]: Mar
+      - generic [ref=e54]: Apr
+      - generic [ref=e58]: May
+    - table [ref=e59]:
+      - rowgroup [ref=e60]:
+        - row "Month Income Expense Net" [ref=e61]:
+          - columnheader "Month" [ref=e62]
+          - columnheader "Income" [ref=e63]
+          - columnheader "Expense" [ref=e64]
+          - columnheader "Net" [ref=e65]
+      - rowgroup [ref=e66]:
+        - row "Jun 2025 $0.00 $0.00 $0.00" [ref=e67]:
+          - cell "Jun 2025" [ref=e68]
+          - cell "$0.00" [ref=e69]
+          - cell "$0.00" [ref=e70]
+          - cell "$0.00" [ref=e71]
+        - row "Jul 2025 $0.00 $0.00 $0.00" [ref=e72]:
+          - cell "Jul 2025" [ref=e73]
+          - cell "$0.00" [ref=e74]
+          - cell "$0.00" [ref=e75]
+          - cell "$0.00" [ref=e76]
+        - row "Aug 2025 $0.00 $0.00 $0.00" [ref=e77]:
+          - cell "Aug 2025" [ref=e78]
+          - cell "$0.00" [ref=e79]
+          - cell "$0.00" [ref=e80]
+          - cell "$0.00" [ref=e81]
+        - row "Sep 2025 $0.00 $0.00 $0.00" [ref=e82]:
+          - cell "Sep 2025" [ref=e83]
+          - cell "$0.00" [ref=e84]
+          - cell "$0.00" [ref=e85]
+          - cell "$0.00" [ref=e86]
+        - row "Oct 2025 $0.00 $0.00 $0.00" [ref=e87]:
+          - cell "Oct 2025" [ref=e88]
+          - cell "$0.00" [ref=e89]
+          - cell "$0.00" [ref=e90]
+          - cell "$0.00" [ref=e91]
+        - row "Nov 2025 $0.00 $0.00 $0.00" [ref=e92]:
+          - cell "Nov 2025" [ref=e93]
+          - cell "$0.00" [ref=e94]
+          - cell "$0.00" [ref=e95]
+          - cell "$0.00" [ref=e96]
+        - row "Dec 2025 $0.00 $0.00 $0.00" [ref=e97]:
+          - cell "Dec 2025" [ref=e98]
+          - cell "$0.00" [ref=e99]
+          - cell "$0.00" [ref=e100]
+          - cell "$0.00" [ref=e101]
+        - row "Jan 2026 $0.00 $0.00 $0.00" [ref=e102]:
+          - cell "Jan 2026" [ref=e103]
+          - cell "$0.00" [ref=e104]
+          - cell "$0.00" [ref=e105]
+          - cell "$0.00" [ref=e106]
+        - row "Feb 2026 $0.00 $0.00 $0.00" [ref=e107]:
+          - cell "Feb 2026" [ref=e108]
+          - cell "$0.00" [ref=e109]
+          - cell "$0.00" [ref=e110]
+          - cell "$0.00" [ref=e111]
+        - row "Mar 2026 $5,750.00 $3,184.01 $2,565.99" [ref=e112]:
+          - cell "Mar 2026" [ref=e113]
+          - cell "$5,750.00" [ref=e114]
+          - cell "$3,184.01" [ref=e115]
+          - cell "$2,565.99" [ref=e116]
+        - row "Apr 2026 $5,400.00 $3,107.96 $2,292.04" [ref=e117]:
+          - cell "Apr 2026" [ref=e118]
+          - cell "$5,400.00" [ref=e119]
+          - cell "$3,107.96" [ref=e120]
+          - cell "$2,292.04" [ref=e121]
+        - row "May 2026 $6,150.00 $3,048.67 $3,101.33" [ref=e122]:
+          - cell "May 2026" [ref=e123]
+          - cell "$6,150.00" [ref=e124]
+          - cell "$3,048.67" [ref=e125]
+          - cell "$3,101.33" [ref=e126]

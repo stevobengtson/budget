@@ -1,0 +1,307 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - link "💰 budget" [ref=e3] [cursor=pointer]:
+      - /url: /budget
+    - navigation [ref=e4]:
+      - link "💰 Budget" [ref=e5] [cursor=pointer]:
+        - /url: /budget
+        - generic [ref=e6]: 💰
+        - generic [ref=e7]: Budget
+      - link "📒 Transactions" [ref=e8] [cursor=pointer]:
+        - /url: /transactions
+        - generic [ref=e9]: 📒
+        - generic [ref=e10]: Transactions
+      - link "🏦 Accounts" [ref=e11] [cursor=pointer]:
+        - /url: /accounts
+        - generic [ref=e12]: 🏦
+        - generic [ref=e13]: Accounts
+      - link "🗂 Categories" [ref=e14] [cursor=pointer]:
+        - /url: /categories
+        - generic [ref=e15]: 🗂
+        - generic [ref=e16]: Categories
+      - link "📉 Paydown" [ref=e17] [cursor=pointer]:
+        - /url: /paydown
+        - generic [ref=e18]: 📉
+        - generic [ref=e19]: Paydown
+      - link "📊 Reports" [ref=e20] [cursor=pointer]:
+        - /url: /reports
+        - generic [ref=e21]: 📊
+        - generic [ref=e22]: Reports
+  - main [ref=e23]:
+    - heading "Categories" [level=1] [ref=e24]
+    - generic [ref=e26]:
+      - textbox "New group name" [ref=e27]
+      - button "+ group" [ref=e28] [cursor=pointer]
+    - heading "[Income]" [level=2] [ref=e29]
+    - table [ref=e30]:
+      - rowgroup [ref=e31]:
+        - row "Name Goal Due" [ref=e32]:
+          - columnheader "Name" [ref=e33]
+          - columnheader "Goal" [ref=e34]
+          - columnheader "Due" [ref=e35]
+          - columnheader [ref=e36]
+      - rowgroup [ref=e37]:
+        - row "Income 🔒 system" [ref=e38]:
+          - cell "Income 🔒 system" [ref=e39]:
+            - text: Income
+            - generic [ref=e40]: 🔒 system
+          - cell [ref=e41]
+          - cell [ref=e42]
+          - cell [ref=e43]
+    - generic [ref=e44]:
+      - textbox "new category name" [ref=e45]
+      - textbox "goal $ (optional)" [ref=e46]
+      - textbox [ref=e47]
+      - button "+ add" [ref=e48] [cursor=pointer]
+    - heading "[Housing]" [level=2] [ref=e49]
+    - table [ref=e50]:
+      - rowgroup [ref=e51]:
+        - row "Name Goal Due" [ref=e52]:
+          - columnheader "Name" [ref=e53]
+          - columnheader "Goal" [ref=e54]
+          - columnheader "Due" [ref=e55]
+          - columnheader [ref=e56]
+      - rowgroup [ref=e57]:
+        - row "Rent $1850.00 archive" [ref=e58]:
+          - cell "Rent" [ref=e59]
+          - cell "$1850.00" [ref=e60]
+          - cell [ref=e61]
+          - cell "archive" [ref=e62]:
+            - button "archive" [ref=e63] [cursor=pointer]
+        - row "Electricity archive" [ref=e64]:
+          - cell "Electricity" [ref=e65]
+          - cell [ref=e66]
+          - cell [ref=e67]
+          - cell "archive" [ref=e68]:
+            - button "archive" [ref=e69] [cursor=pointer]
+        - row "Internet archive" [ref=e70]:
+          - cell "Internet" [ref=e71]
+          - cell [ref=e72]
+          - cell [ref=e73]
+          - cell "archive" [ref=e74]:
+            - button "archive" [ref=e75] [cursor=pointer]
+        - row "Renter's Insurance archive" [ref=e76]:
+          - cell "Renter's Insurance" [ref=e77]
+          - cell [ref=e78]
+          - cell [ref=e79]
+          - cell "archive" [ref=e80]:
+            - button "archive" [ref=e81] [cursor=pointer]
+    - generic [ref=e82]:
+      - textbox "new category name" [ref=e83]
+      - textbox "goal $ (optional)" [ref=e84]
+      - textbox [ref=e85]
+      - button "+ add" [ref=e86] [cursor=pointer]
+    - heading "[Test]" [level=2] [ref=e87]
+    - table [ref=e88]:
+      - rowgroup [ref=e89]:
+        - row "Name Goal Due" [ref=e90]:
+          - columnheader "Name" [ref=e91]
+          - columnheader "Goal" [ref=e92]
+          - columnheader "Due" [ref=e93]
+          - columnheader [ref=e94]
+      - rowgroup
+    - generic [ref=e95]:
+      - textbox "new category name" [ref=e96]
+      - textbox "goal $ (optional)" [ref=e97]
+      - textbox [ref=e98]
+      - button "+ add" [ref=e99] [cursor=pointer]
+    - heading "[Food]" [level=2] [ref=e100]
+    - table [ref=e101]:
+      - rowgroup [ref=e102]:
+        - row "Name Goal Due" [ref=e103]:
+          - columnheader "Name" [ref=e104]
+          - columnheader "Goal" [ref=e105]
+          - columnheader "Due" [ref=e106]
+          - columnheader [ref=e107]
+      - rowgroup [ref=e108]:
+        - row "Groceries archive" [ref=e109]:
+          - cell "Groceries" [ref=e110]
+          - cell [ref=e111]
+          - cell [ref=e112]
+          - cell "archive" [ref=e113]:
+            - button "archive" [ref=e114] [cursor=pointer]
+        - row "Restaurants archive" [ref=e115]:
+          - cell "Restaurants" [ref=e116]
+          - cell [ref=e117]
+          - cell [ref=e118]
+          - cell "archive" [ref=e119]:
+            - button "archive" [ref=e120] [cursor=pointer]
+        - row "Coffee & Drinks archive" [ref=e121]:
+          - cell "Coffee & Drinks" [ref=e122]
+          - cell [ref=e123]
+          - cell [ref=e124]
+          - cell "archive" [ref=e125]:
+            - button "archive" [ref=e126] [cursor=pointer]
+    - generic [ref=e127]:
+      - textbox "new category name" [ref=e128]
+      - textbox "goal $ (optional)" [ref=e129]
+      - textbox [ref=e130]
+      - button "+ add" [ref=e131] [cursor=pointer]
+    - heading "[Transportation]" [level=2] [ref=e132]
+    - table [ref=e133]:
+      - rowgroup [ref=e134]:
+        - row "Name Goal Due" [ref=e135]:
+          - columnheader "Name" [ref=e136]
+          - columnheader "Goal" [ref=e137]
+          - columnheader "Due" [ref=e138]
+          - columnheader [ref=e139]
+      - rowgroup [ref=e140]:
+        - row "Gas archive" [ref=e141]:
+          - cell "Gas" [ref=e142]
+          - cell [ref=e143]
+          - cell [ref=e144]
+          - cell "archive" [ref=e145]:
+            - button "archive" [ref=e146] [cursor=pointer]
+        - row "Car Insurance archive" [ref=e147]:
+          - cell "Car Insurance" [ref=e148]
+          - cell [ref=e149]
+          - cell [ref=e150]
+          - cell "archive" [ref=e151]:
+            - button "archive" [ref=e152] [cursor=pointer]
+        - row "Parking archive" [ref=e153]:
+          - cell "Parking" [ref=e154]
+          - cell [ref=e155]
+          - cell [ref=e156]
+          - cell "archive" [ref=e157]:
+            - button "archive" [ref=e158] [cursor=pointer]
+    - generic [ref=e159]:
+      - textbox "new category name" [ref=e160]
+      - textbox "goal $ (optional)" [ref=e161]
+      - textbox [ref=e162]
+      - button "+ add" [ref=e163] [cursor=pointer]
+    - heading "[Health & Fitness]" [level=2] [ref=e164]
+    - table [ref=e165]:
+      - rowgroup [ref=e166]:
+        - row "Name Goal Due" [ref=e167]:
+          - columnheader "Name" [ref=e168]
+          - columnheader "Goal" [ref=e169]
+          - columnheader "Due" [ref=e170]
+          - columnheader [ref=e171]
+      - rowgroup [ref=e172]:
+        - row "Gym archive" [ref=e173]:
+          - cell "Gym" [ref=e174]
+          - cell [ref=e175]
+          - cell [ref=e176]
+          - cell "archive" [ref=e177]:
+            - button "archive" [ref=e178] [cursor=pointer]
+        - row "Medical archive" [ref=e179]:
+          - cell "Medical" [ref=e180]
+          - cell [ref=e181]
+          - cell [ref=e182]
+          - cell "archive" [ref=e183]:
+            - button "archive" [ref=e184] [cursor=pointer]
+    - generic [ref=e185]:
+      - textbox "new category name" [ref=e186]
+      - textbox "goal $ (optional)" [ref=e187]
+      - textbox [ref=e188]
+      - button "+ add" [ref=e189] [cursor=pointer]
+    - heading "[Entertainment]" [level=2] [ref=e190]
+    - table [ref=e191]:
+      - rowgroup [ref=e192]:
+        - row "Name Goal Due" [ref=e193]:
+          - columnheader "Name" [ref=e194]
+          - columnheader "Goal" [ref=e195]
+          - columnheader "Due" [ref=e196]
+          - columnheader [ref=e197]
+      - rowgroup [ref=e198]:
+        - row "Streaming archive" [ref=e199]:
+          - cell "Streaming" [ref=e200]
+          - cell [ref=e201]
+          - cell [ref=e202]
+          - cell "archive" [ref=e203]:
+            - button "archive" [ref=e204] [cursor=pointer]
+        - row "Fun Money archive" [ref=e205]:
+          - cell "Fun Money" [ref=e206]
+          - cell [ref=e207]
+          - cell [ref=e208]
+          - cell "archive" [ref=e209]:
+            - button "archive" [ref=e210] [cursor=pointer]
+    - generic [ref=e211]:
+      - textbox "new category name" [ref=e212]
+      - textbox "goal $ (optional)" [ref=e213]
+      - textbox [ref=e214]
+      - button "+ add" [ref=e215] [cursor=pointer]
+    - heading "[Savings Goals]" [level=2] [ref=e216]
+    - table [ref=e217]:
+      - rowgroup [ref=e218]:
+        - row "Name Goal Due" [ref=e219]:
+          - columnheader "Name" [ref=e220]
+          - columnheader "Goal" [ref=e221]
+          - columnheader "Due" [ref=e222]
+          - columnheader [ref=e223]
+      - rowgroup [ref=e224]:
+        - row "Emergency Fund $15000.00 archive" [ref=e225]:
+          - cell "Emergency Fund" [ref=e226]
+          - cell "$15000.00" [ref=e227]
+          - cell [ref=e228]
+          - cell "archive" [ref=e229]:
+            - button "archive" [ref=e230] [cursor=pointer]
+        - row "Vacation $3000.00 2026-09-01 archive" [ref=e231]:
+          - cell "Vacation" [ref=e232]
+          - cell "$3000.00" [ref=e233]
+          - cell "2026-09-01" [ref=e234]
+          - cell "archive" [ref=e235]:
+            - button "archive" [ref=e236] [cursor=pointer]
+    - generic [ref=e237]:
+      - textbox "new category name" [ref=e238]
+      - textbox "goal $ (optional)" [ref=e239]
+      - textbox [ref=e240]
+      - button "+ add" [ref=e241] [cursor=pointer]
+    - heading "[Personal]" [level=2] [ref=e242]
+    - table [ref=e243]:
+      - rowgroup [ref=e244]:
+        - row "Name Goal Due" [ref=e245]:
+          - columnheader "Name" [ref=e246]
+          - columnheader "Goal" [ref=e247]
+          - columnheader "Due" [ref=e248]
+          - columnheader [ref=e249]
+      - rowgroup [ref=e250]:
+        - row "Clothing archive" [ref=e251]:
+          - cell "Clothing" [ref=e252]
+          - cell [ref=e253]
+          - cell [ref=e254]
+          - cell "archive" [ref=e255]:
+            - button "archive" [ref=e256] [cursor=pointer]
+        - row "Personal Care archive" [ref=e257]:
+          - cell "Personal Care" [ref=e258]
+          - cell [ref=e259]
+          - cell [ref=e260]
+          - cell "archive" [ref=e261]:
+            - button "archive" [ref=e262] [cursor=pointer]
+    - generic [ref=e263]:
+      - textbox "new category name" [ref=e264]
+      - textbox "goal $ (optional)" [ref=e265]
+      - textbox [ref=e266]
+      - button "+ add" [ref=e267] [cursor=pointer]
+    - heading "[Debt]" [level=2] [ref=e268]
+    - table [ref=e269]:
+      - rowgroup [ref=e270]:
+        - row "Name Goal Due" [ref=e271]:
+          - columnheader "Name" [ref=e272]
+          - columnheader "Goal" [ref=e273]
+          - columnheader "Due" [ref=e274]
+          - columnheader [ref=e275]
+      - rowgroup [ref=e276]:
+        - row "Credit Card Payment archive" [ref=e277]:
+          - cell "Credit Card Payment" [ref=e278]
+          - cell [ref=e279]
+          - cell [ref=e280]
+          - cell "archive" [ref=e281]:
+            - button "archive" [ref=e282] [cursor=pointer]
+        - row "Visa Card Payment archive" [ref=e283]:
+          - cell "Visa Card Payment" [ref=e284]
+          - cell [ref=e285]
+          - cell [ref=e286]
+          - cell "archive" [ref=e287]:
+            - button "archive" [ref=e288] [cursor=pointer]
+        - row "Car Loan Payment archive" [ref=e289]:
+          - cell "Car Loan Payment" [ref=e290]
+          - cell [ref=e291]
+          - cell [ref=e292]
+          - cell "archive" [ref=e293]:
+            - button "archive" [ref=e294] [cursor=pointer]
+    - generic [ref=e295]:
+      - textbox "new category name" [ref=e296]
+      - textbox "goal $ (optional)" [ref=e297]
+      - textbox [ref=e298]
+      - button "+ add" [ref=e299] [cursor=pointer]
