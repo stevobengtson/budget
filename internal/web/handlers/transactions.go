@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -264,11 +265,33 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 }
 
 // renderTxRows writes the row HTML for <tbody id="tx-rows"> followed by
-// an out-of-band swap that empties the #tx-form container — so the
-// inline new/edit form disappears after a successful save.
+// an out-of-band swap that empties the #modal container — so the modal
+// form disappears after a successful save.
+// Filters are read from the HX-Current-URL header so the active account
+// and month filters are preserved after create/update.
 func (h *Handlers) renderTxRows(c *gin.Context) {
 	ctx := c.Request.Context()
-	rows, _ := h.store.ListTransactions(ctx, store.TxFilter{Limit: txPageSize})
+
+	var acctPtr *int64
+	month := store.MonthKey(time.Now())
+	if currentURL := c.GetHeader("HX-Current-URL"); currentURL != "" {
+		if u, err := url.Parse(currentURL); err == nil {
+			if a := u.Query().Get("account"); a != "" {
+				if v, err := strconv.ParseInt(a, 10, 64); err == nil {
+					acctPtr = &v
+				}
+			}
+			if m := u.Query().Get("month"); m != "" {
+				month = m
+			} else if u.Query().Get("all") == "1" {
+				month = ""
+			}
+		}
+	}
+
+	rows, _ := h.store.ListTransactions(ctx, store.TxFilter{
+		AccountID: acctPtr, Month: month, Limit: txPageSize,
+	})
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
 	c.Status(http.StatusOK)
