@@ -22,6 +22,7 @@ internal/web/views/*_templ.go
 # Local docs / screenshots not needed at runtime.
 screenshots/
 docs/
+tmp/
 
 # Test caches
 *.test

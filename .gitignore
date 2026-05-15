@@ -21,6 +21,7 @@ budget.yaml
 
 # Other
 docs/*
+tmp/*
 
 # OS
 .DS_Store
