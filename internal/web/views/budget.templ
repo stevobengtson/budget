@@ -9,16 +9,16 @@ import (
 )
 
 type BudgetData struct {
-	Month         string // "YYYY-MM"
-	PrevMonth     string
-	NextMonth     string
-	Estimated     int64
-	Actual        int64
-	Budgeted      int64
-	Remain        int64
-	EstAct        int64
-	CreditRows    []store.CreditActivity
-	GroupedRows   [][]store.CategoryBudget // grouped by GroupName order, no Income
+	Month       string // "YYYY-MM"
+	PrevMonth   string
+	NextMonth   string
+	Estimated   int64
+	Actual      int64
+	Budgeted    int64
+	Remain      int64
+	EstAct      int64
+	CreditRows  []store.CreditActivity
+	GroupedRows [][]store.CategoryBudget // grouped by GroupName order, no Income
 }
 
 templ BudgetPage(d BudgetData) {
@@ -27,22 +27,31 @@ templ BudgetPage(d BudgetData) {
 	}
 }
 
-templ BudgetBody(d BudgetData) {
+templ BudgetMonthSelector(d BudgetData) {
 	<h1 class="title">Budget · { formatMonth(d.Month) }</h1>
 	<div class="filters">
 		<a class="btn btn--small" href={ templ.URL("/budget?month=" + d.PrevMonth) }>‹ prev</a>
 		<a class="btn btn--small" href={ templ.URL("/budget?month=" + nowMonth()) }>today</a>
 		<a class="btn btn--small" href={ templ.URL("/budget?month=" + d.NextMonth) }>next ›</a>
 	</div>
+}
 
+templ BudgetBanner(d BudgetData) {
 	<div class="banner">
 		<div class="banner__item"><span class="banner__label">Estimated</span><span class="money-pos">{ money.Format(d.Estimated) }</span></div>
 		<div class="banner__item"><span class="banner__label">Actual</span><span class="money-pos">{ money.Format(d.Actual) }</span></div>
 		<div class="banner__item"><span class="banner__label">Budgeted</span><span>{ money.Format(d.Budgeted) }</span></div>
-		<div class="banner__item"><span class="banner__label">Remain</span>@SignedMoney(d.Remain)</div>
-		<div class="banner__item"><span class="banner__label">Est−Act</span>@SignedMoney(d.EstAct)</div>
+		<div class="banner__item">
+			<span class="banner__label">Remain</span>@SignedMoney(d.Remain)
+		</div>
+		<div class="banner__item">
+			<span class="banner__label">Est−Act</span>@SignedMoney(d.EstAct)
+		</div>
 	</div>
+	<p class="footnote">Tip: <a href="/budget/income">manage income</a> in this month.</p>
+}
 
+templ BudgetCreditSection(d BudgetData) {
 	if len(d.CreditRows) > 0 {
 		<h2 class="header">Credit</h2>
 		<table>
@@ -53,13 +62,18 @@ templ BudgetBody(d BudgetData) {
 						<td>{ ca.AccountName }</td>
 						<td class="money-neg">{ money.Format(ca.PurchasesCents) }</td>
 						<td class="money-pos">{ money.Format(ca.PaymentsCents) }</td>
-						<td>@SignedMoney(ca.OwingCents)</td>
+						<td>
+							@SignedMoney(ca.OwingCents)
+						</td>
 					</tr>
 				}
 			</tbody>
 		</table>
 	}
+}
 
+templ BudgetTable(d BudgetData) {
+	{{ assigned, spent, available := budgetTotals(d.GroupedRows) }}
 	<table>
 		<thead>
 			<tr>
@@ -81,26 +95,47 @@ templ BudgetBody(d BudgetData) {
 				}
 			}
 		</tbody>
+		<tfoot>
+			<tr class="totals-row">
+				<td><strong>Totals</strong></td>
+				<td>{ money.Format(assigned) }</td>
+				<td>{ money.Format(spent) }</td>
+				<td>@SignedMoney(available)</td>
+				<td></td>
+				<td></td>
+			</tr>
+		</tfoot>
 	</table>
+}
 
-	<p class="footnote">Tip: <a href="/budget/income">manage income</a> in this month.</p>
+templ BudgetBody(d BudgetData) {
+	@BudgetMonthSelector(d)
+	@BudgetBanner(d)
+	@BudgetCreditSection(d)
+	@BudgetTable(d)
 }
 
 templ BudgetRow(month string, r store.CategoryBudget) {
 	<tr id={ fmt.Sprintf("cat-%d", r.CategoryID) }>
 		<td>&nbsp;&nbsp;{ r.CategoryName }</td>
 		<td>
-			<form hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
-			      hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
-			      hx-swap="outerHTML"
-			      style="display:flex;gap:4px;">
+			<form
+				hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
+				hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
+				hx-swap="outerHTML"
+				style="display:flex;gap:4px;"
+			>
 				<input type="text" name="amount" value={ money.Format(r.AssignedCents) } size="10"/>
 				<button type="submit" class="btn btn--small btn--primary">save</button>
 			</form>
 		</td>
 		<td>{ money.Format(r.SpentCents) }</td>
-		<td>@SignedMoney(r.AvailableCents)</td>
-		<td>@GoalCell(r)</td>
+		<td>
+			@SignedMoney(r.AvailableCents)
+		</td>
+		<td>
+			@GoalCell(r)
+		</td>
 		<td></td>
 	</tr>
 }
@@ -109,10 +144,10 @@ templ GoalCell(r store.CategoryBudget) {
 	if r.GoalCents != nil {
 		<span class="dim">goal { money.Format(*r.GoalCents) }</span>
 		if r.GoalDueDate != nil {
-			<span class="dim"> by { r.GoalDueDate.Format("Jan 2006") }</span>
+			<span class="dim">by { r.GoalDueDate.Format("Jan 2006") }</span>
 		}
 		if r.MonthlyTarget > 0 {
-			<span class="warn"> · need { money.Format(r.MonthlyTarget) }/mo</span>
+			<span class="warn">· need { money.Format(r.MonthlyTarget) }/mo</span>
 		}
 	}
 }
@@ -136,3 +171,14 @@ func formatMonth(m string) string {
 }
 
 func nowMonth() string { return time.Now().Format("2006-01") }
+
+func budgetTotals(grouped [][]store.CategoryBudget) (assigned, spent, available int64) {
+	for _, group := range grouped {
+		for _, r := range group {
+			assigned += r.AssignedCents
+			spent += r.SpentCents
+			available += r.AvailableCents
+		}
+	}
+	return
+}

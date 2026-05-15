@@ -116,6 +116,9 @@ tbody tr.row--cursor td { background: var(--surface1); }
 
 .group-row td { color: var(--overlay0); font-weight: bold; padding-top: 12px; }
 
+tfoot td { padding: 8px; border-top: 2px solid var(--surface1); font-weight: bold; }
+.totals-row td { background: var(--surface0); }
+
 .money-pos { color: var(--green); }
 .money-neg { color: var(--red); }
 .money-dim { color: var(--overlay0); }

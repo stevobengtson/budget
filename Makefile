@@ -27,6 +27,9 @@ run: build
 web: build
 	$(BINARY) web
 
+dev:
+	air
+
 tui: run
 
 test: templ
