@@ -1,6 +1,9 @@
 # Binaries
 bin/*
 
+# Generated Tailwind output
+internal/web/static/app.css
+
 # Test binary, built with go test -c
 *.test
 

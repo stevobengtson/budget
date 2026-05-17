@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -21,19 +23,30 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 		month = store.MonthKey(time.Now())
 	}
 
-	rows, err := h.store.MonthBudget(ctx, month)
+	data, rows, err := h.budgetData(ctx, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "month budget: %v", err)
 		return
 	}
-	// Filter Income; group by GroupName preserving order.
+	_ = rows
+	render(c, http.StatusOK, views.BudgetPage(data))
+}
+
+// budgetData loads everything needed to render the budget page for the
+// requested month and returns the rendered view-model plus the flat row
+// slice (callers that need to find a single row by ID can reuse it without
+// a second store round-trip).
+func (h *Handlers) budgetData(ctx context.Context, month string) (views.BudgetData, []store.CategoryBudget, error) {
+	rows, err := h.store.MonthBudget(ctx, month)
+	if err != nil {
+		return views.BudgetData{}, nil, fmt.Errorf("month budget: %w", err)
+	}
 	grouped := groupCategories(rows)
 
 	incTotal, _ := h.store.TotalIncome(ctx, month)
 	actual, _ := h.store.ActualIncomeForMonth(ctx, month)
 	credit, _ := h.store.CreditCardActivityForMonth(ctx, month)
 
-	// Filter credit rows with no activity.
 	creditFiltered := credit[:0]
 	for _, ca := range credit {
 		if ca.PurchasesCents != 0 || ca.PaymentsCents != 0 {
@@ -47,26 +60,23 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 			assigned += r.AssignedCents
 		}
 	}
-	remain := incTotal - assigned
-	gap := incTotal - actual
 
 	prev := store.PrevMonth(month)
 	t, _ := time.Parse("2006-01", month)
 	next := t.AddDate(0, 1, 0).Format("2006-01")
 
-	data := views.BudgetData{
+	return views.BudgetData{
 		Month:       month,
 		PrevMonth:   prev,
 		NextMonth:   next,
 		Estimated:   incTotal,
 		Actual:      actual,
 		Budgeted:    assigned,
-		Remain:      remain,
-		EstAct:      gap,
+		Remain:      incTotal - assigned,
+		EstAct:      incTotal - actual,
 		CreditRows:  creditFiltered,
 		GroupedRows: grouped,
-	}
-	render(c, http.StatusOK, views.BudgetPage(data))
+	}, rows, nil
 }
 
 // groupCategories takes the flat MonthBudget output and bins category
@@ -89,7 +99,8 @@ func groupCategories(rows []store.CategoryBudget) [][]store.CategoryBudget {
 }
 
 // BudgetAssign updates the assigned amount for a category and returns
-// the swapped row partial.
+// the swapped row partial plus out-of-band updates for the banner stats
+// that move when an assignment changes (Budgeted, Remain).
 func (h *Handlers) BudgetAssign(c *gin.Context) {
 	ctx := c.Request.Context()
 	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
@@ -107,13 +118,11 @@ func (h *Handlers) BudgetAssign(c *gin.Context) {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	// Re-fetch the row's current state (assigned, spent, available, etc.).
-	rows, _ := h.store.MonthBudget(ctx, month)
-	for _, r := range rows {
-		if r.CategoryID == catID {
-			render(c, http.StatusOK, views.BudgetRow(month, r))
-			return
-		}
+
+	data, _, err := h.budgetData(ctx, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
 	}
-	c.String(http.StatusNotFound, "category not in month")
+	render(c, http.StatusOK, views.BudgetRegion(data))
 }

@@ -1,0 +1,48 @@
+// Package checkbox renders a shadcn-styled native HTML checkbox.
+//
+// shadcn/ui's React Checkbox uses Radix primitives + an SVG check indicator.
+// Replicating that in pure templ is a heavier lift than this initial port
+// needs, so the component styles the native <input type="checkbox"> with
+// the same tokens. Forms get a square, ring-respecting control that
+// participates in standard form submission.
+package checkbox
+
+import "github.com/sbengtson/budget/pkg/shadcntempl/internal/cn"
+
+type Props struct {
+	ID       string
+	Name     string
+	Value    string // submitted value when checked (default: "1")
+	Checked  bool
+	Disabled bool
+	Required bool
+	Class    string
+	Attrs    templ.Attributes
+}
+
+const base = "peer h-4 w-4 shrink-0 rounded-sm border border-primary text-primary shadow accent-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+
+func valueOrDefault(v string) string {
+	if v == "" {
+		return "1"
+	}
+	return v
+}
+
+templ Checkbox(p Props) {
+	<input
+		type="checkbox"
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		if p.Name != "" {
+			name={ p.Name }
+		}
+		value={ valueOrDefault(p.Value) }
+		checked?={ p.Checked }
+		disabled?={ p.Disabled }
+		required?={ p.Required }
+		class={ cn.Join(base, p.Class) }
+		{ p.Attrs... }
+	/>
+}

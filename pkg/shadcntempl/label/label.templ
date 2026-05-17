@@ -1,0 +1,24 @@
+// Package label renders shadcn/ui-style form labels.
+package label
+
+import "github.com/sbengtson/budget/pkg/shadcntempl/internal/cn"
+
+type Props struct {
+	For   string
+	Class string
+	Attrs templ.Attributes
+}
+
+const base = "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+
+templ Label(p Props) {
+	<label
+		if p.For != "" {
+			for={ p.For }
+		}
+		class={ cn.Join(base, p.Class) }
+		{ p.Attrs... }
+	>
+		{ children... }
+	</label>
+}

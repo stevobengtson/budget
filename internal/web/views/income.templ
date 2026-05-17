@@ -7,6 +7,11 @@ import (
 
 	"github.com/sbengtson/budget/internal/money"
 	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/pkg/shadcntempl/button"
+	"github.com/sbengtson/budget/pkg/shadcntempl/card"
+	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
+	"github.com/sbengtson/budget/pkg/shadcntempl/input"
+	"github.com/sbengtson/budget/pkg/shadcntempl/table"
 )
 
 type IncomeData struct {
@@ -22,47 +27,116 @@ type IncomeData struct {
 
 templ IncomePage(d IncomeData) {
 	@Layout("Income · Budget", "budget") {
-		<h1 class="title">Income · { incomeMonthLabel(d.Month) }</h1>
-		<div class="filters">
-			<a class="btn btn--small" href={ templ.URL("/budget/income?month=" + d.PrevMonth) }>‹ prev</a>
-			<a class="btn btn--small" href={ templ.URL("/budget/income?month=" + d.Today) }>today</a>
-			<a class="btn btn--small" href={ templ.URL("/budget/income?month=" + d.NextMonth) }>next ›</a>
-			<span class="dim">·</span>
-			<a class="btn btn--small" href={ templ.URL("/budget?month=" + d.Month) }>← back to budget</a>
-			<a class="btn btn--primary" hx-get={ "/budget/income/new?month=" + d.Month } hx-target="#modal" hx-swap="innerHTML">+ new</a>
+		<div class="mb-4 flex items-center justify-between gap-4">
+			<h1 class="text-2xl font-semibold tracking-tight">Income · { incomeMonthLabel(d.Month) }</h1>
+			<div class="flex items-center gap-2">
+				@button.Link("/budget/income?month="+d.PrevMonth, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+					‹ prev
+				}
+				@button.Link("/budget/income?month="+d.Today, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+					today
+				}
+				@button.Link("/budget/income?month="+d.NextMonth, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+					next ›
+				}
+			</div>
+		</div>
+
+		<div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+			@incomeStat("Estimated", money.Format(d.Total), "text-emerald-500")
+			@incomeStat("Actual", money.Format(d.Actual), "text-emerald-500")
+			@incomeStat("Budgeted", money.Format(d.Budgeted), "")
+			@incomeStatSigned("Remain", d.Total-d.Budgeted)
+		</div>
+
+		<div class="mb-3 flex items-center justify-between gap-4">
+			<p class="text-xs text-muted-foreground">
+				<a class="underline underline-offset-4 hover:text-foreground" href={ templ.URL("/budget?month=" + d.Month) }>← back to budget</a>
+			</p>
+			@button.Link("/budget/income/new?month="+d.Month, button.Props{
+				Size: button.SizeSmall,
+				Attrs: templ.Attributes{
+					"hx-get":    "/budget/income/new?month=" + d.Month,
+					"hx-target": "#modal",
+					"hx-swap":   "innerHTML",
+				},
+			}) {
+				+ new
+			}
 		</div>
 
 		if len(d.Rows) == 0 {
-			<p class="dim">No income entries yet for this month. Add one with the <strong>+ new</strong> button.</p>
+			<p class="text-sm text-muted-foreground">
+				No income entries yet for this month. Add one with the <strong>+ new</strong> button.
+			</p>
 		} else {
-			<table>
-				<thead><tr><th>Source</th><th>Amount</th><th></th></tr></thead>
-				<tbody id="income-rows">
+			@table.Table(table.Props{}) {
+				@table.Header(table.Props{}) {
+					@table.Row(table.Props{}) {
+						@table.Head(table.Props{}) { Source }
+						@table.Head(table.Props{Class: "text-right"}) { Amount }
+						@table.Head(table.Props{}) { }
+					}
+				}
+				<tbody id="income-rows" class="[&_tr:last-child]:border-0">
 					for _, r := range d.Rows {
 						@IncomeRow(d.Month, r)
 					}
 				</tbody>
-			</table>
+			}
 		}
+	}
+}
 
-		<div class="banner" style="margin-top:24px">
-			<div class="banner__item"><span class="banner__label">Estimated</span><span class="money-pos">{ money.Format(d.Total) }</span></div>
-			<div class="banner__item"><span class="banner__label">Actual</span><span class="money-pos">{ money.Format(d.Actual) }</span></div>
-			<div class="banner__item"><span class="banner__label">Budgeted</span><span>{ money.Format(d.Budgeted) }</span></div>
-			<div class="banner__item"><span class="banner__label">Remain</span>@SignedMoney(d.Total - d.Budgeted)</div>
+templ incomeStat(label, value, valueClass string) {
+	@card.Card(card.Props{Class: "p-4"}) {
+		<div class="text-xs uppercase tracking-wide text-muted-foreground">{ label }</div>
+		<div class={ "mt-1 text-lg font-semibold tabular-nums " + valueClass }>{ value }</div>
+	}
+}
+
+templ incomeStatSigned(label string, cents int64) {
+	@card.Card(card.Props{Class: "p-4"}) {
+		<div class="text-xs uppercase tracking-wide text-muted-foreground">{ label }</div>
+		<div class="mt-1 text-lg font-semibold tabular-nums">
+			@SignedMoney(cents)
 		</div>
 	}
 }
 
 templ IncomeRow(month string, r store.Income) {
-	<tr id={ fmt.Sprintf("income-%d", r.ID) }>
-		<td>{ r.Name }</td>
-		<td class="money-pos">{ money.Format(r.AmountCents) }</td>
-		<td>
-			<a class="btn btn--small" hx-get={ fmt.Sprintf("/budget/income/%d/edit?month=%s", r.ID, month) } hx-target="#modal" hx-swap="innerHTML">edit</a>
-			<button class="btn btn--small btn--danger" hx-delete={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" hx-confirm="Delete?">×</button>
-		</td>
-	</tr>
+	@table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("income-%d", r.ID)}}) {
+		@table.Cell(table.Props{Class: "font-medium"}) { { r.Name } }
+		@table.Cell(table.Props{Class: "text-right tabular-nums text-emerald-500"}) {
+			{ money.Format(r.AmountCents) }
+		}
+		@table.Cell(table.Props{Class: "whitespace-nowrap"}) {
+			@button.Link(fmt.Sprintf("/budget/income/%d/edit?month=%s", r.ID, month), button.Props{
+				Variant: button.VariantOutline,
+				Size:    button.SizeSmall,
+				Class:   "mr-1",
+				Attrs: templ.Attributes{
+					"hx-get":    fmt.Sprintf("/budget/income/%d/edit?month=%s", r.ID, month),
+					"hx-target": "#modal",
+					"hx-swap":   "innerHTML",
+				},
+			}) {
+				edit
+			}
+			@button.Button(button.Props{
+				Variant: button.VariantDestructive,
+				Size:    button.SizeSmall,
+				Attrs: templ.Attributes{
+					"hx-delete":  fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month),
+					"hx-target":  fmt.Sprintf("#income-%d", r.ID),
+					"hx-swap":    "outerHTML",
+					"hx-confirm": "Delete?",
+				},
+			}) {
+				×
+			}
+		}
+	}
 }
 
 type IncomeFormData struct {
@@ -74,30 +148,64 @@ type IncomeFormData struct {
 }
 
 templ IncomeForm(d IncomeFormData) {
-	<div class="modal-card">
+	@dialog.Content(dialog.Props{}) {
 		<form
 			if d.Editing {
 				hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", d.ID, d.Month) }
 			} else {
 				hx-post={ "/budget/income?month=" + d.Month }
 			}
-			hx-target="#modal" hx-swap="innerHTML">
-			<h3 class="title">
-				if d.Editing {
-					Edit income
-				} else {
-					New income
+			hx-target="#modal"
+			hx-swap="innerHTML"
+			class="grid gap-4"
+		>
+			@dialog.Header(dialog.Props{}) {
+				@dialog.Title(dialog.Props{}) {
+					if d.Editing {
+						Edit income
+					} else {
+						New income
+					}
 				}
-				 · { incomeMonthLabel(d.Month) }
-			</h3>
-			<div class="form-row"><label>Source</label><input name="name" value={ d.Name } required autofocus placeholder="Salary"/></div>
-			<div class="form-row"><label>Amount</label><input name="amount" value={ d.Amount } placeholder="0.00"/></div>
-			<div class="modal-actions">
-				<button type="button" class="btn" hx-on:click="document.getElementById('modal').innerHTML=''">cancel</button>
-				<button type="submit" class="btn btn--primary">save</button>
+				@dialog.Description(dialog.Props{}) {
+					{ incomeMonthLabel(d.Month) }
+				}
+			}
+			<div class="grid gap-3">
+				@formRow("income-name", "Source") {
+					@input.Input(input.Props{
+						ID:          "income-name",
+						Name:        "name",
+						Value:       d.Name,
+						Required:    true,
+						Placeholder: "Salary",
+						Attrs:       templ.Attributes{"autofocus": ""},
+					})
+				}
+				@formRow("income-amount", "Amount") {
+					@input.Input(input.Props{
+						ID:          "income-amount",
+						Name:        "amount",
+						Value:       d.Amount,
+						Placeholder: "0.00",
+						Class:       "tabular-nums",
+					})
+				}
 			</div>
+			@dialog.Footer(dialog.Props{}) {
+				@button.Button(button.Props{
+					Variant: button.VariantOutline,
+					Type:    "button",
+					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+				}) {
+					cancel
+				}
+				@button.Button(button.Props{Type: "submit"}) {
+					save
+				}
+			}
 		</form>
-	</div>
+	}
 }
 
 func incomeMonthLabel(m string) string {

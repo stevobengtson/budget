@@ -6,151 +6,261 @@ import (
 
 	"github.com/sbengtson/budget/internal/money"
 	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/pkg/shadcntempl/button"
+	"github.com/sbengtson/budget/pkg/shadcntempl/card"
+	"github.com/sbengtson/budget/pkg/shadcntempl/checkbox"
+	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
+	"github.com/sbengtson/budget/pkg/shadcntempl/input"
+	"github.com/sbengtson/budget/pkg/shadcntempl/label"
+	"github.com/sbengtson/budget/pkg/shadcntempl/selectbox"
+	"github.com/sbengtson/budget/pkg/shadcntempl/table"
 )
 
 type AccountsData struct {
-	Rows         []store.AccountWithBalance
-	Categories   []store.Category
-	Assets       int64
-	Liabilities  int64
-	Difference   int64
-	AvailCredit  int64
+	Rows        []store.AccountWithBalance
+	Categories  []store.Category
+	Assets      int64
+	Liabilities int64
+	Difference  int64
+	AvailCredit int64
 }
 
 templ AccountsPage(d AccountsData) {
 	@Layout("Accounts", "accounts") {
-		<h1 class="title">Accounts</h1>
-		<a class="btn btn--primary" hx-get="/accounts/new" hx-target="#modal" hx-swap="innerHTML">+ new</a>
-		<table>
-			<thead>
-				<tr>
-					<th>Name</th><th>Type</th><th>Balance</th><th>Limit</th><th>APR</th>
-					<th>Available</th><th></th>
-				</tr>
-			</thead>
-			<tbody>
+		<div class="mb-4 flex items-center justify-between gap-4">
+			<h1 class="text-2xl font-semibold tracking-tight">Accounts</h1>
+			@button.Link("/accounts/new", button.Props{
+				Size: button.SizeSmall,
+				Attrs: templ.Attributes{
+					"hx-get":    "/accounts/new",
+					"hx-target": "#modal",
+					"hx-swap":   "innerHTML",
+				},
+			}) {
+				+ new
+			}
+		</div>
+
+		@table.Table(table.Props{}) {
+			@table.Header(table.Props{}) {
+				@table.Row(table.Props{}) {
+					@table.Head(table.Props{}) { Name }
+					@table.Head(table.Props{}) { Type }
+					@table.Head(table.Props{Class: "text-right"}) { Balance }
+					@table.Head(table.Props{Class: "text-right"}) { Limit }
+					@table.Head(table.Props{Class: "text-right"}) { APR }
+					@table.Head(table.Props{Class: "text-right"}) { Available }
+					@table.Head(table.Props{}) { }
+				}
+			}
+			@table.Body(table.Props{}) {
 				for _, a := range d.Rows {
 					@AccountRow(a)
 				}
-			</tbody>
-		</table>
+			}
+		}
 
-		<div class="banner" style="margin-top:24px">
-			<div class="banner__item"><span class="banner__label">Assets</span><span class="money-pos">{ money.Format(d.Assets) }</span></div>
-			<div class="banner__item"><span class="banner__label">Liabilities</span><span class="money-neg">{ money.Format(d.Liabilities) }</span></div>
-			<div class="banner__item"><span class="banner__label">Difference</span>@SignedMoney(d.Difference)</div>
+		<div class="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+			@acctStat("Assets", money.Format(d.Assets), "text-emerald-500")
+			@acctStat("Liabilities", money.Format(d.Liabilities), "text-red-500")
+			@acctStatSigned("Difference", d.Difference)
 			if d.AvailCredit > 0 {
-				<div class="banner__item"><span class="banner__label">Available credit</span><span class="money-pos">{ money.Format(d.AvailCredit) }</span></div>
+				@acctStat("Available credit", money.Format(d.AvailCredit), "text-emerald-500")
 			}
 		</div>
 	}
 }
 
+templ acctStat(label, value, valueClass string) {
+	@card.Card(card.Props{Class: "p-4"}) {
+		<div class="text-xs uppercase tracking-wide text-muted-foreground">{ label }</div>
+		<div class={ "mt-1 text-lg font-semibold tabular-nums " + valueClass }>{ value }</div>
+	}
+}
+
+templ acctStatSigned(label string, cents int64) {
+	@card.Card(card.Props{Class: "p-4"}) {
+		<div class="text-xs uppercase tracking-wide text-muted-foreground">{ label }</div>
+		<div class="mt-1 text-lg font-semibold tabular-nums">
+			@SignedMoney(cents)
+		</div>
+	}
+}
+
 templ AccountRow(a store.AccountWithBalance) {
-	<tr id={ fmt.Sprintf("acct-%d", a.ID) }>
-		<td>{ a.Name }</td>
-		<td>{ string(a.Type) }</td>
-		<td>@SignedMoney(a.BalanceCents)</td>
-		<td>
+	@table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("acct-%d", a.ID)}}) {
+		@table.Cell(table.Props{Class: "font-medium"}) { { a.Name } }
+		@table.Cell(table.Props{Class: "text-muted-foreground"}) { { string(a.Type) } }
+		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+			@SignedMoney(a.BalanceCents)
+		}
+		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
 			if a.CreditLimitCents != nil {
-			{ money.Format(*a.CreditLimitCents)
-		} }
-		</td>
-		<td>
-			if a.AprBps != nil {
-			{ fmt.Sprintf("%.2f%%", float64(*a.AprBps)/100.0)
-		} }
-		</td>
-		<td>
-			if a.CreditLimitCents != nil {
-				<span class="money-pos">{ money.Format(availableCredit(a)) }</span>
+				{ money.Format(*a.CreditLimitCents) }
 			}
-		</td>
-		<td>
-			<a class="btn btn--small" hx-get={ fmt.Sprintf("/accounts/%d/edit", a.ID) } hx-target="#modal" hx-swap="innerHTML">edit</a>
-			<button class="btn btn--small btn--danger" hx-post={ fmt.Sprintf("/accounts/%d/archive", a.ID) } hx-target={ fmt.Sprintf("#acct-%d", a.ID) } hx-swap="outerHTML" hx-confirm="Archive this account?">archive</button>
-		</td>
-	</tr>
+		}
+		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+			if a.AprBps != nil {
+				{ fmt.Sprintf("%.2f%%", float64(*a.AprBps)/100.0) }
+			}
+		}
+		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+			if a.CreditLimitCents != nil {
+				<span class="text-emerald-500">{ money.Format(availableCredit(a)) }</span>
+			}
+		}
+		@table.Cell(table.Props{Class: "whitespace-nowrap"}) {
+			@button.Link(fmt.Sprintf("/accounts/%d/edit", a.ID), button.Props{
+				Variant: button.VariantOutline,
+				Size:    button.SizeSmall,
+				Class:   "mr-1",
+				Attrs: templ.Attributes{
+					"hx-get":    fmt.Sprintf("/accounts/%d/edit", a.ID),
+					"hx-target": "#modal",
+					"hx-swap":   "innerHTML",
+				},
+			}) {
+				edit
+			}
+			@button.Button(button.Props{
+				Variant: button.VariantDestructive,
+				Size:    button.SizeSmall,
+				Attrs: templ.Attributes{
+					"hx-post":    fmt.Sprintf("/accounts/%d/archive", a.ID),
+					"hx-target":  fmt.Sprintf("#acct-%d", a.ID),
+					"hx-swap":    "outerHTML",
+					"hx-confirm": "Archive this account?",
+				},
+			}) {
+				archive
+			}
+		}
+	}
 }
 
 type AccountFormData struct {
-	Editing             bool
-	ID                  int64
-	Name                string
-	Type                string
-	StartingBalance     string
-	CreditLimit         string
-	APR                 string
-	MonthlyPayment      string
-	IncludeInPaydown    bool
-	PaymentCategoryID   *int64
-	Categories          []store.Category
+	Editing           bool
+	ID                int64
+	Name              string
+	Type              string
+	StartingBalance   string
+	CreditLimit       string
+	APR               string
+	MonthlyPayment    string
+	IncludeInPaydown  bool
+	PaymentCategoryID *int64
+	Categories        []store.Category
 }
 
 templ AccountForm(d AccountFormData) {
-	<div class="modal-card"><form id="acct-form-inner"
-	      if d.Editing {
-	        hx-put={ fmt.Sprintf("/accounts/%d", d.ID) }
-	      } else {
-	        hx-post="/accounts"
-	      }
-	      hx-target="#modal" hx-swap="innerHTML">
-		<h3 class="title">
+	@dialog.Content(dialog.Props{Class: "max-w-xl"}) {
+		<form
+			id="acct-form-inner"
 			if d.Editing {
-			Edit account
-		} else { New account }
-		</h3>
-		<div class="form-row"><label>Name</label><input name="name" value={ d.Name } required/></div>
-		<div class="form-row">
-			<label>Type</label>
-			<select name="type">
-				for _, t := range []string{"checking","savings","cash","credit","loan"} {
-					if t == d.Type {
-						<option value={ t } selected>{ t }</option>
-					} else {
-						<option value={ t }>{ t }</option>
-					}
-				}
-			</select>
-		</div>
-		<div class="form-row"><label>Starting balance</label><input name="starting_balance" value={ d.StartingBalance } placeholder="0.00"/></div>
-		<div class="form-row"><label>Credit limit</label><input name="credit_limit" value={ d.CreditLimit } placeholder="(optional)"/></div>
-		<div class="form-row"><label>APR %</label><input name="apr" value={ d.APR } placeholder="19.99"/></div>
-		<div class="form-row"><label>Monthly payment</label><input name="monthly_payment" value={ d.MonthlyPayment } placeholder="(optional)"/></div>
-		<div class="form-row"><label>Include in paydown</label>
-			if d.IncludeInPaydown {
-				<input type="checkbox" name="include_in_paydown" value="1" checked/>
+				hx-put={ fmt.Sprintf("/accounts/%d", d.ID) }
 			} else {
-				<input type="checkbox" name="include_in_paydown" value="1"/>
+				hx-post="/accounts"
 			}
-		</div>
-		<div class="form-row">
-			<label>Payment category</label>
-			<select name="payment_category_id">
-				<option value="">(none)</option>
-				for _, c := range d.Categories {
-					if d.PaymentCategoryID != nil && *d.PaymentCategoryID == c.ID {
-						<option value={ strconv.FormatInt(c.ID, 10) } selected>{ c.Name }</option>
+			hx-target="#modal"
+			hx-swap="innerHTML"
+			class="grid gap-4"
+		>
+			@dialog.Header(dialog.Props{}) {
+				@dialog.Title(dialog.Props{}) {
+					if d.Editing {
+						Edit account
 					} else {
-						<option value={ strconv.FormatInt(c.ID, 10) }>{ c.Name }</option>
+						New account
 					}
 				}
-			</select>
-		</div>
-		<div class="form-actions">
-			<button class="btn btn--primary">save</button>
-			<button type="button" class="btn" hx-on:click="document.getElementById('modal').innerHTML=''">cancel</button>
-		</div>
-	</form></div>
+			}
+			<div class="grid gap-3">
+				@formRow("acct-name", "Name") {
+					@input.Input(input.Props{ID: "acct-name", Name: "name", Value: d.Name, Required: true})
+				}
+				@formRow("acct-type", "Type") {
+					@selectbox.Select(selectbox.Props{ID: "acct-type", Name: "type"}, accountTypeOptions(d.Type))
+				}
+				<div class="grid grid-cols-2 gap-3">
+					@formRow("acct-start", "Starting balance") {
+						@input.Input(input.Props{ID: "acct-start", Name: "starting_balance", Value: d.StartingBalance, Placeholder: "0.00", Class: "tabular-nums"})
+					}
+					@formRow("acct-limit", "Credit limit") {
+						@input.Input(input.Props{ID: "acct-limit", Name: "credit_limit", Value: d.CreditLimit, Placeholder: "(optional)", Class: "tabular-nums"})
+					}
+					@formRow("acct-apr", "APR %") {
+						@input.Input(input.Props{ID: "acct-apr", Name: "apr", Value: d.APR, Placeholder: "19.99", Class: "tabular-nums"})
+					}
+					@formRow("acct-pay", "Monthly payment") {
+						@input.Input(input.Props{ID: "acct-pay", Name: "monthly_payment", Value: d.MonthlyPayment, Placeholder: "(optional)", Class: "tabular-nums"})
+					}
+				</div>
+				<div class="flex items-center gap-2">
+					@checkbox.Checkbox(checkbox.Props{
+						ID:      "acct-paydown",
+						Name:    "include_in_paydown",
+						Checked: d.IncludeInPaydown,
+					})
+					@label.Label(label.Props{For: "acct-paydown"}) {
+						Include in paydown
+					}
+				</div>
+				@formRow("acct-paycat", "Payment category") {
+					@selectbox.Select(selectbox.Props{
+						ID:          "acct-paycat",
+						Name:        "payment_category_id",
+						Placeholder: "(none)",
+					}, paymentCategoryOptions(d.Categories, d.PaymentCategoryID))
+				}
+			</div>
+			@dialog.Footer(dialog.Props{}) {
+				@button.Button(button.Props{
+					Variant: button.VariantOutline,
+					Type:    "button",
+					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+				}) {
+					cancel
+				}
+				@button.Button(button.Props{Type: "submit"}) {
+					save
+				}
+			}
+		</form>
+	}
+}
+
+func accountTypeOptions(selected string) []selectbox.Option {
+	types := []string{"checking", "savings", "cash", "credit", "loan"}
+	out := make([]selectbox.Option, 0, len(types))
+	for _, t := range types {
+		out = append(out, selectbox.Option{
+			Value:    t,
+			Label:    t,
+			Selected: t == selected,
+		})
+	}
+	return out
+}
+
+func paymentCategoryOptions(cats []store.Category, selected *int64) []selectbox.Option {
+	out := make([]selectbox.Option, 0, len(cats))
+	for _, c := range cats {
+		out = append(out, selectbox.Option{
+			Value:    strconv.FormatInt(c.ID, 10),
+			Label:    c.Name,
+			Selected: selected != nil && *selected == c.ID,
+		})
+	}
+	return out
 }
 
 func availableCredit(a store.AccountWithBalance) int64 {
 	if a.CreditLimitCents == nil {
-			return 0
-		}
+		return 0
+	}
 	v := a.BalanceCents + *a.CreditLimitCents
 	if v < 0 {
-			return 0
-		}
+		return 0
+	}
 	return v
 }

@@ -7,21 +7,27 @@ import (
 
 	"github.com/sbengtson/budget/internal/money"
 	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/pkg/shadcntempl/button"
+	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
+	"github.com/sbengtson/budget/pkg/shadcntempl/input"
+	"github.com/sbengtson/budget/pkg/shadcntempl/label"
+	"github.com/sbengtson/budget/pkg/shadcntempl/selectbox"
+	"github.com/sbengtson/budget/pkg/shadcntempl/table"
 )
 
 type TransactionsData struct {
-	Rows           []store.Transaction
-	Accounts       []store.AccountWithBalance
-	Categories     []store.Category
-	Groups         []store.CategoryGroup
-	FilterAccount  *int64
-	FilterMonth    string // "YYYY-MM" or "" when viewing all months
-	PrevMonth      string
-	NextMonth      string
-	Today          string // current month key, for the "today" jump button
-	Page           int    // 1-based
-	PageSize       int
-	Total          int
+	Rows          []store.Transaction
+	Accounts      []store.AccountWithBalance
+	Categories    []store.Category
+	Groups        []store.CategoryGroup
+	FilterAccount *int64
+	FilterMonth   string // "YYYY-MM" or "" when viewing all months
+	PrevMonth     string
+	NextMonth     string
+	Today         string // current month key, for the "today" jump button
+	Page          int    // 1-based
+	PageSize      int
+	Total         int
 }
 
 templ TransactionsPage(d TransactionsData) {
@@ -31,188 +37,286 @@ templ TransactionsPage(d TransactionsData) {
 }
 
 templ TransactionsBody(d TransactionsData) {
-	<h1 class="title">Transactions ({ strconv.Itoa(d.Total) })</h1>
+	<div class="mb-4 flex items-center justify-between gap-4">
+		<h1 class="text-2xl font-semibold tracking-tight">Transactions <span class="ml-2 text-sm font-normal text-muted-foreground">({ strconv.Itoa(d.Total) })</span></h1>
+		@button.Link("/transactions/new", button.Props{
+			Size: button.SizeSmall,
+			Attrs: templ.Attributes{
+				"hx-get":    "/transactions/new",
+				"hx-target": "#modal",
+				"hx-swap":   "innerHTML",
+			},
+		}) {
+			+ new
+		}
+	</div>
 
-	<div class="filters">
-		<a class="btn btn--small" href={ templ.URL(txMonthHref(d, d.PrevMonth)) }>‹ prev</a>
-		<a class="btn btn--small" href={ templ.URL(txMonthHref(d, d.Today)) }>today</a>
-		<a class="btn btn--small" href={ templ.URL(txMonthHref(d, d.NextMonth)) }>next ›</a>
-		<span class="dim">·</span>
-		<strong>{ txMonthLabel(d.FilterMonth) }</strong>
-		<span class="dim">·</span>
-		<form method="get" action="/transactions" style="display:flex;gap:6px;align-items:center;">
+	<div class="mb-4 flex flex-wrap items-center gap-3">
+		<div class="flex items-center gap-2">
+			@button.Link(txMonthHref(d, d.PrevMonth), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				‹ prev
+			}
+			@button.Link(txMonthHref(d, d.Today), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				today
+			}
+			@button.Link(txMonthHref(d, d.NextMonth), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				next ›
+			}
+		</div>
+		<span class="text-sm font-medium">{ txMonthLabel(d.FilterMonth) }</span>
+		<form method="get" action="/transactions" class="flex items-center gap-2">
 			if d.FilterMonth != "" {
 				<input type="hidden" name="month" value={ d.FilterMonth }/>
 			} else {
 				<input type="hidden" name="all" value="1"/>
 			}
-			<label>Account
-				<select name="account" onchange="this.form.submit()">
-					<option value="">All accounts</option>
-					for _, a := range d.Accounts {
-						if d.FilterAccount != nil && *d.FilterAccount == a.ID {
-							<option value={ strconv.FormatInt(a.ID, 10) } selected>{ a.Name }</option>
-						} else {
-							<option value={ strconv.FormatInt(a.ID, 10) }>{ a.Name }</option>
-						}
-					}
-				</select>
-			</label>
-			<noscript><button type="submit" class="btn">filter</button></noscript>
+			@label.Label(label.Props{For: "tx-account-filter", Class: "text-muted-foreground"}) {
+				Account
+			}
+			@selectbox.Select(selectbox.Props{
+				ID:    "tx-account-filter",
+				Name:  "account",
+				Class: "w-48",
+				Attrs: templ.Attributes{"onchange": "this.form.submit()"},
+			}, accountFilterOptions(d.Accounts, d.FilterAccount))
+			<noscript>
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSmall, Variant: button.VariantOutline}) {
+					filter
+				}
+			</noscript>
 		</form>
-		<a class="btn btn--primary" href="/transactions/new" hx-get="/transactions/new" hx-target="#modal" hx-swap="innerHTML">+ new</a>
 	</div>
 
-	<table>
-		<thead>
-			<tr>
-				<th>Date</th><th>Account</th><th>Category / Transfer</th><th>Payee</th>
-				<th>Outflow</th><th>Inflow</th><th>✓</th><th></th>
-			</tr>
-		</thead>
-		<tbody id="tx-rows">
+	@table.Table(table.Props{}) {
+		@table.Header(table.Props{}) {
+			@table.Row(table.Props{}) {
+				@table.Head(table.Props{}) { Date }
+				@table.Head(table.Props{}) { Account }
+				@table.Head(table.Props{}) { Category / Transfer }
+				@table.Head(table.Props{}) { Payee }
+				@table.Head(table.Props{Class: "text-right"}) { Outflow }
+				@table.Head(table.Props{Class: "text-right"}) { Inflow }
+				@table.Head(table.Props{Class: "text-center"}) { ✓ }
+				@table.Head(table.Props{}) { }
+			}
+		}
+		<tbody id="tx-rows" class="[&_tr:last-child]:border-0">
 			for i, t := range d.Rows {
 				if i > 0 && !sameDay(d.Rows[i-1].Date, t.Date) {
-					<tr class="tx-day-sep"><td colspan="8"></td></tr>
+					<tr><td colspan="8" class="h-2 bg-muted/30 p-0"></td></tr>
 				}
 				@TransactionRow(t, d.Accounts, d.Categories)
 			}
 		</tbody>
-	</table>
+	}
 
 	if d.Total > d.PageSize {
-		<div class="pager">
+		<div class="mt-4 flex items-center gap-3 text-sm text-muted-foreground">
 			if d.Page > 1 {
-				<a class="btn btn--small" href={ templ.URL(transactionsPageHref(d, d.Page-1)) }>‹ prev</a>
+				@button.Link(transactionsPageHref(d, d.Page-1), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+					‹ prev
+				}
 			}
 			<span>page { strconv.Itoa(d.Page) } of { strconv.Itoa((d.Total + d.PageSize - 1) / d.PageSize) }</span>
 			if d.Page * d.PageSize < d.Total {
-				<a class="btn btn--small" href={ templ.URL(transactionsPageHref(d, d.Page+1)) }>next ›</a>
+				@button.Link(transactionsPageHref(d, d.Page+1), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+					next ›
+				}
 			}
 		</div>
 	}
 }
 
 templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
-	<tr id={ fmt.Sprintf("tx-%d", t.ID) }>
-		<td>{ t.Date.Format("Jan 2, 2006") }</td>
-		<td>{ accountName(accts, t.AccountID) }</td>
-		<td>@TxCategoryCell(t, accts, cats)</td>
-		<td>
+	@table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("tx-%d", t.ID)}}) {
+		@table.Cell(table.Props{Class: "whitespace-nowrap"}) {
+			{ t.Date.Format("Jan 2, 2006") }
+		}
+		@table.Cell(table.Props{}) { { accountName(accts, t.AccountID) } }
+		@table.Cell(table.Props{}) {
+			@TxCategoryCell(t, accts, cats)
+		}
+		@table.Cell(table.Props{}) {
 			if t.Payee != nil {
-			{ *t.Payee
-		} }
-		</td>
-		<td>
-			if t.OutflowCents > 0 {
-			<span class="money-neg">{ money.Format(t.OutflowCents)
-		}</span> }
-		</td>
-		<td>
-			if t.InflowCents > 0 {
-			<span class="money-pos">{ money.Format(t.InflowCents)
-		}</span> }
-		</td>
-		<td>
-			if t.TransferAccountID != nil {
-				<button class="btn btn--small btn--cleared" type="button" disabled title="Transfers are auto-cleared">✓</button>
-			} else {
-				<form hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" style="display:inline">
-					if t.Cleared {
-						<button class="btn btn--small btn--cleared" type="submit" title="Cleared — click to unclear">✓</button>
-					} else {
-						<button class="btn btn--small dim" type="submit" title="Not cleared — click to clear">·</button>
-					}
-				</form>
+				{ *t.Payee }
 			}
-		</td>
-		<td>
-			<a class="btn btn--small" hx-get={ fmt.Sprintf("/transactions/%d/edit", t.ID) } hx-target="#modal" hx-swap="innerHTML">edit</a>
-			<button class="btn btn--small btn--danger" hx-delete={ fmt.Sprintf("/transactions/%d", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" hx-confirm="Delete?">×</button>
-		</td>
-	</tr>
+		}
+		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+			if t.OutflowCents > 0 {
+				<span class="text-red-500">{ money.Format(t.OutflowCents) }</span>
+			}
+		}
+		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+			if t.InflowCents > 0 {
+				<span class="text-emerald-500">{ money.Format(t.InflowCents) }</span>
+			}
+		}
+		@table.Cell(table.Props{Class: "text-center"}) {
+			@txClearCell(t)
+		}
+		@table.Cell(table.Props{Class: "whitespace-nowrap"}) {
+			@button.Link(fmt.Sprintf("/transactions/%d/edit", t.ID), button.Props{
+				Variant: button.VariantOutline,
+				Size:    button.SizeSmall,
+				Class:   "mr-1",
+				Attrs: templ.Attributes{
+					"hx-get":    fmt.Sprintf("/transactions/%d/edit", t.ID),
+					"hx-target": "#modal",
+					"hx-swap":   "innerHTML",
+				},
+			}) {
+				edit
+			}
+			@button.Button(button.Props{
+				Variant: button.VariantDestructive,
+				Size:    button.SizeSmall,
+				Attrs: templ.Attributes{
+					"hx-delete":  fmt.Sprintf("/transactions/%d", t.ID),
+					"hx-target":  fmt.Sprintf("#tx-%d", t.ID),
+					"hx-swap":    "outerHTML",
+					"hx-confirm": "Delete?",
+				},
+			}) {
+				×
+			}
+		}
+	}
+}
+
+templ txClearCell(t store.Transaction) {
+	if t.TransferAccountID != nil {
+		@button.Button(button.Props{
+			Variant:  button.VariantGhost,
+			Size:     button.SizeSmall,
+			Disabled: true,
+			Class:    "bg-emerald-600 text-white font-bold ring-1 ring-emerald-500/40 hover:bg-emerald-600",
+			Attrs:    templ.Attributes{"title": "Transfers are auto-cleared"},
+		}) {
+			✓
+		}
+	} else {
+		<form hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" class="inline">
+			if t.Cleared {
+				@button.Button(button.Props{
+					Type:    "submit",
+					Variant: button.VariantGhost,
+					Size:    button.SizeSmall,
+					Class:   "bg-emerald-600 text-white font-bold ring-1 ring-emerald-500/40 hover:bg-emerald-600/90 hover:text-white",
+					Attrs:   templ.Attributes{"title": "Cleared — click to unclear"},
+				}) {
+					✓
+				}
+			} else {
+				@button.Button(button.Props{
+					Type:    "submit",
+					Variant: button.VariantOutline,
+					Size:    button.SizeSmall,
+					Class:   "text-muted-foreground",
+					Attrs:   templ.Attributes{"title": "Not cleared — click to clear"},
+				}) {
+					·
+				}
+			}
+		</form>
+	}
 }
 
 templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
 	if t.TransferAccountID != nil {
-		<span class="dim">
+		<span class="text-muted-foreground">
 			if t.OutflowCents > 0 {
-			→
-		} else { ← }
+				→
+			} else {
+				←
+			}
 			{ accountName(accts, *t.TransferAccountID) }
 		</span>
 		if t.CategoryID != nil {
-			 · { categoryName(cats, *t.CategoryID) }
+			<span class="text-muted-foreground"> · </span>
+			{ categoryName(cats, *t.CategoryID) }
 		}
 	} else if t.CategoryID != nil {
 		{ categoryName(cats, *t.CategoryID) }
 	} else {
-		<span class="dim">(uncategorized)</span>
+		<span class="text-muted-foreground">(uncategorized)</span>
 	}
 }
 
 templ TransactionForm(d TxFormData) {
-	<div class="modal-card"><form id="tx-form-inner"
-	      if d.Editing {
-	        hx-put={ fmt.Sprintf("/transactions/%d", d.ID) }
-	      } else {
-	        hx-post="/transactions"
-	      }
-	      hx-target="#tx-rows" hx-swap="innerHTML">
-		<h3 class="title">
+	@dialog.Content(dialog.Props{Class: "max-w-xl"}) {
+		<form
+			id="tx-form-inner"
 			if d.Editing {
-			Edit
-		} else { New }
-			 transaction
-		</h3>
-		<div class="form-row"><label>Date</label><input type="date" name="date" value={ d.Date } required/></div>
-		<div class="form-row">
-			<label>Account</label>
-			<select name="account_id" required>
-				for _, a := range d.Accounts {
-					if d.AccountID == a.ID {
-						<option value={ strconv.FormatInt(a.ID, 10) } selected>{ a.Name }</option>
+				hx-put={ fmt.Sprintf("/transactions/%d", d.ID) }
+			} else {
+				hx-post="/transactions"
+			}
+			hx-target="#tx-rows"
+			hx-swap="innerHTML"
+			class="grid gap-4"
+		>
+			@dialog.Header(dialog.Props{}) {
+				@dialog.Title(dialog.Props{}) {
+					if d.Editing {
+						Edit transaction
 					} else {
-						<option value={ strconv.FormatInt(a.ID, 10) }>{ a.Name }</option>
+						New transaction
 					}
 				}
-			</select>
-		</div>
-		<div class="form-row">
-			<label>Category</label>
-			<select name="category_id">
-				<option value="">(none)</option>
-				for _, c := range d.Categories {
-					if d.CategoryID != nil && *d.CategoryID == c.ID {
-						<option value={ strconv.FormatInt(c.ID, 10) } selected>{ c.Name }</option>
-					} else {
-						<option value={ strconv.FormatInt(c.ID, 10) }>{ c.Name }</option>
-					}
+			}
+			<div class="grid gap-3">
+				@formRow("tx-date", "Date") {
+					@input.Input(input.Props{ID: "tx-date", Type: "date", Name: "date", Value: d.Date, Required: true})
 				}
-			</select>
-		</div>
-		<div class="form-row"><label>Payee</label><input type="text" name="payee" value={ d.Payee }/></div>
-		<div class="form-row"><label>Notes</label><input type="text" name="notes" value={ d.Notes }/></div>
-		<div class="form-row"><label>Outflow</label><input type="text" name="outflow" value={ d.Outflow } placeholder="0.00"/></div>
-		<div class="form-row"><label>Inflow</label><input type="text" name="inflow" value={ d.Inflow } placeholder="0.00"/></div>
-		<div class="form-row">
-			<label>Transfer to</label>
-			<select name="transfer_to">
-				<option value="">(none)</option>
-				for _, a := range d.Accounts {
-					if d.TransferAccountID != nil && *d.TransferAccountID == a.ID {
-						<option value={ strconv.FormatInt(a.ID, 10) } selected>{ a.Name }</option>
-					} else {
-						<option value={ strconv.FormatInt(a.ID, 10) }>{ a.Name }</option>
-					}
+				@formRow("tx-account", "Account") {
+					@selectbox.Select(selectbox.Props{ID: "tx-account", Name: "account_id", Required: true}, accountOptions(d.Accounts, d.AccountID))
 				}
-			</select>
+				@formRow("tx-category", "Category") {
+					@selectbox.Select(selectbox.Props{ID: "tx-category", Name: "category_id", Placeholder: "(none)"}, categoryOptions(d.Categories, d.CategoryID))
+				}
+				@formRow("tx-payee", "Payee") {
+					@input.Input(input.Props{ID: "tx-payee", Name: "payee", Value: d.Payee})
+				}
+				@formRow("tx-notes", "Notes") {
+					@input.Input(input.Props{ID: "tx-notes", Name: "notes", Value: d.Notes})
+				}
+				<div class="grid grid-cols-2 gap-3">
+					@formRow("tx-outflow", "Outflow") {
+						@input.Input(input.Props{ID: "tx-outflow", Name: "outflow", Value: d.Outflow, Placeholder: "0.00", Class: "tabular-nums"})
+					}
+					@formRow("tx-inflow", "Inflow") {
+						@input.Input(input.Props{ID: "tx-inflow", Name: "inflow", Value: d.Inflow, Placeholder: "0.00", Class: "tabular-nums"})
+					}
+				</div>
+				@formRow("tx-transfer", "Transfer to") {
+					@selectbox.Select(selectbox.Props{ID: "tx-transfer", Name: "transfer_to", Placeholder: "(none)"}, transferOptions(d.Accounts, d.TransferAccountID))
+				}
+			</div>
+			@dialog.Footer(dialog.Props{}) {
+				@button.Button(button.Props{
+					Variant: button.VariantOutline,
+					Type:    "button",
+					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+				}) {
+					cancel
+				}
+				@button.Button(button.Props{Type: "submit"}) {
+					save
+				}
+			}
+		</form>
+	}
+}
+
+templ formRow(id, text string) {
+	<div class="grid gap-1.5">
+		@label.Label(label.Props{For: id}) {
+			{ text }
+		}
+		<div class="[&>input]:w-full [&>select]:w-full">
+			{ children... }
 		</div>
-		<div class="form-actions">
-			<button type="submit" class="btn btn--primary">save</button>
-			<button type="button" class="btn" hx-on:click="document.getElementById('modal').innerHTML=''">cancel</button>
-		</div>
-	</form></div>
+	</div>
 }
 
 type TxFormData struct {
@@ -228,6 +332,55 @@ type TxFormData struct {
 	Inflow            string
 	Accounts          []store.AccountWithBalance
 	Categories        []store.Category
+}
+
+func accountFilterOptions(accts []store.AccountWithBalance, selected *int64) []selectbox.Option {
+	out := make([]selectbox.Option, 0, len(accts)+1)
+	out = append(out, selectbox.Option{Value: "", Label: "All accounts", Selected: selected == nil})
+	for _, a := range accts {
+		out = append(out, selectbox.Option{
+			Value:    strconv.FormatInt(a.ID, 10),
+			Label:    a.Name,
+			Selected: selected != nil && *selected == a.ID,
+		})
+	}
+	return out
+}
+
+func accountOptions(accts []store.AccountWithBalance, selectedID int64) []selectbox.Option {
+	out := make([]selectbox.Option, 0, len(accts))
+	for _, a := range accts {
+		out = append(out, selectbox.Option{
+			Value:    strconv.FormatInt(a.ID, 10),
+			Label:    a.Name,
+			Selected: a.ID == selectedID,
+		})
+	}
+	return out
+}
+
+func categoryOptions(cats []store.Category, selected *int64) []selectbox.Option {
+	out := make([]selectbox.Option, 0, len(cats))
+	for _, c := range cats {
+		out = append(out, selectbox.Option{
+			Value:    strconv.FormatInt(c.ID, 10),
+			Label:    c.Name,
+			Selected: selected != nil && *selected == c.ID,
+		})
+	}
+	return out
+}
+
+func transferOptions(accts []store.AccountWithBalance, selected *int64) []selectbox.Option {
+	out := make([]selectbox.Option, 0, len(accts))
+	for _, a := range accts {
+		out = append(out, selectbox.Option{
+			Value:    strconv.FormatInt(a.ID, 10),
+			Label:    a.Name,
+			Selected: selected != nil && *selected == a.ID,
+		})
+	}
+	return out
 }
 
 func accountName(accts []store.AccountWithBalance, id int64) string {

@@ -6,6 +6,11 @@ import (
 
 	"github.com/sbengtson/budget/internal/money"
 	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/pkg/shadcntempl/badge"
+	"github.com/sbengtson/budget/pkg/shadcntempl/button"
+	"github.com/sbengtson/budget/pkg/shadcntempl/card"
+	"github.com/sbengtson/budget/pkg/shadcntempl/input"
+	"github.com/sbengtson/budget/pkg/shadcntempl/table"
 )
 
 type BudgetData struct {
@@ -28,137 +33,194 @@ templ BudgetPage(d BudgetData) {
 }
 
 templ BudgetMonthSelector(d BudgetData) {
-	<h1 class="title">Budget · { formatMonth(d.Month) }</h1>
-	<div class="filters">
-		<a class="btn btn--small" href={ templ.URL("/budget?month=" + d.PrevMonth) }>‹ prev</a>
-		<a class="btn btn--small" href={ templ.URL("/budget?month=" + nowMonth()) }>today</a>
-		<a class="btn btn--small" href={ templ.URL("/budget?month=" + d.NextMonth) }>next ›</a>
+	<div class="mb-4 flex items-center justify-between gap-4">
+		<h1 class="text-2xl font-semibold tracking-tight">Budget · { formatMonth(d.Month) }</h1>
+		<div class="flex items-center gap-2">
+			@button.Link("/budget?month="+d.PrevMonth, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				‹ prev
+			}
+			@button.Link("/budget?month="+nowMonth(), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				today
+			}
+			@button.Link("/budget?month="+d.NextMonth, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				next ›
+			}
+		</div>
 	</div>
 }
 
 templ BudgetBanner(d BudgetData) {
-	<div class="banner">
-		<div class="banner__item"><span class="banner__label">Estimated</span><span class="money-pos">{ money.Format(d.Estimated) }</span></div>
-		<div class="banner__item"><span class="banner__label">Actual</span><span class="money-pos">{ money.Format(d.Actual) }</span></div>
-		<div class="banner__item"><span class="banner__label">Budgeted</span><span>{ money.Format(d.Budgeted) }</span></div>
-		<div class="banner__item">
-			<span class="banner__label">Remain</span>@SignedMoney(d.Remain)
-		</div>
-		<div class="banner__item">
-			<span class="banner__label">Est−Act</span>@SignedMoney(d.EstAct)
-		</div>
+	<div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+		@bannerStat("Estimated", money.Format(d.Estimated), "text-foreground")
+		@bannerStat("Actual", money.Format(d.Actual), "text-foreground")
+		@bannerStat("Budgeted", money.Format(d.Budgeted), "text-foreground")
+		@bannerStatSigned("Remain", d.Remain)
+		@bannerStatSigned("Est−Act", d.EstAct)
 	</div>
-	<p class="footnote">Tip: <a href="/budget/income">manage income</a> in this month.</p>
+	<p class="mb-4 text-xs text-muted-foreground">Tip: <a class="underline underline-offset-4 hover:text-foreground" href="/budget/income">manage income</a> in this month.</p>
+}
+
+templ bannerStat(label, value, valueClass string) {
+	@card.Card(card.Props{Class: "p-4"}) {
+		<div class="text-xs uppercase tracking-wide text-muted-foreground">{ label }</div>
+		<div class={ "mt-1 text-lg font-semibold tabular-nums " + valueClass }>{ value }</div>
+	}
+}
+
+templ bannerStatSigned(label string, cents int64) {
+	@card.Card(card.Props{Class: "p-4"}) {
+		<div class="text-xs uppercase tracking-wide text-muted-foreground">{ label }</div>
+		<div class="mt-1 text-lg font-semibold tabular-nums">
+			@SignedMoney(cents)
+		</div>
+	}
 }
 
 templ BudgetCreditSection(d BudgetData) {
 	if len(d.CreditRows) > 0 {
-		<h2 class="header">Credit</h2>
-		<table>
-			<thead><tr><th>Account</th><th>Purchases</th><th>Payments</th><th>Owing</th></tr></thead>
-			<tbody>
-				for _, ca := range d.CreditRows {
-					<tr>
-						<td>{ ca.AccountName }</td>
-						<td class="money-neg">{ money.Format(ca.PurchasesCents) }</td>
-						<td class="money-pos">{ money.Format(ca.PaymentsCents) }</td>
-						<td>
-							@SignedMoney(ca.OwingCents)
-						</td>
-					</tr>
+		<h2 class="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Credit</h2>
+		@table.Table(table.Props{}) {
+			@table.Header(table.Props{}) {
+				@table.Row(table.Props{}) {
+					@table.Head(table.Props{}) { Account }
+					@table.Head(table.Props{}) { Purchases }
+					@table.Head(table.Props{}) { Payments }
+					@table.Head(table.Props{}) { Owing }
 				}
-			</tbody>
-		</table>
+			}
+			@table.Body(table.Props{}) {
+				for _, ca := range d.CreditRows {
+					@table.Row(table.Props{}) {
+						@table.Cell(table.Props{}) { { ca.AccountName } }
+						@table.Cell(table.Props{Class: "tabular-nums text-red-500"}) { { money.Format(ca.PurchasesCents) } }
+						@table.Cell(table.Props{Class: "tabular-nums text-emerald-500"}) { { money.Format(ca.PaymentsCents) } }
+						@table.Cell(table.Props{Class: "tabular-nums"}) {
+							@SignedMoney(ca.OwingCents)
+						}
+					}
+				}
+			}
+		}
 	}
 }
 
 templ BudgetTable(d BudgetData) {
 	{{ assigned, spent, available := budgetTotals(d.GroupedRows) }}
-	<table>
-		<thead>
-			<tr>
-				<th style="width:30%">Group / Category</th>
-				<th>Assigned</th>
-				<th>Spent</th>
-				<th>Available</th>
-				<th>Goal</th>
-				<th></th>
-			</tr>
-		</thead>
-		<tbody>
+	@table.Table(table.Props{Class: "mt-2"}) {
+		@table.Header(table.Props{}) {
+			@table.Row(table.Props{}) {
+				@table.Head(table.Props{Class: "w-[34%]"}) { Group / Category }
+				@table.Head(table.Props{}) { Assigned }
+				@table.Head(table.Props{}) { Spent }
+				@table.Head(table.Props{}) { Available }
+				@table.Head(table.Props{}) { Goal }
+				@table.Head(table.Props{}) { }
+			}
+		}
+		@table.Body(table.Props{}) {
 			for _, group := range d.GroupedRows {
 				if len(group) > 0 {
-					<tr class="group-row"><td colspan="6">[{ group[0].GroupName }]</td></tr>
+					@table.Row(table.Props{Class: "bg-muted/40 hover:bg-muted/40"}) {
+						@table.Cell(table.Props{Attrs: templ.Attributes{"colspan": "6", "class": "p-2 align-middle font-semibold uppercase tracking-wide text-xs text-muted-foreground"}}) {
+							{ group[0].GroupName }
+						}
+					}
 					for _, r := range group {
 						@BudgetRow(d.Month, r)
 					}
 				}
 			}
-		</tbody>
-		<tfoot>
-			<tr class="totals-row">
-				<td><strong>Totals</strong></td>
-				<td>{ money.Format(assigned) }</td>
-				<td>{ money.Format(spent) }</td>
-				<td>@SignedMoney(available)</td>
-				<td></td>
-				<td></td>
-			</tr>
-		</tfoot>
-	</table>
+		}
+		@table.Footer(table.Props{}) {
+			@table.Row(table.Props{}) {
+				@table.Cell(table.Props{Class: "font-semibold"}) { Totals }
+				@table.Cell(table.Props{Class: "tabular-nums font-semibold"}) { { money.Format(assigned) } }
+				@table.Cell(table.Props{Class: "tabular-nums font-semibold"}) { { money.Format(spent) } }
+				@table.Cell(table.Props{Class: "tabular-nums font-semibold"}) {
+					@SignedMoney(available)
+				}
+				@table.Cell(table.Props{}) { }
+				@table.Cell(table.Props{}) { }
+			}
+		}
+	}
 }
 
 templ BudgetBody(d BudgetData) {
 	@BudgetMonthSelector(d)
-	@BudgetBanner(d)
-	@BudgetCreditSection(d)
-	@BudgetTable(d)
+	@BudgetRegion(d)
+}
+
+// BudgetRegion wraps everything that depends on saved assignments — banner
+// stats, the credit table, and the main budget table with its totals — in
+// a single swappable container. The per-row assign form targets this id so
+// every save refreshes banner + totals consistently, without per-element
+// out-of-band swaps (which are unreliable when the primary swap target is
+// a <tr> inside a <tbody>).
+templ BudgetRegion(d BudgetData) {
+	<div id="budget-region">
+		@BudgetBanner(d)
+		@BudgetCreditSection(d)
+		@BudgetTable(d)
+	</div>
 }
 
 templ BudgetRow(month string, r store.CategoryBudget) {
-	<tr id={ fmt.Sprintf("cat-%d", r.CategoryID) }>
-		<td>&nbsp;&nbsp;{ r.CategoryName }</td>
-		<td>
+	@table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("cat-%d", r.CategoryID)}}) {
+		@table.Cell(table.Props{Class: "pl-6"}) { { r.CategoryName } }
+		@table.Cell(table.Props{}) {
 			<form
 				hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
-				hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
+				hx-target="#budget-region"
 				hx-swap="outerHTML"
-				style="display:flex;gap:4px;"
+				class="flex items-center gap-2"
 			>
-				<input type="text" name="amount" value={ money.Format(r.AssignedCents) } size="10"/>
-				<button type="submit" class="btn btn--small btn--primary">save</button>
+				@input.Input(input.Props{
+					Name:  "amount",
+					Value: money.Format(r.AssignedCents),
+					Class: "h-8 w-28 text-right tabular-nums",
+				})
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSmall}) {
+					save
+				}
 			</form>
-		</td>
-		<td>{ money.Format(r.SpentCents) }</td>
-		<td>
+		}
+		@table.Cell(table.Props{Class: "tabular-nums"}) { { money.Format(r.SpentCents) } }
+		@table.Cell(table.Props{Class: "tabular-nums"}) {
 			@SignedMoney(r.AvailableCents)
-		</td>
-		<td>
+		}
+		@table.Cell(table.Props{}) {
 			@GoalCell(r)
-		</td>
-		<td></td>
-	</tr>
+		}
+		@table.Cell(table.Props{}) { }
+	}
 }
 
 templ GoalCell(r store.CategoryBudget) {
 	if r.GoalCents != nil {
-		<span class="dim">goal { money.Format(*r.GoalCents) }</span>
-		if r.GoalDueDate != nil {
-			<span class="dim">by { r.GoalDueDate.Format("Jan 2006") }</span>
-		}
-		if r.MonthlyTarget > 0 {
-			<span class="warn">· need { money.Format(r.MonthlyTarget) }/mo</span>
-		}
+		<div class="flex flex-wrap items-center gap-1">
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				goal { money.Format(*r.GoalCents) }
+			}
+			if r.GoalDueDate != nil {
+				<span class="text-xs text-muted-foreground">by { r.GoalDueDate.Format("Jan 2006") }</span>
+			}
+			if r.MonthlyTarget > 0 {
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					need { money.Format(r.MonthlyTarget) }/mo
+				}
+			}
+		</div>
 	}
 }
 
 templ SignedMoney(cents int64) {
 	if cents > 0 {
-		<span class="money-pos">{ money.Format(cents) }</span>
+		<span class="text-emerald-500 tabular-nums">{ money.Format(cents) }</span>
 	} else if cents < 0 {
-		<span class="money-neg">{ money.Format(cents) }</span>
+		<span class="text-red-500 tabular-nums">{ money.Format(cents) }</span>
 	} else {
-		<span class="money-dim">{ money.Format(cents) }</span>
+		<span class="text-muted-foreground tabular-nums">{ money.Format(cents) }</span>
 	}
 }
 

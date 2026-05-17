@@ -1,0 +1,45 @@
+// Package card renders shadcn/ui-style cards.
+package card
+
+import "github.com/sbengtson/budget/pkg/shadcntempl/internal/cn"
+
+type Props struct {
+	Class string
+	Attrs templ.Attributes
+}
+
+templ Card(p Props) {
+	<div class={ cn.Join("rounded-xl border bg-card text-card-foreground shadow", p.Class) } { p.Attrs... }>
+		{ children... }
+	</div>
+}
+
+templ Header(p Props) {
+	<div class={ cn.Join("flex flex-col space-y-1.5 p-6", p.Class) } { p.Attrs... }>
+		{ children... }
+	</div>
+}
+
+templ Title(p Props) {
+	<h3 class={ cn.Join("font-semibold leading-none tracking-tight", p.Class) } { p.Attrs... }>
+		{ children... }
+	</h3>
+}
+
+templ Description(p Props) {
+	<p class={ cn.Join("text-sm text-muted-foreground", p.Class) } { p.Attrs... }>
+		{ children... }
+	</p>
+}
+
+templ Content(p Props) {
+	<div class={ cn.Join("p-6 pt-0", p.Class) } { p.Attrs... }>
+		{ children... }
+	</div>
+}
+
+templ Footer(p Props) {
+	<div class={ cn.Join("flex items-center p-6 pt-0", p.Class) } { p.Attrs... }>
+		{ children... }
+	</div>
+}

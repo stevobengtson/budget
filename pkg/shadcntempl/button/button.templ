@@ -1,0 +1,115 @@
+// Package button renders shadcn/ui-style buttons.
+package button
+
+import "github.com/sbengtson/budget/pkg/shadcntempl/internal/cn"
+
+// Variant controls the visual style.
+type Variant string
+
+const (
+	VariantDefault     Variant = "default"
+	VariantDestructive Variant = "destructive"
+	VariantOutline     Variant = "outline"
+	VariantSecondary   Variant = "secondary"
+	VariantGhost       Variant = "ghost"
+	VariantLink        Variant = "link"
+)
+
+// Size controls padding and text size.
+type Size string
+
+const (
+	SizeDefault Size = "default"
+	SizeSmall   Size = "sm"
+	SizeLarge   Size = "lg"
+	SizeIcon    Size = "icon"
+)
+
+// Props configures a Button. All fields are optional.
+type Props struct {
+	Variant  Variant
+	Size     Size
+	Type     string            // button | submit | reset (default: button)
+	ID       string
+	Name     string
+	Value    string
+	Disabled bool
+	Class    string            // extra Tailwind classes
+	Attrs    templ.Attributes  // raw passthrough (htmx, aria, data-*, etc.)
+}
+
+const base = "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
+
+func variantClass(v Variant) string {
+	switch v {
+	case VariantDestructive:
+		return "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
+	case VariantOutline:
+		return "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground"
+	case VariantSecondary:
+		return "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80"
+	case VariantGhost:
+		return "hover:bg-accent hover:text-accent-foreground"
+	case VariantLink:
+		return "text-primary underline-offset-4 hover:underline"
+	default:
+		return "bg-primary text-primary-foreground shadow hover:bg-primary/90"
+	}
+}
+
+func sizeClass(s Size) string {
+	switch s {
+	case SizeSmall:
+		return "h-8 rounded-md px-3 text-xs"
+	case SizeLarge:
+		return "h-10 rounded-md px-8"
+	case SizeIcon:
+		return "h-9 w-9"
+	default:
+		return "h-9 px-4 py-2"
+	}
+}
+
+// Classes returns the concatenated class list for the supplied props.
+func Classes(p Props) string {
+	return cn.Join(base, variantClass(p.Variant), sizeClass(p.Size), p.Class)
+}
+
+func typeOrDefault(t string) string {
+	if t == "" {
+		return "button"
+	}
+	return t
+}
+
+// Button renders a <button>. The child block becomes the label.
+templ Button(p Props) {
+	<button
+		type={ typeOrDefault(p.Type) }
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		if p.Name != "" {
+			name={ p.Name }
+		}
+		if p.Value != "" {
+			value={ p.Value }
+		}
+		disabled?={ p.Disabled }
+		class={ Classes(p) }
+		{ p.Attrs... }
+	>
+		{ children... }
+	</button>
+}
+
+// Link renders an <a> styled as a button — useful for navigational actions.
+templ Link(href string, p Props) {
+	<a
+		href={ templ.SafeURL(href) }
+		class={ Classes(p) }
+		{ p.Attrs... }
+	>
+		{ children... }
+	</a>
+}

@@ -1,0 +1,67 @@
+// Package table renders shadcn/ui-style tables.
+//
+// shadcn's table is a thin wrapper around the native HTML table elements with
+// a small set of utility classes. The templ port follows that shape: one
+// component per element, no implicit state.
+package table
+
+import "github.com/sbengtson/budget/pkg/shadcntempl/internal/cn"
+
+// Props are shared by every wrapper. Class is appended to the default class
+// list; Attrs is forwarded verbatim.
+type Props struct {
+	Class string
+	Attrs templ.Attributes
+}
+
+// Table is the outer wrapper. shadcn renders the <table> inside a scrolling
+// div; we mirror that so wide tables don't blow out a flex parent.
+templ Table(p Props) {
+	<div class="relative w-full overflow-auto">
+		<table class={ cn.Join("w-full caption-bottom text-sm", p.Class) } { p.Attrs... }>
+			{ children... }
+		</table>
+	</div>
+}
+
+templ Header(p Props) {
+	<thead class={ cn.Join("[&_tr]:border-b", p.Class) } { p.Attrs... }>
+		{ children... }
+	</thead>
+}
+
+templ Body(p Props) {
+	<tbody class={ cn.Join("[&_tr:last-child]:border-0", p.Class) } { p.Attrs... }>
+		{ children... }
+	</tbody>
+}
+
+templ Footer(p Props) {
+	<tfoot class={ cn.Join("border-t bg-muted/50 font-medium [&>tr]:last:border-b-0", p.Class) } { p.Attrs... }>
+		{ children... }
+	</tfoot>
+}
+
+templ Row(p Props) {
+	<tr class={ cn.Join("border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted", p.Class) } { p.Attrs... }>
+		{ children... }
+	</tr>
+}
+
+templ Head(p Props) {
+	<th class={ cn.Join("h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0", p.Class) } { p.Attrs... }>
+		{ children... }
+	</th>
+}
+
+templ Cell(p Props) {
+	<td class={ cn.Join("p-2 align-middle [&:has([role=checkbox])]:pr-0", p.Class) } { p.Attrs... }>
+		{ children... }
+	</td>
+}
+
+templ Caption(p Props) {
+	<caption class={ cn.Join("mt-4 text-sm text-muted-foreground", p.Class) } { p.Attrs... }>
+		{ children... }
+	</caption>
+}

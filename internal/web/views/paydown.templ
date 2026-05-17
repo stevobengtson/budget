@@ -7,6 +7,13 @@ import (
 	"github.com/sbengtson/budget/internal/money"
 	"github.com/sbengtson/budget/internal/paydown"
 	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/pkg/shadcntempl/badge"
+	"github.com/sbengtson/budget/pkg/shadcntempl/button"
+	"github.com/sbengtson/budget/pkg/shadcntempl/card"
+	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
+	"github.com/sbengtson/budget/pkg/shadcntempl/input"
+	"github.com/sbengtson/budget/pkg/shadcntempl/label"
+	"github.com/sbengtson/budget/pkg/shadcntempl/table"
 )
 
 type PaydownData struct {
@@ -21,22 +28,39 @@ type PaydownData struct {
 
 templ PaydownPage(d PaydownData) {
 	@Layout("Paydown", "paydown") {
-		<h1 class="title">Debt Paydown · { strconv.Itoa(d.Horizon) } month horizon</h1>
-
-		<div class="filters">
-			<form method="get" action="/paydown" style="display:flex;gap:8px;align-items:center;">
-				<label>Horizon (months) <input name="horizon" type="number" min="12" max="360" step="12" value={ strconv.Itoa(d.Horizon) }/></label>
-				<button class="btn">apply</button>
+		<div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+			<h1 class="text-2xl font-semibold tracking-tight">
+				Debt Paydown <span class="ml-2 text-sm font-normal text-muted-foreground">{ strconv.Itoa(d.Horizon) } month horizon</span>
+			</h1>
+			<form method="get" action="/paydown" class="flex items-center gap-2">
+				@label.Label(label.Props{For: "pd-horizon", Class: "text-muted-foreground"}) {
+					Horizon (months)
+				}
+				@input.Input(input.Props{
+					ID:    "pd-horizon",
+					Name:  "horizon",
+					Type:  "number",
+					Value: strconv.Itoa(d.Horizon),
+					Class: "w-28 tabular-nums",
+					Attrs: templ.Attributes{"min": "12", "max": "360", "step": "12"},
+				})
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSmall, Variant: button.VariantOutline}) {
+					apply
+				}
 			</form>
 		</div>
 
-		<div class="banner">
-			<div class="banner__item"><span class="banner__label">Monthly outflow</span><span class="money-pos">{ money.Format(d.TotalMonthly) }</span></div>
-			<div class="banner__item"><span class="banner__label">Total interest</span><span class="money-neg">{ money.Format(d.TotalInterest) }</span></div>
+		<div class="mb-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+			@pdStat("Monthly outflow", money.Format(d.TotalMonthly), "text-emerald-500")
+			@pdStat("Total interest", money.Format(d.TotalInterest), "text-red-500")
 		</div>
 
 		if len(d.Plans) == 0 {
-			<p class="dim">No accounts in the paydown plan yet. Open <a href="/accounts">Accounts</a>, edit one with APR, and check "include in paydown".</p>
+			<p class="text-sm text-muted-foreground">
+				No accounts in the paydown plan yet. Open
+				<a class="underline underline-offset-4 hover:text-foreground" href="/accounts">Accounts</a>,
+				edit one with APR, and check &#34;include in paydown&#34;.
+			</p>
 		}
 
 		for i, p := range d.Plans {
@@ -45,79 +69,180 @@ templ PaydownPage(d PaydownData) {
 	}
 }
 
+templ pdStat(label, value, valueClass string) {
+	@card.Card(card.Props{Class: "p-4"}) {
+		<div class="text-xs uppercase tracking-wide text-muted-foreground">{ label }</div>
+		<div class={ "mt-1 text-lg font-semibold tabular-nums " + valueClass }>{ value }</div>
+	}
+}
+
 templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance) {
-	<section style="margin-bottom:24px">
-		<h3>
-			[{ acct.Name }] { fmt.Sprintf("%.2f%% APR", float64(p.AprBps)/100.0) } · payment <span class="money-pos">{ money.Format(p.PaymentCents) }/mo</span> · start { money.Format(p.StartCents) }
-			if !p.PayoffMonth.IsZero() {
-				· clears { p.PayoffMonth.Format("Jan 2006") }
-			}
-			if p.Diverging {
-				· <span class="money-neg">payment ≤ interest, debt grows</span>
-			}
-			<button class="btn btn--small" hx-get={ fmt.Sprintf("/paydown/%d/payment-form", acct.ID) } hx-target="#modal" hx-swap="innerHTML" style="margin-left:8px">edit payment</button>
-			<button class="btn btn--small" hx-get={ fmt.Sprintf("/paydown/%d/category-form", acct.ID) } hx-target="#modal" hx-swap="innerHTML">link category</button>
-			<button class="btn btn--small btn--danger" hx-post={ fmt.Sprintf("/paydown/%d/exclude", acct.ID) } hx-confirm="Remove from paydown?">remove</button>
-		</h3>
-		<table>
-			<thead><tr><th>Month</th><th>Interest</th><th>Payment</th><th>Source</th><th>Balance</th></tr></thead>
-			<tbody>
-				for _, r := range p.Rows {
-					<tr>
-						<td>{ r.Month.Format("Jan 2006") }</td>
-						<td class="money-neg">{ money.Format(r.InterestCents) }</td>
-						<td class="money-pos">{ money.Format(r.PaymentCents) }</td>
-						<td>@PaydownSource(r.PaymentSource)</td>
-						<td>{ money.Format(r.BalanceCents) }</td>
-					</tr>
+	<section class="mb-8">
+		@card.Card(card.Props{Class: "mb-3"}) {
+			<div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-4">
+				<h3 class="text-base font-semibold">{ acct.Name }</h3>
+				<span class="text-sm text-muted-foreground tabular-nums">{ fmt.Sprintf("%.2f%% APR", float64(p.AprBps)/100.0) }</span>
+				<span class="text-sm">
+					<span class="text-muted-foreground">payment</span>
+					<span class="ml-1 text-emerald-500 tabular-nums">{ money.Format(p.PaymentCents) }/mo</span>
+				</span>
+				<span class="text-sm">
+					<span class="text-muted-foreground">start</span>
+					<span class="ml-1 tabular-nums">{ money.Format(p.StartCents) }</span>
+				</span>
+				if !p.PayoffMonth.IsZero() {
+					<span class="text-sm">
+						<span class="text-muted-foreground">clears</span>
+						<span class="ml-1">{ p.PayoffMonth.Format("Jan 2006") }</span>
+					</span>
 				}
-			</tbody>
-		</table>
+				if p.Diverging {
+					@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
+						payment ≤ interest, debt grows
+					}
+				}
+				<div class="ml-auto flex flex-wrap items-center gap-2">
+					@button.Button(button.Props{
+						Variant: button.VariantOutline,
+						Size:    button.SizeSmall,
+						Attrs: templ.Attributes{
+							"hx-get":    fmt.Sprintf("/paydown/%d/payment-form", acct.ID),
+							"hx-target": "#modal",
+							"hx-swap":   "innerHTML",
+						},
+					}) {
+						edit payment
+					}
+					@button.Button(button.Props{
+						Variant: button.VariantOutline,
+						Size:    button.SizeSmall,
+						Attrs: templ.Attributes{
+							"hx-get":    fmt.Sprintf("/paydown/%d/category-form", acct.ID),
+							"hx-target": "#modal",
+							"hx-swap":   "innerHTML",
+						},
+					}) {
+						link category
+					}
+					@button.Button(button.Props{
+						Variant: button.VariantDestructive,
+						Size:    button.SizeSmall,
+						Attrs: templ.Attributes{
+							"hx-post":    fmt.Sprintf("/paydown/%d/exclude", acct.ID),
+							"hx-confirm": "Remove from paydown?",
+						},
+					}) {
+						remove
+					}
+				</div>
+			</div>
+		}
+		@table.Table(table.Props{}) {
+			@table.Header(table.Props{}) {
+				@table.Row(table.Props{}) {
+					@table.Head(table.Props{}) { Month }
+					@table.Head(table.Props{Class: "text-right"}) { Interest }
+					@table.Head(table.Props{Class: "text-right"}) { Payment }
+					@table.Head(table.Props{}) { Source }
+					@table.Head(table.Props{Class: "text-right"}) { Balance }
+				}
+			}
+			@table.Body(table.Props{}) {
+				for _, r := range p.Rows {
+					@table.Row(table.Props{}) {
+						@table.Cell(table.Props{Class: "whitespace-nowrap"}) { { r.Month.Format("Jan 2006") } }
+						@table.Cell(table.Props{Class: "text-right tabular-nums text-red-500"}) { { money.Format(r.InterestCents) } }
+						@table.Cell(table.Props{Class: "text-right tabular-nums text-emerald-500"}) { { money.Format(r.PaymentCents) } }
+						@table.Cell(table.Props{}) {
+							@PaydownSource(r.PaymentSource)
+						}
+						@table.Cell(table.Props{Class: "text-right tabular-nums"}) { { money.Format(r.BalanceCents) } }
+					}
+				}
+			}
+		}
 	</section>
 }
 
 templ PaydownSource(s paydown.PaymentSource) {
 	if s == paydown.SourceSpent {
-		<span class="money-pos">✓ spent</span>
+		<span class="text-emerald-500">✓ spent</span>
 	} else if s == paydown.SourceAssigned {
-		<span class="warn">→ assigned</span>
+		<span class="text-amber-500">→ assigned</span>
 	} else {
-		<span class="dim">· default</span>
+		<span class="text-muted-foreground">· default</span>
 	}
 }
 
 // PaymentModal renders a centered card with a single-input form for
 // updating the fallback monthly payment on an account.
 templ PaymentModal(acct store.AccountWithBalance) {
-	<div class="modal-card">
-		<h3>Edit monthly payment — { acct.Name }</h3>
-		<form hx-post={ fmt.Sprintf("/paydown/%d/payment", acct.ID) } hx-target="body" hx-swap="outerHTML">
-			<div class="form-row">
-				<label>Monthly payment</label>
-				<input name="amount" type="text" placeholder="200.00" autofocus
-					if acct.MonthlyPaymentCents != nil {
-						value={ money.Format(*acct.MonthlyPaymentCents) }
-					}
-				/>
-			</div>
-			<p class="dim">Leave blank to clear. The amount is used for any month that has no spent or assigned data in the linked category.</p>
-			<div class="modal-actions">
-				<button type="button" class="btn" hx-on:click="document.getElementById('modal').innerHTML=''">cancel</button>
-				<button type="submit" class="btn btn--primary">save</button>
-			</div>
+	@dialog.Content(dialog.Props{}) {
+		@dialog.Header(dialog.Props{}) {
+			@dialog.Title(dialog.Props{}) {
+				Edit monthly payment — { acct.Name }
+			}
+		}
+		<form hx-post={ fmt.Sprintf("/paydown/%d/payment", acct.ID) } hx-target="body" hx-swap="outerHTML" class="grid gap-4">
+			@formRow("pd-payment", "Monthly payment") {
+				if acct.MonthlyPaymentCents != nil {
+					@input.Input(input.Props{
+						ID:          "pd-payment",
+						Name:        "amount",
+						Value:       money.Format(*acct.MonthlyPaymentCents),
+						Placeholder: "200.00",
+						Class:       "tabular-nums",
+						Attrs:       templ.Attributes{"autofocus": ""},
+					})
+				} else {
+					@input.Input(input.Props{
+						ID:          "pd-payment",
+						Name:        "amount",
+						Placeholder: "200.00",
+						Class:       "tabular-nums",
+						Attrs:       templ.Attributes{"autofocus": ""},
+					})
+				}
+			}
+			<p class="text-sm text-muted-foreground">
+				Leave blank to clear. The amount is used for any month that has no spent
+				or assigned data in the linked category.
+			</p>
+			@dialog.Footer(dialog.Props{}) {
+				@button.Button(button.Props{
+					Variant: button.VariantOutline,
+					Type:    "button",
+					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+				}) {
+					cancel
+				}
+				@button.Button(button.Props{Type: "submit"}) {
+					save
+				}
+			}
 		</form>
-	</div>
+	}
 }
 
 // CategoryModal renders the modal for linking / unlinking a budget
 // category that drives this account's per-month payment override.
+// The native <select> here renders <optgroup> entries (per category
+// group), which the shared selectbox helper doesn't model, so we emit
+// the markup directly using selectbox's class signature.
 templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups []store.CategoryGroup) {
-	<div class="modal-card">
-		<h3>Link payment category — { acct.Name }</h3>
-		<form hx-post={ fmt.Sprintf("/paydown/%d/category", acct.ID) } hx-target="body" hx-swap="outerHTML">
-			<div class="form-row">
-				<label>Category</label>
-				<select name="category_id">
+	@dialog.Content(dialog.Props{}) {
+		@dialog.Header(dialog.Props{}) {
+			@dialog.Title(dialog.Props{}) {
+				Link payment category — { acct.Name }
+			}
+		}
+		<form hx-post={ fmt.Sprintf("/paydown/%d/category", acct.ID) } hx-target="body" hx-swap="outerHTML" class="grid gap-4">
+			@formRow("pd-category", "Category") {
+				<select
+					id="pd-category"
+					name="category_id"
+					class="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-background [&>option]:text-foreground"
+				>
 					<option value="">(none — fall back to default)</option>
 					for _, g := range groups {
 						<optgroup label={ g.Name }>
@@ -133,12 +258,23 @@ templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups
 						</optgroup>
 					}
 				</select>
-			</div>
-			<p class="dim">For each projected month the engine picks <strong>spent</strong> in this category, then <strong>assigned</strong>, then the default monthly payment.</p>
-			<div class="modal-actions">
-				<button type="button" class="btn" hx-on:click="document.getElementById('modal').innerHTML=''">cancel</button>
-				<button type="submit" class="btn btn--primary">save</button>
-			</div>
+			}
+			<p class="text-sm text-muted-foreground">
+				For each projected month the engine picks <strong>spent</strong> in this
+				category, then <strong>assigned</strong>, then the default monthly payment.
+			</p>
+			@dialog.Footer(dialog.Props{}) {
+				@button.Button(button.Props{
+					Variant: button.VariantOutline,
+					Type:    "button",
+					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+				}) {
+					cancel
+				}
+				@button.Button(button.Props{Type: "submit"}) {
+					save
+				}
+			}
 		</form>
-	</div>
+	}
 }

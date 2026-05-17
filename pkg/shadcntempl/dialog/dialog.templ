@@ -1,0 +1,49 @@
+// Package dialog renders shadcn/ui-style modal dialog content.
+//
+// The overlay + portal behavior is handled by the host page (htmx swaps a
+// rendered Content fragment into #modal; layout.css styles the
+// .modal-mount overlay). This package provides the inner card structure:
+// Content, Header, Title, Description, Footer.
+package dialog
+
+import "github.com/sbengtson/budget/pkg/shadcntempl/internal/cn"
+
+type Props struct {
+	Class string
+	Attrs templ.Attributes
+}
+
+templ Content(p Props) {
+	<div
+		role="dialog"
+		aria-modal="true"
+		class={ cn.Join("relative grid w-full max-w-lg gap-4 rounded-lg border bg-background p-6 shadow-lg sm:rounded-lg", p.Class) }
+		{ p.Attrs... }
+	>
+		{ children... }
+	</div>
+}
+
+templ Header(p Props) {
+	<div class={ cn.Join("flex flex-col space-y-1.5 text-center sm:text-left", p.Class) } { p.Attrs... }>
+		{ children... }
+	</div>
+}
+
+templ Title(p Props) {
+	<h2 class={ cn.Join("text-lg font-semibold leading-none tracking-tight", p.Class) } { p.Attrs... }>
+		{ children... }
+	</h2>
+}
+
+templ Description(p Props) {
+	<p class={ cn.Join("text-sm text-muted-foreground", p.Class) } { p.Attrs... }>
+		{ children... }
+	</p>
+}
+
+templ Footer(p Props) {
+	<div class={ cn.Join("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", p.Class) } { p.Attrs... }>
+		{ children... }
+	</div>
+}
