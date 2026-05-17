@@ -116,6 +116,9 @@ tbody tr.row--cursor td { background: var(--surface1); }
 
 .group-row td { color: var(--overlay0); font-weight: bold; padding-top: 12px; }
 
+.tx-day-sep td { padding: 0; height: 10px; border-bottom: 0; background: var(--surface0); }
+tbody tr.tx-day-sep:hover td { background: var(--surface0); }
+
 tfoot td { padding: 8px; border-top: 2px solid var(--surface1); font-weight: bold; }
 .totals-row td { background: var(--surface0); }
 
@@ -145,8 +148,12 @@ button, .btn {
   font: inherit;
 }
 button:hover, .btn:hover { background: var(--surface2); }
+button:disabled, .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+button:disabled:hover, .btn:disabled:hover { filter: none; }
 .btn--primary { background: var(--mauve); color: var(--base); border-color: var(--mauve); }
 .btn--danger  { background: var(--red);   color: var(--base); border-color: var(--red); }
+.btn--cleared { background: var(--green); color: var(--base); border-color: var(--green); font-weight: bold; }
+.btn--cleared:hover { background: var(--green); filter: brightness(0.9); }
 .btn--small   { padding: 2px 8px; font-size: 12px; }
 
 input, select, textarea {

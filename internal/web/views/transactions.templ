@@ -71,7 +71,10 @@ templ TransactionsBody(d TransactionsData) {
 			</tr>
 		</thead>
 		<tbody id="tx-rows">
-			for _, t := range d.Rows {
+			for i, t := range d.Rows {
+				if i > 0 && !sameDay(d.Rows[i-1].Date, t.Date) {
+					<tr class="tx-day-sep"><td colspan="8"></td></tr>
+				}
 				@TransactionRow(t, d.Accounts, d.Categories)
 			}
 		</tbody>
@@ -111,13 +114,17 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 		}</span> }
 		</td>
 		<td>
-			<form hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" style="display:inline">
-				if t.Cleared {
-					<button class="btn btn--small money-pos" type="submit">✓</button>
-				} else {
-					<button class="btn btn--small dim" type="submit">·</button>
-				}
-			</form>
+			if t.TransferAccountID != nil {
+				<button class="btn btn--small btn--cleared" type="button" disabled title="Transfers are auto-cleared">✓</button>
+			} else {
+				<form hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" style="display:inline">
+					if t.Cleared {
+						<button class="btn btn--small btn--cleared" type="submit" title="Cleared — click to unclear">✓</button>
+					} else {
+						<button class="btn btn--small dim" type="submit" title="Not cleared — click to clear">·</button>
+					}
+				</form>
+			}
 		</td>
 		<td>
 			<a class="btn btn--small" hx-get={ fmt.Sprintf("/transactions/%d/edit", t.ID) } hx-target="#modal" hx-swap="innerHTML">edit</a>
@@ -268,6 +275,12 @@ func txMonthHref(d TransactionsData, month string) string {
 		q += fmt.Sprintf("&account=%d", *d.FilterAccount)
 	}
 	return q
+}
+
+func sameDay(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
+	return ay == by && am == bm && ad == bd
 }
 
 func txMonthLabel(month string) string {
