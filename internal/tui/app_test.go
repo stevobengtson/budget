@@ -23,7 +23,7 @@ func TestRootViewRenders(t *testing.T) {
 	mAny, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = mAny.(Model)
 
-	for _, name := range []string{"Budget", "Transactions", "Accounts", "Categories", "Paydown", "Reports"} {
+	for _, name := range []string{"Budget", "Transactions", "Accounts", "Categories", "Paydown"} {
 		if !strings.Contains(m.View(), name) {
 			t.Errorf("View missing tab label %q", name)
 		}

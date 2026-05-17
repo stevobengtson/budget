@@ -548,66 +548,6 @@ func TestPaymentScheduleForCategory(t *testing.T) {
 	}
 }
 
-func TestSpendingByCategoryAndCashflow(t *testing.T) {
-	s := newTestStore(t)
-	ctx := context.Background()
-
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
-	gid, _ := s.CreateGroup(ctx, "Monthly", 0)
-	groc, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Groceries"})
-	gas, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Gas"})
-
-	now := time.Now()
-	if _, err := s.CreateTransaction(ctx, Transaction{Date: now, AccountID: chk, CategoryID: &groc, OutflowCents: 8_000}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.CreateTransaction(ctx, Transaction{Date: now, AccountID: chk, CategoryID: &gas, OutflowCents: 5_000}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.CreateTransaction(ctx, Transaction{Date: now, AccountID: chk, CategoryID: &groc, OutflowCents: 2_000}); err != nil {
-		t.Fatal(err)
-	}
-
-	since := now.AddDate(0, -1, 0)
-	until := now.AddDate(0, 0, 1)
-	rows, err := s.SpendingByCategory(ctx, since, until)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != 2 {
-		t.Fatalf("expected 2 rows, got %d", len(rows))
-	}
-	if rows[0].CategoryName != "Groceries" || rows[0].OutflowCents != 10_000 {
-		t.Errorf("first = %+v, want Groceries/10000", rows[0])
-	}
-	if rows[1].CategoryName != "Gas" || rows[1].OutflowCents != 5_000 {
-		t.Errorf("second = %+v, want Gas/5000", rows[1])
-	}
-
-	// Cashflow includes month-of-now.
-	month := MonthKey(now)
-	if _, err := s.CreateIncome(ctx, Income{Month: month, Name: "Work", AmountCents: 200_000}); err != nil {
-		t.Fatal(err)
-	}
-	cf, err := s.MonthlyCashflow(ctx, 3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(cf) != 3 {
-		t.Fatalf("cashflow rows = %d, want 3", len(cf))
-	}
-	last := cf[len(cf)-1]
-	if last.Month != month {
-		t.Errorf("last month = %q, want %q", last.Month, month)
-	}
-	if last.IncomeCents != 200_000 {
-		t.Errorf("income = %d, want 200000", last.IncomeCents)
-	}
-	if last.OutflowCents != 15_000 {
-		t.Errorf("outflow = %d, want 15000", last.OutflowCents)
-	}
-}
-
 func TestSinkingFundCarryover(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()

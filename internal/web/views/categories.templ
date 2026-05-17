@@ -25,7 +25,7 @@ templ CategoriesPage(d CategoriesData) {
 
 		for _, g := range d.Groups {
 			<h2 class="header">[{ g.Name }]</h2>
-			<table>
+			<table class="cat-table">
 				<thead><tr><th>Name</th><th>Goal</th><th>Due</th><th></th></tr></thead>
 				<tbody>
 					for _, c := range d.Cats {

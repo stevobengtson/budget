@@ -25,7 +25,7 @@ Track accounts, assign money to categories each month, project debt paydown, and
 | **Updates** | Full screen redraws | HTMX partial swaps — only changed rows update |
 | **Theme** | Catppuccin Mocha (terminal colors) | Catppuccin Mocha (CSS) |
 
-Both interfaces cover all tabs: Budget · Transactions · Accounts · Categories · Paydown · Reports.
+Both interfaces cover all tabs: Budget · Transactions · Accounts · Categories · Paydown.
 
 ---
 
@@ -35,7 +35,6 @@ Both interfaces cover all tabs: Budget · Transactions · Accounts · Categories
 - **Multi-account** — checking, savings, cash, credit cards, and loans in one view
 - **Transfers** — move money between accounts; tag the from-leg with a budget category (e.g. paying a credit card)
 - **Debt paydown projector** — real APR daily-compound amortization; links to your budget so actual payments replace forecasts automatically
-- **Reports** — spending by category (horizontal bar chart) and 12-month cashflow (income vs. expense)
 - **Sinking-fund goals** — set a target amount + due date; the app tells you the monthly contribution needed
 - **Income tracking** — estimate income for each month; see estimated vs. actual side-by-side on the Budget tab
 - **Fully local** — one SQLite file, no network access, no accounts, no telemetry
@@ -96,14 +95,6 @@ Transaction form with calendar date picker and account/category pickers:
 
 ---
 
-**Reports** — spending by category and 12-month cashflow chart
-
-| Spending by category | Monthly cashflow |
-|---|---|
-| ![Spending](./screenshots/20-reports-spending.png) | ![Cashflow](./screenshots/21-reports-cashflow.png) |
-
----
-
 ## Screenshots — Web
 
 The web interface mirrors every TUI tab with the same Catppuccin Mocha theme. Each page has a real URL so the browser back button and bookmarks work.
@@ -135,14 +126,6 @@ The web interface mirrors every TUI tab with the same Catppuccin Mocha theme. Ea
 **Paydown** — include/exclude accounts, set payments, link budget categories
 
 ![Web Paydown](./screenshots/web-05-paydown.png)
-
----
-
-**Reports** — spending by category and 12-month cashflow
-
-| Spending | Cashflow |
-|---|---|
-| ![Web Spending](./screenshots/web-06-reports-spending.png) | ![Web Cashflow](./screenshots/web-07-reports-cashflow.png) |
 
 ---
 
@@ -304,7 +287,7 @@ make db-delete  # delete the database file (and WAL/SHM)
 
 | Key | Action |
 |---|---|
-| `1`–`6` / click | switch tabs |
+| `1`–`5` / click | switch tabs |
 | `shift+h` / `shift+l` | prev / next tab |
 | `q` / `ctrl+c` | quit |
 | `?` | show / hide help |
@@ -363,16 +346,6 @@ Each included account projects monthly amortization at `APR / 365` daily compoun
 3. **default** — the account's fixed monthly payment fallback
 
 The `Source` column labels each row (`✓ spent`, `→ assigned`, `· default`).
-
-**Reports tab**
-
-| Key | Action |
-|---|---|
-| `s` | spending by category |
-| `c` | monthly cashflow (12 months) |
-| `[` / `]` | prev / next period (this month / 30d / 90d / YTD) |
-| `pgup` / `pgdn` | page through spending categories |
-| `r` | refresh |
 
 **Forms**
 

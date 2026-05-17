@@ -71,7 +71,7 @@ func CategoriesPage(d CategoriesData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "]</h2><table><thead><tr><th>Name</th><th>Goal</th><th>Due</th><th></th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "]</h2><table class=\"cat-table\"><thead><tr><th>Name</th><th>Goal</th><th>Due</th><th></th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

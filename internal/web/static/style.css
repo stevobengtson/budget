@@ -116,6 +116,12 @@ tbody tr.row--cursor td { background: var(--surface1); }
 
 .group-row td { color: var(--overlay0); font-weight: bold; padding-top: 12px; }
 
+.cat-table { table-layout: fixed; }
+.cat-table th:nth-child(1), .cat-table td:nth-child(1) { width: 40%; }
+.cat-table th:nth-child(2), .cat-table td:nth-child(2) { width: 22%; }
+.cat-table th:nth-child(3), .cat-table td:nth-child(3) { width: 22%; }
+.cat-table th:nth-child(4), .cat-table td:nth-child(4) { width: 16%; text-align: right; }
+
 .tx-day-sep td { padding: 0; height: 10px; border-bottom: 0; background: var(--surface0); }
 tbody tr.tx-day-sep:hover td { background: var(--surface0); }
 

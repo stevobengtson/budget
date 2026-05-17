@@ -81,8 +81,4 @@ func (s *Server) routes() {
 	s.engine.GET("/paydown/:acctID/category-form", hs.PaydownCategoryForm)
 	s.engine.POST("/paydown/:acctID/payment", hs.PaydownSetPayment)
 	s.engine.POST("/paydown/:acctID/category", hs.PaydownSetCategory)
-
-	s.engine.GET("/reports", func(c *gin.Context) { c.Redirect(http.StatusSeeOther, "/reports/spending") })
-	s.engine.GET("/reports/spending", hs.ReportsSpending)
-	s.engine.GET("/reports/cashflow", hs.ReportsCashflow)
 }

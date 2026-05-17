@@ -21,7 +21,6 @@ const (
 	tabAccounts
 	tabCategories
 	tabPaydown
-	tabReports
 	tabCount
 )
 
@@ -37,8 +36,6 @@ func (t tab) Name() string {
 		return "Categories"
 	case tabPaydown:
 		return "Paydown"
-	case tabReports:
-		return "Reports"
 	}
 	return ""
 }
@@ -55,8 +52,6 @@ func (t tab) Icon() string {
 		return "🗂"
 	case tabPaydown:
 		return "📉"
-	case tabReports:
-		return "📊"
 	}
 	return ""
 }
@@ -84,7 +79,6 @@ type Model struct {
 	transactions txModel
 	budget       budgetModel
 	paydown      paydownModel
-	reports      reportsModel
 }
 
 func New(s *store.Store) Model {
@@ -101,7 +95,6 @@ func New(s *store.Store) Model {
 		transactions: newTxModel(s),
 		budget:       newBudgetModel(s),
 		paydown:      newPaydownModel(s),
-		reports:      newReportsModel(s),
 	}
 	// Refresh receivers mutate via pointer; do it on initialization so the
 	// first-paint screen has data instead of an empty list.
@@ -110,7 +103,6 @@ func New(s *store.Store) Model {
 	_ = m.transactions.Refresh()
 	_ = m.budget.Refresh()
 	_ = m.paydown.Refresh()
-	_ = m.reports.Refresh()
 	return m
 }
 
@@ -162,8 +154,6 @@ func (m *Model) refreshActive() tea.Cmd {
 		return m.categories.Refresh()
 	case tabPaydown:
 		return m.paydown.Refresh()
-	case tabReports:
-		return m.reports.Refresh()
 	}
 	return nil
 }
@@ -172,7 +162,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.reports.SetSize(msg.Width, msg.Height)
 		m.transactions.SetSize(msg.Width, msg.Height)
 		m.budget.SetSize(msg.Width, msg.Height)
 		m.budget.adjustScroll()
@@ -209,9 +198,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.refreshActive()
 			case "5":
 				m.active = tabPaydown
-				return m, m.refreshActive()
-			case "6":
-				m.active = tabReports
 				return m, m.refreshActive()
 			case "H", "shift+left":
 				m.active = (m.active - 1 + tabCount) % tabCount
@@ -266,8 +252,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.budget, cmd = m.budget.Update(msg)
 	case tabPaydown:
 		m.paydown, cmd = m.paydown.Update(msg)
-	case tabReports:
-		m.reports, cmd = m.reports.Update(msg)
 	}
 	return m, cmd
 }
@@ -292,8 +276,6 @@ func (m Model) View() string {
 		body = m.categories.View()
 	case tabPaydown:
 		body = m.paydown.View()
-	case tabReports:
-		body = m.reports.View()
 	}
 	if m.showHelp {
 		body = helpView()
@@ -383,8 +365,6 @@ func statusHints(t tab) string {
 		return "↑↓ move · n new · enter edit · d delete/archive · ? help"
 	case tabPaydown:
 		return "↑↓ move · a add · e payment · c category · r remove · +/- horizon · ,/. page · ? help"
-	case tabReports:
-		return "s spending · c cashflow · [/] period · pgup/pgdn page · r refresh · ? help"
 	}
 	return ""
 }
@@ -393,7 +373,7 @@ func helpView() string {
 	rows := [][2]string{
 		{"?", "show / hide this help"},
 		{"esc", "close help · cancel form / modal"},
-		{"1–6 / click", "switch tabs"},
+		{"1–5 / click", "switch tabs"},
 		{"shift+h / shift+l", "prev / next tab"},
 		{"click row", "select row in any list"},
 		{"q / ctrl+c", "quit"},
@@ -411,8 +391,6 @@ func helpView() string {
 		{"c", "(paydown) link payment category for selected account"},
 		{"+ / -", "(paydown) extend / shrink horizon (12-month steps)"},
 		{", / .", "(paydown) page back / forward (also pgup/pgdn)"},
-		{"s / c", "(reports) spending by category · monthly cashflow"},
-		{"[ / ]", "(reports) prev / next spending period"},
 	}
 	var b strings.Builder
 	b.WriteString(styleTitle.Render("Help · keymap"))
