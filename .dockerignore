@@ -6,6 +6,10 @@ tmp/
 
 # Generated Templ Go files (rebuilt inside the image to avoid stale state).
 internal/web/views/*_templ.go
+pkg/shadcntempl/**/*_templ.go
+
+# Generated Tailwind output (rebuilt inside the image from input.css).
+internal/web/static/app.css
 
 # Local SQLite databases
 *.db
