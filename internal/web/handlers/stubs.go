@@ -25,5 +25,3 @@ func (h *Handlers) BudgetGoal(c *gin.Context)          { placeholder(c, "BudgetG
 // --- Paydown ---
 
 // Index handlers (placeholders until each tab is built).
-
-func (h *Handlers) CategoriesUpdate(c *gin.Context) { placeholder(c, "CategoriesUpdate") }

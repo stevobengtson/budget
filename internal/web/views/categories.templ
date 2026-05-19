@@ -7,7 +7,9 @@ import (
 	"github.com/sbengtson/budget/internal/store"
 	"github.com/sbengtson/budget/pkg/shadcntempl/badge"
 	"github.com/sbengtson/budget/pkg/shadcntempl/button"
+	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
 	"github.com/sbengtson/budget/pkg/shadcntempl/input"
+	"github.com/sbengtson/budget/pkg/shadcntempl/selectbox"
 	"github.com/sbengtson/budget/pkg/shadcntempl/table"
 )
 
@@ -113,8 +115,20 @@ templ CategoryRow(c store.Category) {
 				{ c.GoalDueDate.Format("2006-01-02") }
 			}
 		}
-		@table.Cell(table.Props{}) {
+		@table.Cell(table.Props{Class: "whitespace-nowrap"}) {
 			if !c.IsIncome {
+				@button.Link(fmt.Sprintf("/categories/%d/edit", c.ID), button.Props{
+					Variant: button.VariantOutline,
+					Size:    button.SizeSmall,
+					Class:   "mr-1",
+					Attrs: templ.Attributes{
+						"hx-get":    fmt.Sprintf("/categories/%d/edit", c.ID),
+						"hx-target": "#modal",
+						"hx-swap":   "innerHTML",
+					},
+				}) {
+					edit
+				}
 				@button.Button(button.Props{
 					Variant: button.VariantDestructive,
 					Size:    button.SizeSmall,
@@ -130,6 +144,95 @@ templ CategoryRow(c store.Category) {
 			}
 		}
 	}
+}
+
+// CategoryFormData holds the editable surface of a category for the
+// edit modal. Create uses the inline per-group form on the index page and
+// does not go through this form.
+type CategoryFormData struct {
+	ID        int64
+	GroupID   int64
+	Name      string
+	GoalCents string
+	GoalDue   string
+	Groups    []store.CategoryGroup
+}
+
+templ CategoryForm(d CategoryFormData) {
+	@dialog.Content(dialog.Props{}) {
+		<form
+			hx-put={ fmt.Sprintf("/categories/%d", d.ID) }
+			hx-target="body"
+			hx-swap="outerHTML"
+			class="grid gap-4"
+		>
+			@dialog.Header(dialog.Props{}) {
+				@dialog.Title(dialog.Props{}) {
+					Edit category
+				}
+			}
+			<div class="grid gap-3">
+				@formRow("cat-name", "Name") {
+					@input.Input(input.Props{
+						ID:       "cat-name",
+						Name:     "name",
+						Value:    d.Name,
+						Required: true,
+						Attrs:    templ.Attributes{"autofocus": ""},
+					})
+				}
+				@formRow("cat-group", "Group") {
+					@selectbox.Select(selectbox.Props{
+						ID:   "cat-group",
+						Name: "group_id",
+					}, categoryGroupOptions(d.Groups, d.GroupID))
+				}
+				<div class="grid grid-cols-2 gap-3">
+					@formRow("cat-goal", "Goal $") {
+						@input.Input(input.Props{
+							ID:          "cat-goal",
+							Name:        "goal_cents",
+							Value:       d.GoalCents,
+							Placeholder: "(optional)",
+							Class:       "tabular-nums",
+						})
+					}
+					@formRow("cat-due", "Goal due") {
+						@input.Input(input.Props{
+							ID:    "cat-due",
+							Type:  "date",
+							Name:  "goal_due",
+							Value: d.GoalDue,
+						})
+					}
+				</div>
+			</div>
+			@dialog.Footer(dialog.Props{}) {
+				@button.Button(button.Props{
+					Variant: button.VariantOutline,
+					Type:    "button",
+					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+				}) {
+					cancel
+				}
+				@button.Button(button.Props{Type: "submit"}) {
+					save
+				}
+			}
+		</form>
+	}
+}
+
+func categoryGroupOptions(groups []store.CategoryGroup, selected int64) []selectbox.Option {
+	out := make([]selectbox.Option, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, selectbox.Option{
+			Value:    strconv.FormatInt(g.ID, 10),
+			Label:    g.Name,
+			Selected: g.ID == selected,
+		})
+	}
+	return out
 }
 
 func formatCents(cents int64) string {

@@ -71,6 +71,7 @@ func (s *Server) routes() {
 	s.engine.GET("/categories", hs.CategoriesIndex)
 	s.engine.POST("/categories/group", hs.CategoriesCreateGroup)
 	s.engine.POST("/categories", hs.CategoriesCreate)
+	s.engine.GET("/categories/:id/edit", hs.CategoriesEdit)
 	s.engine.PUT("/categories/:id", hs.CategoriesUpdate)
 	s.engine.POST("/categories/:id/archive", hs.CategoriesArchive)
 
