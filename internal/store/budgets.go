@@ -219,16 +219,33 @@ type CreditActivity struct {
 // account, with this month's purchases (outflows) and payments (transfer
 // inflows). Loans are excluded — they typically have a fixed payment plan
 // rather than a revolving "what to pay this month" amount.
+//
+// When an account is part of the paydown plan and has a linked payment
+// category, transfer-inflow transactions whose category matches that
+// linked category are excluded from "payments". Those transfers are the
+// projected paydown payment; counting them here as well would let the same
+// payment push "Owing" negative (double-counting against the paydown
+// projection). All other transfer inflows still count, so a regular
+// transfer-to-credit without that category still reduces Owing.
 func (s *Store) CreditCardActivityForMonth(ctx context.Context, month string) ([]CreditActivity, error) {
+	// Transfers store their category on the outgoing leg only — the
+	// inflow row visible on the credit account has category_id = NULL but
+	// transfer_pair_id pointing back to the outflow leg. COALESCE the two
+	// so the filter sees the user-assigned category regardless of which
+	// leg we're scanning.
 	q := fmt.Sprintf(`
 SELECT a.id, a.name,
   COALESCE((SELECT SUM(t.outflow_cents) FROM transactions t
             WHERE t.account_id = a.id
               AND %s = ?), 0) AS purchases,
-  COALESCE((SELECT SUM(t.inflow_cents)  FROM transactions t
+  COALESCE((SELECT SUM(t.inflow_cents) FROM transactions t
+            LEFT JOIN transactions tp ON tp.id = t.transfer_pair_id
             WHERE t.account_id = a.id
               AND t.transfer_account_id IS NOT NULL
-              AND %s = ?), 0) AS payments
+              AND %s = ?
+              AND (a.payment_category_id IS NULL
+                   OR COALESCE(t.category_id, tp.category_id) IS NULL
+                   OR COALESCE(t.category_id, tp.category_id) <> a.payment_category_id)), 0) AS payments
 FROM accounts a
 WHERE a.type = 'credit' AND a.archived_at IS NULL
 ORDER BY a.name`,
