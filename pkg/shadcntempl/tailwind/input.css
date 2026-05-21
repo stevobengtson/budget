@@ -50,4 +50,16 @@
     background-color: var(--background);
     color: var(--foreground);
   }
+
+  /* htmx loading indicator: fade in while a request is in flight. The
+     .htmx-request class is toggled by htmx on the triggering element or
+     on whichever element it points at via hx-indicator. */
+  .htmx-indicator {
+    opacity: 0;
+    transition: opacity 200ms ease-in;
+  }
+  .htmx-request .htmx-indicator,
+  .htmx-request.htmx-indicator {
+    opacity: 1;
+  }
 }

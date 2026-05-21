@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -31,17 +32,7 @@ func (h *Handlers) PaydownIndex(c *gin.Context) {
 	now := time.Now()
 	var totalMonthly, totalInterest int64
 	for _, a := range included {
-		startCents := debtCents(a)
-		var fallback int64
-		if a.MonthlyPaymentCents != nil {
-			fallback = *a.MonthlyPaymentCents
-		}
-		ms, _ := h.store.PaymentScheduleForCategory(ctx, a.PaymentCategoryID, now, horizon, fallback)
-		schedule := make([]paydown.MonthPayment, len(ms))
-		for i, m := range ms {
-			schedule[i] = paydown.MonthPayment{Cents: m.Cents, Source: convSrc(m.Source)}
-		}
-		p, err := paydown.Compute(a.ID, a.Name, *a.AprBps, startCents, schedule, now)
+		p, err := h.computePlan(ctx, a, horizon, now)
 		if err != nil {
 			c.String(http.StatusInternalServerError, err.Error())
 			return
@@ -59,7 +50,69 @@ func (h *Handlers) PaydownIndex(c *gin.Context) {
 		Horizon:       horizon,
 		TotalMonthly:  totalMonthly,
 		TotalInterest: totalInterest,
+		PageSize:      views.PaydownPageSize,
 	}))
+}
+
+// PaydownRows returns the paginated schedule fragment for a single
+// account. The page query param is 1-based; out-of-range values clamp.
+func (h *Handlers) PaydownRows(c *gin.Context) {
+	ctx := c.Request.Context()
+	id, _ := strconv.ParseInt(c.Param("acctID"), 10, 64)
+	horizon, _ := strconv.Atoi(c.Query("horizon"))
+	if horizon < 12 || horizon > 360 {
+		horizon = 60
+	}
+	page, _ := strconv.Atoi(c.Query("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	// We don't have a store.GetAccountWithBalance; just reuse ListAccounts
+	// and find the row. The list is small (n ≤ 30 in practice).
+	all, err := h.store.ListAccounts(ctx, false)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	var acct *store.AccountWithBalance
+	for i := range all {
+		if all[i].ID == id {
+			acct = &all[i]
+			break
+		}
+	}
+	if acct == nil {
+		c.String(http.StatusNotFound, "account not found")
+		return
+	}
+	if acct.AprBps == nil {
+		c.String(http.StatusBadRequest, "account has no APR")
+		return
+	}
+	p, err := h.computePlan(ctx, *acct, horizon, time.Now())
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.PaydownScheduleBody(p, horizon, page, views.PaydownPageSize))
+}
+
+// computePlan runs the paydown projection for a single account. Shared by
+// the index handler and the row fragment handler so they always return
+// numerically identical schedules.
+func (h *Handlers) computePlan(ctx context.Context, a store.AccountWithBalance, horizon int, now time.Time) (paydown.Plan, error) {
+	startCents := debtCents(a)
+	var fallback int64
+	if a.MonthlyPaymentCents != nil {
+		fallback = *a.MonthlyPaymentCents
+	}
+	ms, _ := h.store.PaymentScheduleForCategory(ctx, a.PaymentCategoryID, now, horizon, fallback)
+	schedule := make([]paydown.MonthPayment, len(ms))
+	for i, m := range ms {
+		schedule[i] = paydown.MonthPayment{Cents: m.Cents, Source: convSrc(m.Source)}
+	}
+	return paydown.Compute(a.ID, a.Name, *a.AprBps, startCents, schedule, now)
 }
 
 // PaydownPaymentForm renders the modal contents for editing the

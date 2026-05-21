@@ -76,6 +76,7 @@ func (s *Server) routes() {
 	s.engine.POST("/categories/:id/archive", hs.CategoriesArchive)
 
 	s.engine.GET("/paydown", hs.PaydownIndex)
+	s.engine.GET("/paydown/:acctID/rows", hs.PaydownRows)
 	s.engine.POST("/paydown/:acctID/include", hs.PaydownInclude)
 	s.engine.POST("/paydown/:acctID/exclude", hs.PaydownExclude)
 	s.engine.GET("/paydown/:acctID/payment-form", hs.PaydownPaymentForm)
