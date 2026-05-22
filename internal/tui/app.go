@@ -356,15 +356,15 @@ func (m Model) renderStatusBar(width int) string {
 func statusHints(t tab) string {
 	switch t {
 	case tabBudget:
-		return "↑↓ move · enter assign · g goal · p copy prev · i income · </> month · t today · ? help"
+		return "j/k move · enter assign · g goal · p copy prev · i income · h/l month · t today · ctrl+d/u page · ? help"
 	case tabTx:
-		return "↑↓ move · n new · enter edit · d delete · c cleared · f acct · </> month · t today · M all · ? help"
+		return "j/k move · n new · enter edit · d delete · c cleared · f acct · h/l month · t today · M all · ctrl+d/u page · ? help"
 	case tabAccounts:
-		return "↑↓ move · n new · enter edit · d archive · ? help"
+		return "j/k move · n new · enter edit · d archive · ? help"
 	case tabCategories:
-		return "↑↓ move · n new · enter edit · d delete/archive · ? help"
+		return "j/k move · n new · enter edit · d delete/archive · ctrl+d/u page · ? help"
 	case tabPaydown:
-		return "↑↓ move · a add · e payment · c category · r remove · +/- horizon · ,/. page · ? help"
+		return "j/k move · n add · e payment · c category · d remove · h/l horizon · ctrl+d/u page · ? help"
 	}
 	return ""
 }
@@ -377,22 +377,22 @@ func helpView() string {
 		{"shift+h / shift+l", "prev / next tab"},
 		{"click row", "select row in any list"},
 		{"q / ctrl+c", "quit"},
-		{"n", "new (in list views)"},
+		{"j / k", "move down / up (every list)"},
+		{"ctrl+d / ctrl+u", "page down / up (every list)"},
+		{"h / l", "prev / next month (budget, transactions); shrink / extend horizon (paydown)"},
+		{"n", "new (in list views) · also add on Paydown"},
 		{"enter", "edit selected · or assign on Budget · or save form"},
-		{"d", "delete or archive (with confirm)"},
+		{"d", "delete or archive (with confirm) · also remove on Paydown"},
 		{"g", "(budget) set goal & due date"},
 		{"i", "(budget) manage income for the month"},
 		{"p", "(budget) copy selected category's assigned amount from prev month"},
 		{"p", "(income) copy all entries from prev month (upsert by name)"},
-		{"</>", "(budget) prev / next month"},
 		{"space", "open picker on Type / Account / Category / Date"},
 		{"f / F", "(transactions) filter by account / clear filter"},
-		{"< / >", "(transactions) prev / next month filter"},
 		{"t / M", "(transactions) jump to current month / clear month filter"},
-		{"a / e / r", "(paydown) add account · edit payment · remove"},
+		{"c", "(transactions) toggle cleared on selected row"},
+		{"e", "(paydown) edit fallback monthly payment"},
 		{"c", "(paydown) link payment category for selected account"},
-		{"+ / -", "(paydown) extend / shrink horizon (12-month steps)"},
-		{", / .", "(paydown) page back / forward (also pgup/pgdn)"},
 	}
 	var b strings.Builder
 	b.WriteString(styleTitle.Render("Help · keymap"))

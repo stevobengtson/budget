@@ -172,14 +172,14 @@ func (m categoriesModel) updateList(msg tea.Msg) (categoriesModel, tea.Cmd) {
 				m.cursor++
 				m.adjustScroll()
 			}
-		case "pgup":
+		case "pgup", "ctrl+u":
 			avail := m.linesAvailable()
 			m.cursor -= avail
 			if m.cursor < 0 {
 				m.cursor = 0
 			}
 			m.adjustScroll()
-		case "pgdown", "pgdn":
+		case "pgdown", "pgdn", "ctrl+d":
 			avail := m.linesAvailable()
 			m.cursor += avail
 			if m.cursor >= len(m.rows) {

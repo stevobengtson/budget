@@ -41,12 +41,12 @@ type paydownModel struct {
 	included []store.AccountWithBalance
 	plans    []paydown.Plan
 
-	cursor   int // selects which included account is "active"
-	horizon  int
-	mode     pdMode
-	form     form
-	picker   picker
-	confirm  confirmModel
+	cursor  int // selects which included account is "active"
+	horizon int
+	mode    pdMode
+	form    form
+	picker  picker
+	confirm confirmModel
 
 	pager paginator.Model
 
@@ -304,7 +304,7 @@ func (m paydownModel) updateList(msg tea.Msg) (paydownModel, tea.Cmd) {
 				m.cursor++
 				m.adjustSectionScroll()
 			}
-		case "a":
+		case "n":
 			candidates := m.eligibleToAdd()
 			if len(candidates) == 0 {
 				return m, flashFail("no eligible accounts (need APR set + not already included)")
@@ -320,7 +320,7 @@ func (m paydownModel) updateList(msg tea.Msg) (paydownModel, tea.Cmd) {
 			if len(m.included) > 0 {
 				m.startPaymentForm()
 			}
-		case "r", "d":
+		case "d":
 			if len(m.included) > 0 {
 				m.confirm = confirmModel{prompt: "Remove " + m.included[m.cursor].Name + " from paydown?"}
 				m.mode = pdRemoveConfirm
@@ -348,19 +348,22 @@ func (m paydownModel) updateList(msg tea.Msg) (paydownModel, tea.Cmd) {
 				m.picker = newPicker("Link payment category", items, cur)
 				m.mode = pdCategoryPick
 			}
-		case "+", "=":
-			if m.horizon < pdHorizonMax {
-				m.horizon += 12
-				return m, m.Refresh()
-			}
-		case "-", "_":
+		// Horizon controls. Paydown has no calendar month, so the same
+		// h / l keys that mean "prev/next month" elsewhere shrink and
+		// extend the projection horizon here.
+		case "h":
 			if m.horizon > pdHorizonMin {
 				m.horizon -= 12
 				return m, m.Refresh()
 			}
-		case "pgdown", "pgdn", "n", ".":
+		case "l":
+			if m.horizon < pdHorizonMax {
+				m.horizon += 12
+				return m, m.Refresh()
+			}
+		case "pgdown", "pgdn", "ctrl+d":
 			m.pager.NextPage()
-		case "pgup", "p", ",":
+		case "pgup", "ctrl+u":
 			m.pager.PrevPage()
 		case "home":
 			m.pager.Page = 0
@@ -524,7 +527,8 @@ func (m paydownModel) viewList() string {
 	if !allCleared {
 		clearLabel = "won't clear in horizon"
 	}
-	banner := fmt.Sprintf("  %s %s  ·  %s %s  ·  %s %s",
+	banner := fmt.Sprintf(
+		"  %s %s  ·  %s %s  ·  %s %s",
 		styleDim.Render("Monthly outflow"), stylePos.Render(money.Format(totalMonthly)),
 		styleDim.Render("Total interest"), styleNeg.Render(money.Format(totalInterest)),
 		styleDim.Render("Longest payoff"), styleWarn.Render(clearLabel),
@@ -568,8 +572,8 @@ func (m paydownModel) viewList() string {
 	}
 
 	if m.pager.TotalPages > 1 {
-		fmt.Fprintf(&b, "  %s page %s\n",
-			styleDim.Render("◀ , / pgup · . / pgdown ▶"),
+		fmt.Fprintf(
+			&b, "  page %s\n",
 			m.pager.View(),
 		)
 	}
@@ -579,7 +583,8 @@ func (m paydownModel) viewList() string {
 func (m paydownModel) renderAccountSection(idx int, p paydown.Plan, acct store.AccountWithBalance) string {
 	var b strings.Builder
 
-	header := fmt.Sprintf("[%s] %.2f%% APR · payment %s/mo · start %s",
+	header := fmt.Sprintf(
+		"[%s] %.2f%% APR · payment %s/mo · start %s",
 		acct.Name,
 		float64(p.AprBps)/100.0,
 		money.Format(p.PaymentCents),

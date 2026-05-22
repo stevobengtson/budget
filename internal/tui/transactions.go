@@ -178,10 +178,10 @@ func (m txModel) updateList(msg tea.Msg) (txModel, tea.Cmd) {
 				m.cursor++
 				m.syncPageToCursor()
 			}
-		case "pgdown", "pgdn":
+		case "pgdown", "pgdn", "ctrl+d":
 			m.pager.NextPage()
 			m.cursor = m.pager.Page * m.pager.PerPage
-		case "pgup":
+		case "pgup", "ctrl+u":
 			m.pager.PrevPage()
 			m.cursor = m.pager.Page * m.pager.PerPage
 		case "home":
@@ -223,7 +223,7 @@ func (m txModel) updateList(msg tea.Msg) (txModel, tea.Cmd) {
 		case "F":
 			m.filterAccountID = nil
 			return m, m.Refresh()
-		case "<", ",":
+		case "h", "<", ",":
 			if m.filterMonth == "" {
 				m.filterMonth = store.MonthKey(time.Now())
 			} else {
@@ -231,7 +231,7 @@ func (m txModel) updateList(msg tea.Msg) (txModel, tea.Cmd) {
 			}
 			m.cursor = 0
 			return m, m.Refresh()
-		case ">", ".":
+		case "l", ">", ".":
 			if m.filterMonth == "" {
 				m.filterMonth = store.MonthKey(time.Now())
 			} else {

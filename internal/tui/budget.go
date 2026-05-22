@@ -266,7 +266,7 @@ func (m budgetModel) updateList(msg tea.Msg) (budgetModel, tea.Cmd) {
 				m.cursor++
 				m.adjustScroll()
 			}
-		case "pgup":
+		case "pgup", "ctrl+u":
 			end := m.endForStart(m.scrollOffset)
 			pageSize := end - m.scrollOffset
 			if pageSize < 1 {
@@ -277,7 +277,7 @@ func (m budgetModel) updateList(msg tea.Msg) (budgetModel, tea.Cmd) {
 				m.cursor = 0
 			}
 			m.adjustScroll()
-		case "pgdown", "pgdn":
+		case "pgdown", "pgdn", "ctrl+d":
 			end := m.endForStart(m.scrollOffset)
 			pageSize := end - m.scrollOffset
 			if pageSize < 1 {
@@ -664,7 +664,7 @@ func (m budgetModel) viewIncomeList() string {
 	b.WriteString(padRight("  Remain", 28) + remStyled + "\n")
 
 	b.WriteString("\n")
-	b.WriteString(styleHelp.Render("n: new · enter: edit · d: delete · p: copy prev month · ↑↓: move · esc: back to budget"))
+	b.WriteString(styleHelp.Render("j/k: move · n: new · enter: edit · d: delete · p: copy prev month · esc: back to budget"))
 	return b.String()
 }
 
