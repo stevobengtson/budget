@@ -145,3 +145,56 @@ func (h *Handlers) BudgetIncomeDelete(c *gin.Context) {
 	}
 	c.Writer.WriteHeader(http.StatusOK)
 }
+
+// BudgetIncomeCopyPrev copies every income entry from the previous month
+// into the current month. The (month, name) pair is unique, so entries
+// that already exist in the target month are updated to the previous
+// month's amount/sort_order instead of producing a duplicate-key error.
+// New names are inserted. Entries that exist only in the target month
+// are left alone.
+func (h *Handlers) BudgetIncomeCopyPrev(c *gin.Context) {
+	ctx := c.Request.Context()
+	month := c.Query("month")
+	if month == "" {
+		month = store.MonthKey(time.Now())
+	}
+	prev := store.PrevMonth(month)
+
+	prevRows, err := h.store.ListIncomes(ctx, prev)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	curRows, err := h.store.ListIncomes(ctx, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	existing := make(map[string]store.Income, len(curRows))
+	for _, r := range curRows {
+		existing[r.Name] = r
+	}
+
+	for _, r := range prevRows {
+		if cur, ok := existing[r.Name]; ok {
+			cur.AmountCents = r.AmountCents
+			cur.SortOrder = r.SortOrder
+			if err := h.store.UpdateIncome(ctx, cur); err != nil {
+				c.String(http.StatusInternalServerError, err.Error())
+				return
+			}
+			continue
+		}
+		if _, err := h.store.CreateIncome(ctx, store.Income{
+			Month:       month,
+			Name:        r.Name,
+			AmountCents: r.AmountCents,
+			SortOrder:   r.SortOrder,
+		}); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	c.Header("HX-Redirect", "/budget/income?month="+month)
+	c.Writer.WriteHeader(http.StatusOK)
+}

@@ -356,7 +356,7 @@ func (m Model) renderStatusBar(width int) string {
 func statusHints(t tab) string {
 	switch t {
 	case tabBudget:
-		return "↑↓ move · enter assign · g goal · i income · </> month · t today · ? help"
+		return "↑↓ move · enter assign · g goal · p copy prev · i income · </> month · t today · ? help"
 	case tabTx:
 		return "↑↓ move · n new · enter edit · d delete · c cleared · f acct · </> month · t today · M all · ? help"
 	case tabAccounts:
@@ -382,6 +382,8 @@ func helpView() string {
 		{"d", "delete or archive (with confirm)"},
 		{"g", "(budget) set goal & due date"},
 		{"i", "(budget) manage income for the month"},
+		{"p", "(budget) copy selected category's assigned amount from prev month"},
+		{"p", "(income) copy all entries from prev month (upsert by name)"},
 		{"</>", "(budget) prev / next month"},
 		{"space", "open picker on Type / Account / Category / Date"},
 		{"f / F", "(transactions) filter by account / clear filter"},

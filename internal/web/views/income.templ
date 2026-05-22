@@ -49,20 +49,33 @@ templ IncomePage(d IncomeData) {
 			@incomeStatSigned("Remain", d.Total-d.Budgeted)
 		</div>
 
-		<div class="mb-3 flex items-center justify-between gap-4">
+		<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
 			<p class="text-xs text-muted-foreground">
 				<a class="underline underline-offset-4 hover:text-foreground" href={ templ.URL("/budget?month=" + d.Month) }>← back to budget</a>
 			</p>
-			@button.Link("/budget/income/new?month="+d.Month, button.Props{
-				Size: button.SizeSmall,
-				Attrs: templ.Attributes{
-					"hx-get":    "/budget/income/new?month=" + d.Month,
-					"hx-target": "#modal",
-					"hx-swap":   "innerHTML",
-				},
-			}) {
-				+ new
-			}
+			<div class="flex flex-wrap items-center gap-2">
+				@button.Button(button.Props{
+					Variant: button.VariantOutline,
+					Size:    button.SizeSmall,
+					Attrs: templ.Attributes{
+						"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
+						"hx-confirm": "Copy all entries from the previous month into this one?",
+						"title":      "Copy every entry from " + d.PrevMonth + " into this month",
+					},
+				}) {
+					← copy from prev
+				}
+				@button.Link("/budget/income/new?month="+d.Month, button.Props{
+					Size: button.SizeSmall,
+					Attrs: templ.Attributes{
+						"hx-get":    "/budget/income/new?month=" + d.Month,
+						"hx-target": "#modal",
+						"hx-swap":   "innerHTML",
+					},
+				}) {
+					+ new
+				}
+			</div>
 		</div>
 
 		if len(d.Rows) == 0 {

@@ -317,9 +317,30 @@ func (m budgetModel) updateList(msg tea.Msg) (budgetModel, tea.Cmd) {
 			if m.incomeCursor >= len(m.incomes) {
 				m.incomeCursor = max0(len(m.incomes) - 1)
 			}
+		case "p":
+			if len(m.rows) > 0 {
+				return m, m.copyAssignedFromPrev()
+			}
 		}
 	}
 	return m, nil
+}
+
+// copyAssignedFromPrev replaces the highlighted category's assigned
+// amount for the active month with whatever was assigned in the previous
+// month (0 if the previous month had no row).
+func (m *budgetModel) copyAssignedFromPrev() tea.Cmd {
+	row := m.rows[m.cursor]
+	ctx := context.Background()
+	prev := store.PrevMonth(m.month)
+	prevCents, err := m.store.GetAssigned(ctx, prev, row.CategoryID)
+	if err != nil {
+		return flashFail(err.Error())
+	}
+	if err := m.store.SetAssigned(ctx, m.month, row.CategoryID, prevCents); err != nil {
+		return flashFail(err.Error())
+	}
+	return tea.Batch(m.Refresh(), flashOK("Copied "+money.Format(prevCents)+" from "+formatMonth(prev)))
 }
 
 func (m *budgetModel) startAssignForm() {
@@ -477,9 +498,52 @@ func (m budgetModel) updateIncomeList(msg tea.Msg) (budgetModel, tea.Cmd) {
 				m.incomeConfirm = confirmModel{prompt: fmt.Sprintf("Delete income %q?", m.incomes[m.incomeCursor].Name)}
 				m.mode = budIncomeConfirm
 			}
+		case "p":
+			return m, m.copyIncomeFromPrev()
 		}
 	}
 	return m, nil
+}
+
+// copyIncomeFromPrev mirrors the web "copy from previous month" action:
+// for every entry in the previous month, either insert it (new name) or
+// update the current-month row with the same name to the previous amount.
+// Entries that only exist in the current month are left alone. The
+// (month, name) unique constraint means a blind re-insert would error;
+// the upsert side-steps that.
+func (m *budgetModel) copyIncomeFromPrev() tea.Cmd {
+	ctx := context.Background()
+	prev := store.PrevMonth(m.month)
+	prevRows, err := m.store.ListIncomes(ctx, prev)
+	if err != nil {
+		return flashFail(err.Error())
+	}
+	if len(prevRows) == 0 {
+		return flashFail("No income in " + formatMonth(prev))
+	}
+	existing := make(map[string]store.Income, len(m.incomes))
+	for _, r := range m.incomes {
+		existing[r.Name] = r
+	}
+	for _, r := range prevRows {
+		if cur, ok := existing[r.Name]; ok {
+			cur.AmountCents = r.AmountCents
+			cur.SortOrder = r.SortOrder
+			if err := m.store.UpdateIncome(ctx, cur); err != nil {
+				return flashFail(err.Error())
+			}
+			continue
+		}
+		if _, err := m.store.CreateIncome(ctx, store.Income{
+			Month:       m.month,
+			Name:        r.Name,
+			AmountCents: r.AmountCents,
+			SortOrder:   r.SortOrder,
+		}); err != nil {
+			return flashFail(err.Error())
+		}
+	}
+	return tea.Batch(m.Refresh(), flashOK(fmt.Sprintf("Copied %d entries from %s", len(prevRows), formatMonth(prev))))
 }
 
 func (m *budgetModel) startIncomeForm(existing *store.Income) {
@@ -600,7 +664,7 @@ func (m budgetModel) viewIncomeList() string {
 	b.WriteString(padRight("  Remain", 28) + remStyled + "\n")
 
 	b.WriteString("\n")
-	b.WriteString(styleHelp.Render("n: new · enter: edit · d: delete · ↑↓: move · esc: back to budget"))
+	b.WriteString(styleHelp.Render("n: new · enter: edit · d: delete · p: copy prev month · ↑↓: move · esc: back to budget"))
 	return b.String()
 }
 

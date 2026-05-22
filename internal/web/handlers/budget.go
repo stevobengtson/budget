@@ -126,3 +126,34 @@ func (h *Handlers) BudgetAssign(c *gin.Context) {
 	}
 	render(c, http.StatusOK, views.BudgetRegion(data))
 }
+
+// BudgetAssignCopyPrev replaces the current month's assignment for a
+// single category with whatever was assigned in the previous month
+// (defaults to 0 if there was no entry there). Returns the same region
+// fragment used by BudgetAssign so the banner + totals stay in sync.
+func (h *Handlers) BudgetAssignCopyPrev(c *gin.Context) {
+	ctx := c.Request.Context()
+	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
+	month := c.Query("month")
+	if month == "" {
+		month = store.MonthKey(time.Now())
+	}
+
+	prev := store.PrevMonth(month)
+	prevCents, err := h.store.GetAssigned(ctx, prev, catID)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.store.SetAssigned(ctx, month, catID, prevCents); err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	data, _, err := h.budgetData(ctx, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetRegion(data))
+}

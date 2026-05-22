@@ -183,6 +183,20 @@ templ BudgetRow(month string, r store.CategoryBudget) {
 				@button.Button(button.Props{Type: "submit", Size: button.SizeSmall}) {
 					save
 				}
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantGhost,
+					Size:    button.SizeSmall,
+					Class:   "text-muted-foreground hover:text-foreground",
+					Attrs: templ.Attributes{
+						"hx-post":   fmt.Sprintf("/budget/assign/%d/copy-prev?month=%s", r.CategoryID, month),
+						"hx-target": "#budget-region",
+						"hx-swap":   "outerHTML",
+						"title":     "Copy from previous month",
+					},
+				}) {
+					← prev
+				}
 			</form>
 		}
 		@table.Cell(table.Props{Class: "tabular-nums"}) { { money.Format(r.SpentCents) } }

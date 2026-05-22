@@ -45,11 +45,13 @@ func (s *Server) routes() {
 
 	s.engine.GET("/budget", hs.BudgetIndex)
 	s.engine.POST("/budget/assign/:catID", hs.BudgetAssign)
+	s.engine.POST("/budget/assign/:catID/copy-prev", hs.BudgetAssignCopyPrev)
 	s.engine.POST("/budget/goal/:catID", hs.BudgetGoal)
 	s.engine.GET("/budget/income", hs.BudgetIncomePanel)
 	s.engine.GET("/budget/income/new", hs.BudgetIncomeNew)
 	s.engine.GET("/budget/income/:id/edit", hs.BudgetIncomeEdit)
 	s.engine.POST("/budget/income", hs.BudgetIncomeCreate)
+	s.engine.POST("/budget/income/copy-prev", hs.BudgetIncomeCopyPrev)
 	s.engine.PUT("/budget/income/:id", hs.BudgetIncomeUpdate)
 	s.engine.DELETE("/budget/income/:id", hs.BudgetIncomeDelete)
 
