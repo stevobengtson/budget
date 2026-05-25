@@ -32,6 +32,7 @@ type form struct {
 	err       string
 	submitted bool
 	canceled  bool
+	subtitle  string // optional dim info line rendered under title
 }
 
 func (f *form) Focus() {
@@ -93,7 +94,12 @@ func (f *form) Update(msg tea.Msg) (form, tea.Cmd) {
 func (f *form) View(title string) string {
 	var b strings.Builder
 	b.WriteString(styleTitle.Render(title))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
+	if f.subtitle != "" {
+		b.WriteString(f.subtitle)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 	for i, fd := range f.fields {
 		label := fd.label
 		if i == f.focus {

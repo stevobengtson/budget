@@ -1,14 +1,10 @@
 package cmd
 
 import (
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
 	"github.com/spf13/cobra"
 
-	"github.com/sbengtson/budget/internal/db"
-	"github.com/sbengtson/budget/internal/store"
 	"github.com/sbengtson/budget/internal/tui"
 )
 
@@ -27,21 +23,16 @@ func runTUI() error {
 	if err != nil {
 		return err
 	}
-	conn, dialect, err := db.Open(cfg.DB.DSN)
-	if err != nil {
-		return fmt.Errorf("open db: %w", err)
-	}
-	defer func() { _ = conn.Close() }()
 
 	zone.NewGlobal()
 
-	sd := store.DialectSQLite
-	if dialect == db.DialectPostgres {
-		sd = store.DialectPostgres
-	}
-	s := store.NewWithDialect(conn, sd)
-	m := tui.New(s)
-	if _, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run(); err != nil {
+	// The DB is opened inside the bubbletea event loop so that a
+	// "Loading budget…" screen is rendered first. Close() releases the
+	// connection (if one was successfully established) on exit.
+	boot := tui.NewBootstrap(cfg.DB.DSN, 0)
+	defer boot.Close()
+
+	if _, err := tea.NewProgram(boot, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run(); err != nil {
 		return err
 	}
 	return nil

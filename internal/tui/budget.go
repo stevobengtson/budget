@@ -344,11 +344,55 @@ func (m *budgetModel) copyAssignedFromPrev() tea.Cmd {
 }
 
 func (m *budgetModel) startAssignForm() {
-	cur := money.Format(m.rows[m.cursor].AssignedCents)
-	m.form = form{fields: []field{newField("Assigned", cur, "dollars; supports negatives")}}
+	r := m.rows[m.cursor]
+	cur := money.Format(r.AssignedCents)
+	m.form = form{
+		fields:   []field{newField("Assigned", cur, "dollars; supports negatives")},
+		subtitle: budgetSubtitle(r),
+	}
 	m.form.SetValues([]string{cur})
 	m.form.Focus()
 	m.mode = budAssignForm
+}
+
+// budgetSubtitle renders the current Assigned / Spent / Available state for
+// the category being edited, plus the goal summary when the category has a
+// goal set — matching the rendering used in the budget table.
+func budgetSubtitle(r store.CategoryBudget) string {
+	availStr := money.Format(r.AvailableCents)
+	switch {
+	case r.AvailableCents < 0:
+		availStr = styleNeg.Render(availStr)
+	case r.AvailableCents > 0:
+		availStr = stylePos.Render(availStr)
+	default:
+		availStr = styleDim.Render(availStr)
+	}
+	sep := styleDim.Render("  ·  ")
+	out := styleDim.Render("Assigned ") + money.Format(r.AssignedCents) +
+		sep + styleDim.Render("Spent ") + money.Format(r.SpentCents) +
+		sep + styleDim.Render("Available ") + availStr
+	if goal := goalSummary(r); goal != "" {
+		out += sep + goal
+	}
+	return out
+}
+
+// goalSummary formats a category's goal as "goal $X by Mon YYYY · need $Y/mo".
+// Returns empty string when no goal is set. Shared by the budget table and the
+// assign/goal forms so wording stays consistent.
+func goalSummary(r store.CategoryBudget) string {
+	if r.GoalCents == nil {
+		return ""
+	}
+	out := "goal " + money.Format(*r.GoalCents)
+	if r.GoalDueDate != nil {
+		out += " by " + r.GoalDueDate.Format("Jan 2006")
+	}
+	if r.MonthlyTarget > 0 {
+		out += styleWarn.Render(fmt.Sprintf(" · need %s/mo", money.Format(r.MonthlyTarget)))
+	}
+	return out
 }
 
 func (m *budgetModel) startGoalForm() {
@@ -361,10 +405,13 @@ func (m *budgetModel) startGoalForm() {
 	if r.GoalDueDate != nil {
 		due = r.GoalDueDate.Format("2006-01-02")
 	}
-	m.form = form{fields: []field{
-		newField("Goal amount", goal, "blank to clear"),
-		newField("Due date", due, "YYYY-MM-DD; blank to clear"),
-	}}
+	m.form = form{
+		fields: []field{
+			newField("Goal amount", goal, "blank to clear"),
+			newField("Due date", due, "YYYY-MM-DD; blank to clear"),
+		},
+		subtitle: budgetSubtitle(r),
+	}
 	m.form.SetValues([]string{goal, due})
 	m.form.Focus()
 	m.mode = budGoalForm
@@ -775,16 +822,7 @@ func (m budgetModel) viewList() string {
 		default:
 			availStr = styleDim.Render(availStr)
 		}
-		goalCol := ""
-		if r.GoalCents != nil {
-			goalCol = "goal " + money.Format(*r.GoalCents)
-			if r.GoalDueDate != nil {
-				goalCol += " by " + r.GoalDueDate.Format("Jan 2006")
-			}
-			if r.MonthlyTarget > 0 {
-				goalCol += styleWarn.Render(fmt.Sprintf(" · need %s/mo", money.Format(r.MonthlyTarget)))
-			}
-		}
+		goalCol := goalSummary(r)
 		cells := []string{
 			padRight("  "+r.CategoryName, widths[0]),
 			padRight(money.Format(r.AssignedCents), widths[1]),
