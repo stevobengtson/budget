@@ -10,7 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/store"
 )
 
 type tab int

@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/sbengtson/budget/internal/money"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/views"
 )
 
@@ -32,7 +32,7 @@ func (h *Handlers) AccountsIndex(c *gin.Context) {
 	d := views.AccountsData{
 		Rows: rows, Categories: cats,
 		Assets: assets, Liabilities: liab,
-		Difference: assets + liab,
+		Difference:  assets + liab,
 		AvailCredit: avail,
 	}
 	render(c, http.StatusOK, views.AccountsPage(d))
@@ -57,10 +57,10 @@ func (h *Handlers) AccountsEdit(c *gin.Context) {
 	cats, _ := h.store.ListCategories(ctx, false)
 	d := views.AccountFormData{
 		Editing: true, ID: a.ID, Name: a.Name, Type: string(a.Type),
-		StartingBalance: money.Format(a.StartingBalanceCents),
-		IncludeInPaydown: a.IncludeInPaydown,
+		StartingBalance:   money.Format(a.StartingBalanceCents),
+		IncludeInPaydown:  a.IncludeInPaydown,
 		PaymentCategoryID: a.PaymentCategoryID,
-		Categories: cats,
+		Categories:        cats,
 	}
 	if a.CreditLimitCents != nil {
 		d.CreditLimit = money.Format(*a.CreditLimitCents)

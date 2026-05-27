@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/sbengtson/budget/internal/db"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/db"
+	"github.com/sbengtson/budget/internal/core/store"
 )
 
 // DefaultConnectTimeout is the deadline applied to the initial database

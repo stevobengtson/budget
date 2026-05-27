@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
-	"github.com/sbengtson/budget/internal/money"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
 )
 
 type acctMode int
@@ -23,14 +23,14 @@ const (
 )
 
 type accountsModel struct {
-	store    *store.Store
-	rows     []store.AccountWithBalance
-	cursor   int
-	mode     acctMode
-	form     form
-	picker   picker
-	confirm  confirmModel
-	editing  *store.Account // nil = new
+	store   *store.Store
+	rows    []store.AccountWithBalance
+	cursor  int
+	mode    acctMode
+	form    form
+	picker  picker
+	confirm confirmModel
+	editing *store.Account // nil = new
 
 	// cached for payment-category picker
 	cats   []store.Category
@@ -77,7 +77,12 @@ func (m *accountsModel) Refresh() tea.Cmd {
 	return nil
 }
 
-func max0(n int) int { if n < 0 { return 0 }; return n }
+func max0(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
+}
 
 func (m accountsModel) Update(msg tea.Msg) (accountsModel, tea.Cmd) {
 	switch m.mode {

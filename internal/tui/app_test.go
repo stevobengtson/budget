@@ -6,8 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
-	"github.com/sbengtson/budget/internal/db"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/db"
+	"github.com/sbengtson/budget/internal/core/store"
 )
 
 func TestRootViewRenders(t *testing.T) {

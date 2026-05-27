@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sbengtson/budget/internal/money"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/format"
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/pkg/shadcntempl/badge"
 	"github.com/sbengtson/budget/pkg/shadcntempl/button"
 	"github.com/sbengtson/budget/pkg/shadcntempl/card"
@@ -211,17 +212,17 @@ templ BudgetRow(month string, r store.CategoryBudget) {
 }
 
 templ GoalCell(r store.CategoryBudget) {
-	if r.GoalCents != nil {
+	if g, ok := format.GoalFor(r.GoalCents, r.GoalDueDate, r.MonthlyTarget); ok {
 		<div class="flex flex-wrap items-center gap-1">
 			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
-				goal { money.Format(*r.GoalCents) }
+				goal { g.Amount }
 			}
-			if r.GoalDueDate != nil {
-				<span class="text-xs text-muted-foreground">by { r.GoalDueDate.Format("Jan 2006") }</span>
+			if g.Due != "" {
+				<span class="text-xs text-muted-foreground">by { g.Due }</span>
 			}
-			if r.MonthlyTarget > 0 {
+			if g.Need != "" {
 				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
-					need { money.Format(r.MonthlyTarget) }/mo
+					need { g.Need }
 				}
 			}
 		</div>

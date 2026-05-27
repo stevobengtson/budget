@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
-	"github.com/sbengtson/budget/internal/db"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/db"
+	"github.com/sbengtson/budget/internal/core/store"
 )
 
 func TestTransactionsGroupedByDay(t *testing.T) {
@@ -66,7 +66,7 @@ func TestTransferRowShowsDashInClearedColumn(t *testing.T) {
 	from, _ := s.CreateAccount(ctx, store.Account{Name: "Chk", Type: store.TypeChecking, StartingBalanceCents: 10_000_000})
 	to, _ := s.CreateAccount(ctx, store.Account{Name: "Visa", Type: store.TypeCredit})
 	if _, _, err := s.CreateTransfer(ctx, store.TransferInput{
-		Date: time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC),
+		Date:          time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC),
 		FromAccountID: from, ToAccountID: to, AmountCents: 5000,
 	}); err != nil {
 		t.Fatalf("CreateTransfer: %v", err)

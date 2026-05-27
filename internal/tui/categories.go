@@ -9,15 +9,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
-	"github.com/sbengtson/budget/internal/money"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
 )
 
 type catMode int
 
 const (
-	catList catMode = iota
-	catKindPick    // pick: new group | new category
+	catList     catMode = iota
+	catKindPick         // pick: new group | new category
 	catGroupForm
 	catCatForm
 	catGroupPick
@@ -25,23 +25,23 @@ const (
 )
 
 type catRow struct {
-	isGroup  bool
-	groupID  int64
+	isGroup   bool
+	groupID   int64
 	groupName string
-	cat      *store.Category
+	cat       *store.Category
 }
 
 type categoriesModel struct {
-	store     *store.Store
-	groups    []store.CategoryGroup
-	cats      []store.Category
-	rows      []catRow
-	cursor    int
-	mode      catMode
-	form      form
-	picker    picker
-	confirm   confirmModel
-	editing   *store.Category
+	store      *store.Store
+	groups     []store.CategoryGroup
+	cats       []store.Category
+	rows       []catRow
+	cursor     int
+	mode       catMode
+	form       form
+	picker     picker
+	confirm    confirmModel
+	editing    *store.Category
 	editingGrp *store.CategoryGroup
 
 	width, height int

@@ -38,7 +38,17 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build binary
+      - name: Build web assets
+        run: |
+          curl -fsSL -o /usr/local/bin/tailwindcss \
+            "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.0/tailwindcss-linux-x64"
+          chmod +x /usr/local/bin/tailwindcss
+          /usr/local/bin/tailwindcss -i ./pkg/shadcntempl/tailwind/input.css -o ./internal/web/static/app.css --minify
+          go install github.com/a-h/templ/cmd/templ@v0.3.1001
+          "$(go env GOPATH)/bin/templ" generate -path ./pkg/shadcntempl
+          "$(go env GOPATH)/bin/templ" generate -path ./internal/web
+
+      - name: Build binaries
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -46,7 +56,8 @@ jobs:
         run: |
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
-          go build -trimpath -ldflags="-s -w" -o "budget${EXT}" ./cmd/budget
+          go build -trimpath -ldflags="-s -w" -o "budget-tui${EXT}" ./cmd/tui
+          go build -trimpath -ldflags="-s -w" -o "budget-web${EXT}" ./cmd/web
 
       - name: Package (tar)
         if: matrix.archive == 'tar'
@@ -57,7 +68,7 @@ jobs:
         run: |
           NAME="budget-${TAG}-${GOOS}-${GOARCH}"
           mkdir "$NAME"
-          mv budget "$NAME/"
+          mv budget-tui budget-web "$NAME/"
           cp README.md LICENSE "$NAME/" 2>/dev/null || true
           tar czf "${NAME}.tar.gz" "$NAME"
           echo "ASSET=${NAME}.tar.gz" >> "$GITHUB_ENV"
@@ -71,7 +82,7 @@ jobs:
         run: |
           NAME="budget-${TAG}-${GOOS}-${GOARCH}"
           mkdir "$NAME"
-          mv budget.exe "$NAME/"
+          mv budget-tui.exe budget-web.exe "$NAME/"
           cp README.md LICENSE "$NAME/" 2>/dev/null || true
           zip -r "${NAME}.zip" "$NAME"
           echo "ASSET=${NAME}.zip" >> "$GITHUB_ENV"

@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"context"
@@ -7,51 +7,52 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sbengtson/budget/internal/db"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/db"
+	"github.com/sbengtson/budget/internal/core/store"
 )
 
-var seedCmd = &cobra.Command{
-	Use:   "seed",
-	Short: "Populate the database with three months of demo data",
-	RunE: func(c *cobra.Command, args []string) error {
-		cfg, err := resolvedConfig()
-		if err != nil {
-			return err
-		}
-		conn, dialect, err := db.Open(cfg.DB.DSN)
-		if err != nil {
-			return fmt.Errorf("open db: %w", err)
-		}
-		defer func() { _ = conn.Close() }()
-
-		sd := store.DialectSQLite
-		if dialect == db.DialectPostgres {
-			sd = store.DialectPostgres
-		}
-		s := store.NewWithDialect(conn, sd)
-		ctx := context.Background()
-
-		groups, _ := s.ListGroups(ctx)
-		for _, g := range groups {
-			if g.Name != "Income" {
-				return fmt.Errorf("database already has data — wipe it first")
+// seedCmd builds the `seed` command (registered under `db` by DBCmd).
+func (a *App) seedCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "seed",
+		Short: "Populate the database with three months of demo data",
+		RunE: func(c *cobra.Command, args []string) error {
+			cfg, err := a.ResolvedConfig()
+			if err != nil {
+				return err
 			}
-		}
-		if err := seed(ctx, s); err != nil {
-			return err
-		}
-		fmt.Println("seeded successfully")
-		return nil
-	},
-}
+			conn, dialect, err := db.Open(cfg.DB.DSN)
+			if err != nil {
+				return fmt.Errorf("open db: %w", err)
+			}
+			defer func() { _ = conn.Close() }()
 
-func init() { dbCmd.AddCommand(seedCmd) }
+			sd := store.DialectSQLite
+			if dialect == db.DialectPostgres {
+				sd = store.DialectPostgres
+			}
+			s := store.NewWithDialect(conn, sd)
+			ctx := context.Background()
+
+			groups, _ := s.ListGroups(ctx)
+			for _, g := range groups {
+				if g.Name != "Income" {
+					return fmt.Errorf("database already has data — wipe it first")
+				}
+			}
+			if err := seed(ctx, s); err != nil {
+				return err
+			}
+			fmt.Println("seeded successfully")
+			return nil
+		},
+	}
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-func ptr64(v int64) *int64    { return &v }
-func ptrStr(s string) *string { return &s }
+func ptr64(v int64) *int64           { return &v }
+func ptrStr(s string) *string        { return &s }
 func ptrTime(t time.Time) *time.Time { return &t }
 
 // cents converts a dollar amount to integer cents.
@@ -215,9 +216,9 @@ func seed(ctx context.Context, s *store.Store) error {
 	// ── Per-month data ────────────────────────────────────────────────────────
 
 	type txDef struct {
-		d     int    // day of month
+		d     int // day of month
 		acct  int64
-		cat   int64  // 0 = none
+		cat   int64 // 0 = none
 		payee string
 		notes string
 		out   float64
@@ -228,7 +229,7 @@ func seed(ctx context.Context, s *store.Store) error {
 		from int64
 		to   int64
 		amt  float64
-		cat  int64  // 0 = none
+		cat  int64 // 0 = none
 		note string
 	}
 
@@ -407,25 +408,25 @@ func seed(ctx context.Context, s *store.Store) error {
 
 		// Budget assignments.
 		assignments := map[string]float64{
-			"Housing/Rent":                  1850,
-			"Housing/Electricity":           90,
-			"Housing/Internet":              55,
-			"Housing/Renter's Insurance":    18,
-			"Food/Groceries":                400,
-			"Food/Restaurants":              150,
-			"Food/Coffee & Drinks":          50,
-			"Transportation/Gas":            80,
-			"Transportation/Car Insurance":  142,
-			"Transportation/Parking":        20,
-			"Health & Fitness/Gym":          40,
-			"Entertainment/Streaming":       45,
-			"Entertainment/Fun Money":       50,
-			"Savings Goals/Emergency Fund":  200,
-			"Savings Goals/Vacation":        100,
-			"Personal/Clothing":             50,
-			"Personal/Personal Care":        30,
-			"Debt/Credit Card Payment":      200,
-			"Debt/Car Loan Payment":         285,
+			"Housing/Rent":                 1850,
+			"Housing/Electricity":          90,
+			"Housing/Internet":             55,
+			"Housing/Renter's Insurance":   18,
+			"Food/Groceries":               400,
+			"Food/Restaurants":             150,
+			"Food/Coffee & Drinks":         50,
+			"Transportation/Gas":           80,
+			"Transportation/Car Insurance": 142,
+			"Transportation/Parking":       20,
+			"Health & Fitness/Gym":         40,
+			"Entertainment/Streaming":      45,
+			"Entertainment/Fun Money":      50,
+			"Savings Goals/Emergency Fund": 200,
+			"Savings Goals/Vacation":       100,
+			"Personal/Clothing":            50,
+			"Personal/Personal Care":       30,
+			"Debt/Credit Card Payment":     200,
+			"Debt/Car Loan Payment":        285,
 		}
 		for key, d := range assignments {
 			cid, ok := catID[key]

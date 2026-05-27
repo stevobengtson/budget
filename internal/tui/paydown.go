@@ -10,9 +10,9 @@ import (
 	"github.com/charmbracelet/bubbles/paginator"
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
-	"github.com/sbengtson/budget/internal/money"
-	"github.com/sbengtson/budget/internal/paydown"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/paydown"
+	"github.com/sbengtson/budget/internal/core/store"
 )
 
 type pdMode int

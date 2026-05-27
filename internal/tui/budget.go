@@ -9,8 +9,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	zone "github.com/lrstanley/bubblezone"
-	"github.com/sbengtson/budget/internal/money"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/format"
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
 )
 
 type budMode int
@@ -32,12 +33,12 @@ type budgetModel struct {
 	mode   budMode
 	form   form
 
-	incomes        []store.Income
-	incomeTotal    int64
-	actualIncome   int64
-	incomeCursor   int
-	editingIncome  *store.Income
-	incomeConfirm  confirmModel
+	incomes       []store.Income
+	incomeTotal   int64
+	actualIncome  int64
+	incomeCursor  int
+	editingIncome *store.Income
+	incomeConfirm confirmModel
 
 	creditActivity []store.CreditActivity
 
@@ -382,15 +383,16 @@ func budgetSubtitle(r store.CategoryBudget) string {
 // Returns empty string when no goal is set. Shared by the budget table and the
 // assign/goal forms so wording stays consistent.
 func goalSummary(r store.CategoryBudget) string {
-	if r.GoalCents == nil {
+	g, ok := format.GoalFor(r.GoalCents, r.GoalDueDate, r.MonthlyTarget)
+	if !ok {
 		return ""
 	}
-	out := "goal " + money.Format(*r.GoalCents)
-	if r.GoalDueDate != nil {
-		out += " by " + r.GoalDueDate.Format("Jan 2006")
+	out := "goal " + g.Amount
+	if g.Due != "" {
+		out += " by " + g.Due
 	}
-	if r.MonthlyTarget > 0 {
-		out += styleWarn.Render(fmt.Sprintf(" · need %s/mo", money.Format(r.MonthlyTarget)))
+	if g.Need != "" {
+		out += styleWarn.Render(" · need " + g.Need)
 	}
 	return out
 }

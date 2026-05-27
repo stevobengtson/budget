@@ -19,8 +19,8 @@ func NewWithDialect(db *sql.DB, d Dialect) *Store {
 	return &Store{db: db, dialect: d}
 }
 
-func (s *Store) DB() *sql.DB        { return s.db }
-func (s *Store) Dialect() Dialect   { return s.dialect }
+func (s *Store) DB() *sql.DB      { return s.db }
+func (s *Store) Dialect() Dialect { return s.dialect }
 
 // nullTime scans NULL DATETIME into *time.Time.
 type nullTime struct{ sql.NullTime }

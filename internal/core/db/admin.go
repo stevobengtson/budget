@@ -133,7 +133,9 @@ func MigrateStatus(conn *sql.DB, d Dialect) error {
 type stdoutLogger struct{}
 
 func (stdoutLogger) Printf(format string, v ...any) {
-	if !strings.HasSuffix(format, "\n") { format += "\n" }
+	if !strings.HasSuffix(format, "\n") {
+		format += "\n"
+	}
 	fmt.Printf(format, v...)
 }
 func (stdoutLogger) Println(v ...any)               { fmt.Println(v...) }

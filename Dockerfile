@@ -43,7 +43,7 @@ RUN set -eux; \
     /usr/local/bin/tailwindcss -i ./pkg/shadcntempl/tailwind/input.css -o ./internal/web/static/app.css --minify; \
     templ generate -path ./pkg/shadcntempl; \
     templ generate -path ./internal/web; \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/budget ./cmd/budget
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/budget ./cmd/web
 
 # ── Runtime stage ───────────────────────────────────────────────────────────
 FROM alpine:3.20

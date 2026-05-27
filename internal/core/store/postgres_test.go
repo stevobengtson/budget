@@ -7,11 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sbengtson/budget/internal/db"
+	"github.com/sbengtson/budget/internal/core/db"
 )
 
 // Skip the test unless BUDGET_POSTGRES_URL is set, e.g.:
-//   BUDGET_POSTGRES_URL=postgres://postgres:postgres@localhost:5432/budget_test
+//
+//	BUDGET_POSTGRES_URL=postgres://postgres:postgres@localhost:5432/budget_test
+//
 // The test wipes all known tables to give itself a clean slate.
 func newTestPostgresStore(t *testing.T) *Store {
 	t.Helper()

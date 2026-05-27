@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sbengtson/budget/internal/db"
+	"github.com/sbengtson/budget/internal/core/db"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -557,7 +557,7 @@ func TestPaymentScheduleForCategory(t *testing.T) {
 	// Apr 2026: assigned $800, spent $800 (paid).
 	_ = s.SetAssigned(ctx, "2026-04", visaPay, 80_000)
 	_, _ = s.CreateTransaction(ctx, Transaction{
-		Date: time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC),
+		Date:      time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC),
 		AccountID: chk, CategoryID: &visaPay, OutflowCents: 80_000,
 	})
 
@@ -627,7 +627,7 @@ func TestSinkingFundCarryover(t *testing.T) {
 
 	// Spend $5 in Feb to make sure spending counts.
 	if _, err := s.CreateTransaction(ctx, Transaction{
-		Date: time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC),
+		Date:      time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC),
 		AccountID: chk, CategoryID: &ins, OutflowCents: 500,
 	}); err != nil {
 		t.Fatal(err)

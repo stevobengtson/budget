@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/pkg/shadcntempl/badge"
 	"github.com/sbengtson/budget/pkg/shadcntempl/button"
 	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"

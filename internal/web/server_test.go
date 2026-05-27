@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sbengtson/budget/internal/db"
-	"github.com/sbengtson/budget/internal/store"
+	"github.com/sbengtson/budget/internal/core/db"
+	"github.com/sbengtson/budget/internal/core/store"
 )
 
 func newTestServer(t *testing.T) *httptest.Server {

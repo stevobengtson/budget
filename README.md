@@ -18,7 +18,7 @@ Track accounts, assign money to categories each month, project debt paydown, and
 
 | | TUI | Web |
 |---|---|---|
-| **Launch** | `budget` or `budget tui` | `budget web` |
+| **Launch** | `./bin/tui/budget` | `./bin/web/budget` |
 | **Access** | Terminal | Browser at `http://localhost:8080` |
 | **Best for** | Local daily use, keyboard power users | Remote access, Docker/Synology, mouse-friendly use |
 | **Navigation** | Keyboard shortcuts | Click tabs, real URLs (browser back button works) |
@@ -145,7 +145,7 @@ To open the web interface instead:
 
 ```bash
 make seed     # if you haven't already
-./bin/budget web          # serves http://localhost:8080
+./bin/web/budget          # serves http://localhost:8080
 ```
 
 To start fresh with your own data:
@@ -154,30 +154,34 @@ To start fresh with your own data:
 make db-reset  # wipe the database
 make run       # TUI — auto-migrates on first open
 # or
-./bin/budget web  # web — auto-migrates on first request
+./bin/web/budget  # web — auto-migrates on first request
 ```
 
 ---
 
 ## Usage
 
-The `budget` binary uses Cobra subcommands. With no subcommand, it launches the TUI.
+There are two binaries, both named `budget`, built to `./bin/tui/budget` and
+`./bin/web/budget`. With no subcommand each launches its own interface; both
+share the same Cobra admin subcommands (`config`, `db`, `migrate`), so you can
+run schema and data tasks from whichever binary is handy. Examples below use
+`./bin/tui/budget`.
 
 ```bash
-budget                       # TUI (default)
-budget tui                   # explicit TUI
-budget web                   # HTTP server on :8080 (HTMX + Templ)
-budget migrate --from <a> --to <b>   # copy data SQLite ↔ Postgres
-budget config show           # print resolved config
+./bin/tui/budget                     # TUI (default for the tui binary)
+./bin/web/budget                     # HTTP server on :8080 (default for the web binary)
+./bin/web/budget web                 # explicit web launch (same as bare web binary)
+./bin/tui/budget migrate --from <a> --to <b>   # copy data SQLite ↔ Postgres
+./bin/tui/budget config show         # print resolved config
 
-# Schema + seed (under `db` group):
-budget db up                 # apply all pending up migrations
-budget db up-one             # apply just the next pending migration
-budget db down               # roll back the most recent migration
-budget db reset              # roll back to zero + re-apply (DESTRUCTIVE)
-budget db status             # one line per migration (applied / pending)
-budget db version            # current migration version
-budget db seed               # populate demo data
+# Schema + seed (under `db` group; available from either binary):
+./bin/tui/budget db up               # apply all pending up migrations
+./bin/tui/budget db up-one           # apply just the next pending migration
+./bin/tui/budget db down             # roll back the most recent migration
+./bin/tui/budget db reset            # roll back to zero + re-apply (DESTRUCTIVE)
+./bin/tui/budget db status           # one line per migration (applied / pending)
+./bin/tui/budget db version          # current migration version
+./bin/tui/budget db seed             # populate demo data
 ```
 
 > Note the two different "migrate" verbs:
@@ -216,7 +220,7 @@ log:
 `budget web` serves an HTMX + Templ + Gin frontend. It mirrors every TUI tab and uses real URLs (e.g. `/budget?month=2026-05`) so the browser back button works. Forms swap individual rows and sections via HTMX — the page never fully reloads. The Catppuccin Mocha theme matches the TUI.
 
 ```bash
-budget web --addr :8080
+./bin/web/budget --addr :8080
 open http://localhost:8080
 ```
 
@@ -263,7 +267,7 @@ The destination is wiped (TRUNCATE on Postgres / DELETE on SQLite) and primary k
 
 ```bash
 make setup      # install Go module deps + goose CLI
-make build      # compile binary to ./bin/budget
+make build      # compile both binaries to ./bin/tui/budget and ./bin/web/budget
 make test       # run the full test suite
 make seed       # load demo data into ./data/budget.db
 make clean      # remove the compiled binary
@@ -374,12 +378,20 @@ The `Source` column labels each row (`✓ spent`, `→ assigned`, `· default`).
 ## Layout
 
 ```
-cmd/budget/main.go          entrypoint, flag parsing
-cmd/seed/main.go            demo data seeder
-internal/db/                SQLite open + embedded goose migrations
-internal/money/             cents ↔ human string parsing and formatting
-internal/store/             persistence layer (one file per aggregate)
-internal/paydown/           debt amortization projection (pure Go, no DB)
+cmd/tui/main.go             tui binary entrypoint (builds to ./bin/tui/budget)
+cmd/web/main.go             web binary entrypoint (builds to ./bin/web/budget)
+internal/cli/               shared Cobra commands (root flags, config/db/migrate/seed)
+internal/core/config/       runtime configuration loading
+internal/core/db/           SQLite/Postgres open + embedded goose migrations
+internal/core/money/        cents ↔ human string parsing and formatting
+internal/core/store/        persistence layer (one file per aggregate)
+internal/core/paydown/      debt amortization projection (pure Go, no DB)
+internal/core/format/       presentation helpers shared by both UIs (goal summaries)
 internal/tui/               Bubble Tea screens and components
 internal/web/               Gin + Templ + HTMX web server and handlers
 ```
+
+Each binary links only its own UI: building the tui pulls in no web
+dependencies (Gin/Templ) and the web binary pulls in no terminal-UI
+dependencies (Bubble Tea). Both share everything under `internal/core` and the
+admin commands in `internal/cli`.

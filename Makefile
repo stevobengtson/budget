@@ -1,6 +1,8 @@
-BINARY  := ./bin/budget
-CMD     := ./cmd/budget
-MIGRATIONS := ./internal/db/migrations/sqlite
+BIN_TUI := ./bin/tui/budget
+BIN_WEB := ./bin/web/budget
+CMD_TUI := ./cmd/tui
+CMD_WEB := ./cmd/web
+MIGRATIONS := ./internal/core/db/migrations/sqlite
 
 TEMPL    ?= templ
 TAILWIND ?= ./bin/tailwindcss
@@ -19,7 +21,7 @@ TAILWIND_URL := https://github.com/tailwindlabs/tailwindcss/releases/download/$(
 CSS_SRC := ./pkg/shadcntempl/tailwind/input.css
 CSS_OUT := ./internal/web/static/app.css
 
-.PHONY: build run web tui test clean setup seed db-path db-delete db-migrate db-reset db-status templ tools tailwind tailwind-watch css theme
+.PHONY: build build-tui build-web run web tui test clean setup seed db-path db-delete db-migrate db-reset db-status templ tools tailwind tailwind-watch css theme
 
 setup: tools
 	@command -v go >/dev/null 2>&1 || { echo "ERROR: go not found — install from https://go.dev/dl/"; exit 1; }
@@ -48,14 +50,19 @@ tailwind: css
 tailwind-watch: $(TAILWIND)
 	$(TAILWIND) -i $(CSS_SRC) -o $(CSS_OUT) --watch
 
-build: css templ
-	go build -o $(BINARY) $(CMD)
+build-tui:
+	go build -o $(BIN_TUI) $(CMD_TUI)
 
-run: build
-	$(BINARY) tui
+build-web: css templ
+	go build -o $(BIN_WEB) $(CMD_WEB)
 
-web: build
-	$(BINARY) web
+build: build-tui build-web
+
+run: build-tui
+	$(BIN_TUI)
+
+web: build-web
+	$(BIN_WEB)
 
 dev:
 	air
@@ -72,7 +79,7 @@ theme:
 	go run ./cmd/shadcntempl-theme -out ./pkg/shadcntempl/theme/theme.css $(if $(URL),-url $(URL),)$(if $(PRESET), -preset $(PRESET),)
 
 clean:
-	rm -f $(BINARY) $(CSS_OUT)
+	rm -rf ./bin/tui ./bin/web $(CSS_OUT)
 
 db-path:
 	@echo $(DB_PATH)
@@ -85,8 +92,8 @@ db-migrate:
 
 db-reset: db-delete db-migrate
 
-seed: db-migrate build
-	$(BINARY) --db $(DB_PATH) db seed
+seed: db-migrate build-tui
+	$(BIN_TUI) --db $(DB_PATH) db seed
 
 db-status:
 	goose -dir $(MIGRATIONS) sqlite3 $(DB_PATH) status

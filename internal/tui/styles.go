@@ -5,15 +5,16 @@ import "github.com/charmbracelet/lipgloss"
 // Catppuccin Mocha palette — https://catppuccin.com/palette/
 //
 // Theme mapping:
-//   accent  → Mauve   (#cba6f7) - tabs, highlights, active focus
-//   muted   → Overlay0 (#6c7086) - dim text, sub-labels
-//   border  → Surface1 (#45475a) - panel + tab borders
-//   ok      → Green   (#a6e3a1) - positive amounts, success flash
-//   warn    → Peach   (#fab387) - caution, sinking-fund hints
-//   bad     → Red     (#f38ba8) - negative amounts, errors
-//   heading → Blue    (#89b4fa) - titles
-//   onDark  → Base    (#1e1e2e) - text drawn on accent backgrounds
-//   bgPanel → Surface0 (#313244) - status bar background
+//
+//	accent  → Mauve   (#cba6f7) - tabs, highlights, active focus
+//	muted   → Overlay0 (#6c7086) - dim text, sub-labels
+//	border  → Surface1 (#45475a) - panel + tab borders
+//	ok      → Green   (#a6e3a1) - positive amounts, success flash
+//	warn    → Peach   (#fab387) - caution, sinking-fund hints
+//	bad     → Red     (#f38ba8) - negative amounts, errors
+//	heading → Blue    (#89b4fa) - titles
+//	onDark  → Base    (#1e1e2e) - text drawn on accent backgrounds
+//	bgPanel → Surface0 (#313244) - status bar background
 var (
 	colorAccent  = lipgloss.Color("#cba6f7") // Mauve
 	colorMuted   = lipgloss.Color("#6c7086") // Overlay0
