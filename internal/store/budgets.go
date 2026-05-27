@@ -61,7 +61,7 @@ func (s *Store) MonthBudget(ctx context.Context, month string) ([]CategoryBudget
 	q := fmt.Sprintf(`
 SELECT c.id, c.group_id, g.name, c.name, c.is_income, c.goal_cents, c.goal_due_date,
        COALESCE(b.assigned_cents, 0)                                              AS assigned,
-       COALESCE((SELECT SUM(t.outflow_cents) FROM transactions t
+       COALESCE((SELECT SUM(t.outflow_cents) - SUM(t.inflow_cents) FROM transactions t
                  WHERE t.category_id = c.id AND %s = ?), 0) AS spent
 FROM categories c
 JOIN category_groups g ON g.id = c.group_id

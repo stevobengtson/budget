@@ -37,8 +37,8 @@ func TestTransactionsPagination(t *testing.T) {
 	mAny, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
 	m = mAny.(Model)
 
-	if m.transactions.pager.PerPage <= 0 {
-		t.Fatalf("PerPage should be positive, got %d", m.transactions.pager.PerPage)
+	if len(m.transactions.pageStarts) < 2 {
+		t.Fatalf("expected ≥ 2 pages for 50 rows on small terminal, got %d", len(m.transactions.pageStarts))
 	}
 	if m.transactions.pager.TotalPages < 2 {
 		t.Fatalf("TotalPages should be ≥ 2 for 50 rows on small terminal, got %d", m.transactions.pager.TotalPages)
@@ -61,9 +61,9 @@ func TestTransactionsPagination(t *testing.T) {
 		t.Errorf("expected page 1 after pgdn, got %d", m.transactions.pager.Page)
 	}
 
-	// Cursor should now point at first row of page 1 (perPage index).
-	if m.transactions.cursor != m.transactions.pager.PerPage {
-		t.Errorf("cursor = %d, want %d (start of page 1)", m.transactions.cursor, m.transactions.pager.PerPage)
+	// Cursor should now point at the first row of page 1.
+	if m.transactions.cursor != m.transactions.pageStarts[1] {
+		t.Errorf("cursor = %d, want %d (start of page 1)", m.transactions.cursor, m.transactions.pageStarts[1])
 	}
 }
 

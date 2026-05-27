@@ -50,13 +50,17 @@ type txModel struct {
 	dp    datepicker.Model
 	pager paginator.Model
 
+	// pageStarts[i] is the index into rows where page i begins. Pages are
+	// sized by rendered line count (transactions + date headers) so a page
+	// never overflows the terminal height.
+	pageStarts []int
+
 	width, height int
 }
 
 func newTxModel(s *store.Store) txModel {
 	pg := paginator.New()
 	pg.Type = paginator.Arabic
-	pg.PerPage = 20 // recomputed once SetSize is called
 	return txModel{
 		store:       s,
 		filterMonth: store.MonthKey(time.Now()),
@@ -69,32 +73,87 @@ func (m *txModel) SetSize(w, h int) {
 	m.recomputePagination()
 }
 
-// recomputePagination sets the per-page count based on current terminal
-// height (subtracting tab bar, status bar, header, and help line).
 // syncPageToCursor flips the page so the cursor remains visible.
 func (m *txModel) syncPageToCursor() {
-	if m.pager.PerPage <= 0 {
-		return
+	m.pager.Page = m.pageOf(m.cursor)
+}
+
+// pageOf returns the page index whose slice contains the given row index.
+func (m *txModel) pageOf(idx int) int {
+	p := 0
+	for i, s := range m.pageStarts {
+		if s <= idx {
+			p = i
+		} else {
+			break
+		}
 	}
-	page := m.cursor / m.pager.PerPage
-	if page != m.pager.Page {
-		m.pager.Page = page
+	return p
+}
+
+// pageBounds returns the [start, end) row range rendered on the current page.
+func (m *txModel) pageBounds() (int, int) {
+	if len(m.pageStarts) == 0 {
+		return 0, len(m.rows)
 	}
+	page := m.pager.Page
+	if page < 0 {
+		page = 0
+	}
+	if page >= len(m.pageStarts) {
+		page = len(m.pageStarts) - 1
+	}
+	start := m.pageStarts[page]
+	end := len(m.rows)
+	if page+1 < len(m.pageStarts) {
+		end = m.pageStarts[page+1]
+	}
+	return start, end
 }
 
 func (m *txModel) recomputePagination() {
-	// Chrome rows: tab bar (3) + title (1) + table header (1) + pager line (1)
+	// Chrome rows: tab bar (3) + title (1) + column header (1) + pager line (1)
 	// + help line (1) + status bar (1) + outer padding/blank lines (~3).
 	chrome := 11
-	per := m.height - chrome
-	if per < 5 {
-		per = 5
+	budget := m.height - chrome
+	if budget < 5 {
+		budget = 5
 	}
-	m.pager.PerPage = per
-	m.pager.SetTotalPages(len(m.rows))
+	m.pageStarts = computePageStarts(m.rows, budget)
+	m.pager.SetTotalPages(len(m.pageStarts))
 	if m.pager.Page >= m.pager.TotalPages {
 		m.pager.Page = max0(m.pager.TotalPages - 1)
 	}
+}
+
+// computePageStarts partitions rows into pages whose rendered height fits
+// within budget lines. Each transaction costs one line; the first row of a day
+// costs an extra line for its date header. Every page always holds at least
+// one transaction.
+func computePageStarts(rows []store.Transaction, budget int) []int {
+	starts := []int{0}
+	if len(rows) == 0 || budget < 1 {
+		return starts
+	}
+	used := 0
+	lastDay := ""
+	for i := range rows {
+		day := rows[i].Date.Format("2006-01-02")
+		cost := 1
+		if day != lastDay {
+			cost++ // date header line
+		}
+		pageStart := starts[len(starts)-1]
+		if used+cost > budget && i != pageStart {
+			starts = append(starts, i)
+			used = 1 + 1 // new page: this row + its (always-emitted) date header
+			lastDay = day
+			continue
+		}
+		used += cost
+		lastDay = day
+	}
+	return starts
 }
 
 func (m txModel) modal() bool { return m.mode != txList }
@@ -180,10 +239,10 @@ func (m txModel) updateList(msg tea.Msg) (txModel, tea.Cmd) {
 			}
 		case "pgdown", "pgdn", "ctrl+d":
 			m.pager.NextPage()
-			m.cursor = m.pager.Page * m.pager.PerPage
+			m.cursor = m.pageStarts[m.pager.Page]
 		case "pgup", "ctrl+u":
 			m.pager.PrevPage()
-			m.cursor = m.pager.Page * m.pager.PerPage
+			m.cursor = m.pageStarts[m.pager.Page]
 		case "home":
 			m.pager.Page = 0
 			m.cursor = 0
@@ -755,13 +814,34 @@ func (m txModel) viewList() string {
 		}
 		return strings.Join([]string{header, styleDim.Render(empty)}, "\n")
 	}
-	headers := []string{"Date", "Account", "Category / Transfer", "Payee", "Outflow", "Inflow", " "}
-	widths := []int{14, 14, 24, 26, 12, 12, 2}
+	headers := []string{"Account", "Category / Transfer", "Payee", "Outflow", "Inflow", " "}
+	widths := []int{14, 28, 32, 12, 12, 2}
 
-	start, end := m.pager.GetSliceBounds(len(m.rows))
-	rows := make([][]string, end-start)
+	start, end := m.pageBounds()
+
+	var bodyB strings.Builder
+	// Single column-header row, indented to align with the row marker.
+	hdrCells := make([]string, len(headers))
+	for i, h := range headers {
+		hdrCells[i] = styleHeader.Render(padRight(h, widths[i]))
+	}
+	bodyB.WriteString("  " + lipgloss.JoinHorizontal(lipgloss.Top, hdrCells...) + "\n")
+
+	// Rows are grouped under a date header. A new header is emitted whenever
+	// the day changes (and always for the first row of the page), so a page
+	// that starts mid-day still shows which day it belongs to.
+	lastDay := ""
 	for i := start; i < end; i++ {
 		t := m.rows[i]
+		if day := t.Date.Format("2006-01-02"); day != lastDay {
+			bodyB.WriteString(styleTitle.Render(t.Date.Format("Mon, Jan 2, 2006")) + "\n")
+			lastDay = day
+		}
+		// Transfers are read-only on this page (they can't be cleared or
+		// edited), so the whole row is dimmed and the cleared column shows a
+		// dash instead of a checkbox.
+		isTransfer := t.TransferPairID != nil
+
 		acct := truncate(lookupAccount(m.accounts, t.AccountID), 13)
 		var catOrTransfer string
 		if t.TransferAccountID != nil {
@@ -771,40 +851,69 @@ func (m txModel) viewList() string {
 				arrow = "← "
 			}
 			if t.CategoryID != nil {
-				catName := truncate(lookupCategory(m.cats, *t.CategoryID), 11)
-				otherTrim := truncate(other, 9)
-				catOrTransfer = catName + " " + styleDim.Render(arrow+otherTrim)
+				catName := truncate(lookupCategory(m.cats, *t.CategoryID), 13)
+				catOrTransfer = catName + " " + arrow + truncate(other, 10)
 			} else {
-				catOrTransfer = styleDim.Render(arrow + truncate(other, 21))
+				catOrTransfer = arrow + truncate(other, 26)
 			}
 		} else if t.CategoryID != nil {
-			catOrTransfer = truncate(lookupCategory(m.cats, *t.CategoryID), 23)
+			catOrTransfer = truncate(lookupCategory(m.cats, *t.CategoryID), 27)
 		} else {
-			catOrTransfer = styleDim.Render("(uncategorized)")
+			catOrTransfer = "(uncategorized)"
 		}
-		out, in := "", ""
+
+		outRaw, inRaw := "", ""
 		if t.OutflowCents > 0 {
-			out = styleNeg.Render(money.Format(t.OutflowCents))
+			outRaw = money.Format(t.OutflowCents)
 		}
 		if t.InflowCents > 0 {
-			in = stylePos.Render(money.Format(t.InflowCents))
+			inRaw = money.Format(t.InflowCents)
 		}
 		payee := ""
 		if t.Payee != nil {
-			payee = truncate(*t.Payee, 25)
+			payee = truncate(*t.Payee, 31)
 		}
-		cleared := " "
-		if t.Cleared {
-			cleared = stylePos.Render("✓")
+
+		var out, in, cleared string
+		if isTransfer {
+			acct = styleDim.Render(acct)
+			catOrTransfer = styleDim.Render(catOrTransfer)
+			payee = styleDim.Render(payee)
+			out = styleDim.Render(outRaw)
+			in = styleDim.Render(inRaw)
+			cleared = styleDim.Render("-")
+		} else {
+			if t.CategoryID == nil {
+				catOrTransfer = styleDim.Render(catOrTransfer)
+			}
+			if outRaw != "" {
+				out = styleNeg.Render(outRaw)
+			}
+			if inRaw != "" {
+				in = stylePos.Render(inRaw)
+			}
+			cleared = " "
+			if t.Cleared {
+				cleared = stylePos.Render("✓")
+			}
 		}
-		rows[i-start] = []string{t.Date.Format("Jan 2, 2006"), acct, catOrTransfer, payee, out, in, cleared}
+		cells := []string{
+			padRight(acct, widths[0]),
+			padRight(catOrTransfer, widths[1]),
+			padRight(payee, widths[2]),
+			padRight(out, widths[3]),
+			padRight(in, widths[4]),
+			padRight(cleared, widths[5]),
+		}
+		marker := "  "
+		if i == m.cursor {
+			marker = styleSelected.Render("▸ ")
+		}
+		line := zone.Mark("tx-row-"+strconv.Itoa(i),
+			marker+lipgloss.JoinHorizontal(lipgloss.Top, cells...))
+		bodyB.WriteString(line + "\n")
 	}
-	// renderTable receives a cursor relative to the slice; convert.
-	relCursor := m.cursor - start
-	if relCursor < 0 || relCursor >= len(rows) {
-		relCursor = -1
-	}
-	body := renderTableWithStartIndex(headers, widths, rows, relCursor, "tx-row-", start)
+	body := strings.TrimRight(bodyB.String(), "\n")
 
 	pager := ""
 	if m.pager.TotalPages > 1 {

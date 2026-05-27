@@ -178,6 +178,51 @@ func TestMonthBudget(t *testing.T) {
 	}
 }
 
+func TestMonthBudgetSpentNetsInflows(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	gid, _ := s.CreateGroup(ctx, "Monthly", 0)
+	dining, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Dining Out"})
+
+	now := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
+	month := MonthKey(now)
+
+	// Spend $80, then receive a $45 refund into the same category.
+	if _, err := s.CreateTransaction(ctx, Transaction{
+		Date: now, AccountID: chk, CategoryID: &dining, OutflowCents: 8000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateTransaction(ctx, Transaction{
+		Date: now, AccountID: chk, CategoryID: &dining, InflowCents: 4500,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAssigned(ctx, month, dining, 20_000); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := s.MonthBudget(ctx, month)
+	if err != nil {
+		t.Fatalf("month budget: %v", err)
+	}
+	r := findCategoryRow(t, rows, "Dining Out")
+	// Spent is net of the refund so the row reconciles on screen:
+	// assigned - spent = available.
+	if r.SpentCents != 3_500 {
+		t.Errorf("spent = %d, want 3500 (8000 outflow - 4500 inflow)", r.SpentCents)
+	}
+	if r.AvailableCents != 16_500 {
+		t.Errorf("available = %d, want 16500", r.AvailableCents)
+	}
+	if r.AssignedCents-r.SpentCents != r.AvailableCents {
+		t.Errorf("row does not reconcile: assigned(%d) - spent(%d) = %d, available = %d",
+			r.AssignedCents, r.SpentCents, r.AssignedCents-r.SpentCents, r.AvailableCents)
+	}
+}
+
 func findCategoryRow(t *testing.T, rows []CategoryBudget, name string) CategoryBudget {
 	t.Helper()
 	for _, r := range rows {
