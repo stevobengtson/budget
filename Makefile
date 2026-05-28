@@ -3,6 +3,7 @@ BIN_WEB := ./bin/web/budget
 CMD_TUI := ./cmd/tui
 CMD_WEB := ./cmd/web
 MIGRATIONS := ./internal/core/db/migrations/sqlite
+DB_PATH := ./budget.db
 
 TEMPL    ?= templ
 TAILWIND ?= ./bin/tailwindcss
