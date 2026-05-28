@@ -7,18 +7,18 @@ tmp_dir = "tmp"
 
 [build]
 args_bin = []
-bin = "./bin/budget"
-cmd = "./bin/tailwindcss -i ./pkg/shadcntempl/tailwind/input.css -o ./internal/web/static/app.css --minify && templ generate -path ./pkg/shadcntempl && templ generate -path ./internal/web && go build -o ./bin/budget ./cmd/budget"
+bin = "./bin/web/budget"
+cmd = "./bin/tailwindcss -i ./pkg/shadcntempl/tailwind/input.css -o ./internal/web/static/app.css --minify && templ generate -path ./pkg/shadcntempl && templ generate -path ./internal/web && go build -o ./bin/web/budget ./cmd/web"
 delay = 1000
-entrypoint = ["./bin/budget", "web"]
+entrypoint = ["./bin/web/budget"]
 exclude_dir = [
   "assets",
-  "tmp",
-  "vendor",
-  "testdata",
   "data",
   "docs",
   "screenshots",
+  "testdata",
+  "tmp",
+  "vendor",
 ]
 exclude_file = []
 exclude_regex = ["_test.go", ".*_templ.go", "app.css"]
