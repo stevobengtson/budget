@@ -14,6 +14,7 @@ import (
 	datepicker "github.com/ethanefung/bubble-datepicker"
 	zone "github.com/lrstanley/bubblezone"
 	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/settings"
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
@@ -328,12 +329,28 @@ func (m *txModel) startForm(existing *store.Transaction) {
 	m.editing = existing
 
 	defaultAcct := ""
-	if len(m.accounts) > 0 {
-		defaultAcct = m.accounts[0].Name
+	if id, err := settings.ResolveDefaultAccount(context.Background(), m.store); err == nil {
+		defaultAcct = lookupAccount(m.accounts, id)
+	}
+	if defaultAcct == "" {
+		for _, a := range m.accounts {
+			if a.ArchivedAt == nil {
+				defaultAcct = a.Name
+				break
+			}
+		}
 	}
 	defaultCat := ""
-	if len(m.cats) > 0 {
-		defaultCat = m.cats[0].Name
+	if id, err := settings.ResolveDefaultCategory(context.Background(), m.store); err == nil && id != nil {
+		defaultCat = lookupCategory(m.cats, *id)
+	}
+	if defaultCat == "" {
+		for _, c := range m.cats {
+			if c.ArchivedAt == nil && !c.IsIncome {
+				defaultCat = c.Name
+				break
+			}
+		}
 	}
 
 	fields := []field{

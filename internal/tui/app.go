@@ -21,6 +21,7 @@ const (
 	tabAccounts
 	tabCategories
 	tabPaydown
+	tabSettings
 	tabCount
 )
 
@@ -36,6 +37,8 @@ func (t tab) Name() string {
 		return "Categories"
 	case tabPaydown:
 		return "Paydown"
+	case tabSettings:
+		return "Settings"
 	}
 	return ""
 }
@@ -52,6 +55,8 @@ func (t tab) Icon() string {
 		return "🗂"
 	case tabPaydown:
 		return "📉"
+	case tabSettings:
+		return "⚙"
 	}
 	return ""
 }
@@ -79,6 +84,7 @@ type Model struct {
 	transactions txModel
 	budget       budgetModel
 	paydown      paydownModel
+	settings     settingsModel
 }
 
 func New(s *store.Store) Model {
@@ -95,6 +101,7 @@ func New(s *store.Store) Model {
 		transactions: newTxModel(s),
 		budget:       newBudgetModel(s),
 		paydown:      newPaydownModel(s),
+		settings:     newSettingsModel(s),
 	}
 	// Refresh receivers mutate via pointer; do it on initialization so the
 	// first-paint screen has data instead of an empty list.
@@ -103,6 +110,7 @@ func New(s *store.Store) Model {
 	_ = m.transactions.Refresh()
 	_ = m.budget.Refresh()
 	_ = m.paydown.Refresh()
+	_ = m.settings.Refresh()
 	return m
 }
 
@@ -120,6 +128,8 @@ func (m Model) childKeysOnly() bool {
 		return m.budget.modal()
 	case tabPaydown:
 		return m.paydown.modal()
+	case tabSettings:
+		return m.settings.modal()
 	}
 	return false
 }
@@ -136,6 +146,8 @@ func (m *Model) routeMouse(msg tea.MouseMsg) tea.Cmd {
 		return m.categories.HandleMouse(msg)
 	case tabPaydown:
 		return m.paydown.HandleMouse(msg)
+	case tabSettings:
+		return m.settings.HandleMouse(msg)
 	}
 	return nil
 }
@@ -154,6 +166,11 @@ func (m *Model) refreshActive() tea.Cmd {
 		return m.categories.Refresh()
 	case tabPaydown:
 		return m.paydown.Refresh()
+	case tabSettings:
+		if err := m.settings.Refresh(); err != nil {
+			return flashFail(err.Error())
+		}
+		return nil
 	}
 	return nil
 }
@@ -198,6 +215,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.refreshActive()
 			case "5":
 				m.active = tabPaydown
+				return m, m.refreshActive()
+			case "6":
+				m.active = tabSettings
 				return m, m.refreshActive()
 			case "H", "shift+left":
 				m.active = (m.active - 1 + tabCount) % tabCount
@@ -252,6 +272,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.budget, cmd = m.budget.Update(msg)
 	case tabPaydown:
 		m.paydown, cmd = m.paydown.Update(msg)
+	case tabSettings:
+		m.settings, cmd = m.settings.Update(msg)
 	}
 	return m, cmd
 }
@@ -276,6 +298,8 @@ func (m Model) View() string {
 		body = m.categories.View()
 	case tabPaydown:
 		body = m.paydown.View()
+	case tabSettings:
+		body = m.settings.View()
 	}
 	if m.showHelp {
 		body = helpView()
@@ -365,6 +389,8 @@ func statusHints(t tab) string {
 		return "j/k move · n new · enter edit · d delete/archive · ctrl+d/u page · ? help"
 	case tabPaydown:
 		return "j/k move · n add · e payment · c category · d remove · h/l horizon · ctrl+d/u page · ? help"
+	case tabSettings:
+		return "a account · c category · r reset · s save · ? help"
 	}
 	return ""
 }
@@ -373,7 +399,7 @@ func helpView() string {
 	rows := [][2]string{
 		{"?", "show / hide this help"},
 		{"esc", "close help · cancel form / modal"},
-		{"1–5 / click", "switch tabs"},
+		{"1–6 / click", "switch tabs"},
 		{"shift+h / shift+l", "prev / next tab"},
 		{"click row", "select row in any list"},
 		{"q / ctrl+c", "quit"},

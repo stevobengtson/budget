@@ -1,0 +1,83 @@
+package views
+
+import (
+	"strconv"
+
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/pkg/shadcntempl/button"
+	"github.com/sbengtson/budget/pkg/shadcntempl/selectbox"
+)
+
+type SettingsData struct {
+	Accounts          []store.AccountWithBalance
+	Categories        []store.Category
+	DefaultAccountID  *int64 // nil = "use first"
+	DefaultCategoryID *int64
+	Flash             string
+}
+
+templ SettingsPage(d SettingsData) {
+	@Layout("Settings", "settings") {
+		<div class="mx-auto grid max-w-xl gap-4">
+			<h1 class="text-xl font-semibold">Settings</h1>
+			<form method="post" action="/settings" class="grid gap-4 rounded-md border bg-card p-4">
+				<div class="grid gap-1.5">
+					<label class="text-sm font-medium" for="default-account">Default account</label>
+					<div class="[&>select]:w-full">
+						@selectbox.Select(
+							selectbox.Props{ID: "default-account", Name: "default_account_id", Placeholder: "(use first)"},
+							settingsAccountOptions(d.Accounts, d.DefaultAccountID),
+						)
+					</div>
+					<p class="text-xs text-muted-foreground">Pre-selected on new transactions. Leave blank to use the first non-archived account.</p>
+				</div>
+				<div class="grid gap-1.5">
+					<label class="text-sm font-medium" for="default-category">Default category</label>
+					<div class="[&>select]:w-full">
+						@selectbox.Select(
+							selectbox.Props{ID: "default-category", Name: "default_category_id", Placeholder: "(use first)"},
+							settingsCategoryOptions(d.Categories, d.DefaultCategoryID),
+						)
+					</div>
+					<p class="text-xs text-muted-foreground">Leave blank to use the first non-archived category.</p>
+				</div>
+				<div class="flex justify-end">
+					@button.Button(button.Props{Type: "submit"}) { save }
+				</div>
+				if d.Flash != "" {
+					<p class="text-sm text-emerald-500">{ d.Flash }</p>
+				}
+			</form>
+		</div>
+	}
+}
+
+func settingsAccountOptions(accts []store.AccountWithBalance, selected *int64) []selectbox.Option {
+	out := make([]selectbox.Option, 0, len(accts))
+	for _, a := range accts {
+		if a.ArchivedAt != nil {
+			continue
+		}
+		out = append(out, selectbox.Option{
+			Value:    strconv.FormatInt(a.ID, 10),
+			Label:    a.Name,
+			Selected: selected != nil && *selected == a.ID,
+		})
+	}
+	return out
+}
+
+func settingsCategoryOptions(cats []store.Category, selected *int64) []selectbox.Option {
+	out := make([]selectbox.Option, 0, len(cats))
+	for _, c := range cats {
+		if c.ArchivedAt != nil || c.IsIncome {
+			continue
+		}
+		out = append(out, selectbox.Option{
+			Value:    strconv.FormatInt(c.ID, 10),
+			Label:    c.Name,
+			Selected: selected != nil && *selected == c.ID,
+		})
+	}
+	return out
+}

@@ -85,4 +85,7 @@ func (s *Server) routes() {
 	s.engine.GET("/paydown/:acctID/category-form", hs.PaydownCategoryForm)
 	s.engine.POST("/paydown/:acctID/payment", hs.PaydownSetPayment)
 	s.engine.POST("/paydown/:acctID/category", hs.PaydownSetCategory)
+
+	s.engine.GET("/settings", hs.SettingsIndex)
+	s.engine.POST("/settings", hs.SettingsUpdate)
 }

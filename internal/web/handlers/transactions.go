@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/settings"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/views"
 )
@@ -82,15 +83,19 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 }
 
 func (h *Handlers) TransactionsNew(c *gin.Context) {
-	accts, _ := h.store.ListAccounts(c.Request.Context(), false)
-	cats, _ := h.store.ListCategories(c.Request.Context(), false)
+	ctx := c.Request.Context()
+	accts, _ := h.store.ListAccounts(ctx, false)
+	cats, _ := h.store.ListCategories(ctx, false)
 	d := views.TxFormData{
 		Date:       time.Now().Format("2006-01-02"),
 		Accounts:   accts,
 		Categories: cats,
 	}
-	if len(accts) > 0 {
-		d.AccountID = accts[0].ID
+	if id, err := settings.ResolveDefaultAccount(ctx, h.store); err == nil {
+		d.AccountID = id
+	}
+	if id, err := settings.ResolveDefaultCategory(ctx, h.store); err == nil && id != nil {
+		d.CategoryID = id
 	}
 	render(c, http.StatusOK, views.TransactionForm(d))
 }
