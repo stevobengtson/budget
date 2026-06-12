@@ -1,8 +1,8 @@
 # Other
 docs/superpowers/
-.playwright-mcp
-.claude
-.remember
+.playwright-mcp/
+.claude/
+.remember/
 
 # OS
 .DS_Store
