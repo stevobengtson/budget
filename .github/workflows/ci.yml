@@ -10,13 +10,17 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: api/go.mod
           cache: true
+          cache-dependency-path: api/go.sum
 
       - name: Test
         run: go test ./...
@@ -24,15 +28,19 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: api/go.mod
           cache: true
+          cache-dependency-path: api/go.sum
 
       - name: Build
         run: |
           go build -o /dev/null ./cmd/tui
-          go build -o /dev/null ./cmd/web
+          go build -o /dev/null ./cmd/api

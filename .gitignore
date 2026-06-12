@@ -1,8 +1,8 @@
 # Binaries
-bin/*
+bin/
 
 # Generated Tailwind output
-internal/web/static/app.css
+api/internal/web/static/app.css
 
 # Test binary, built with go test -c
 *.test
@@ -16,7 +16,7 @@ go.work
 go.work.sum
 
 # SQLite databases
-data/*
+data/
 *.db
 
 # Environment
@@ -24,7 +24,7 @@ budget.yaml
 
 # Other
 docs/*
-tmp/*
+tmp/
 
 # OS
 .DS_Store

@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    defaults:
+      run:
+        working-directory: api
     strategy:
       matrix:
         include:
@@ -35,18 +38,9 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: api/go.mod
           cache: true
-
-      - name: Build web assets
-        run: |
-          curl -fsSL -o /usr/local/bin/tailwindcss \
-            "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.0/tailwindcss-linux-x64"
-          chmod +x /usr/local/bin/tailwindcss
-          /usr/local/bin/tailwindcss -i ./pkg/shadcntempl/tailwind/input.css -o ./internal/web/static/app.css --minify
-          go install github.com/a-h/templ/cmd/templ@v0.3.1001
-          "$(go env GOPATH)/bin/templ" generate -path ./pkg/shadcntempl
-          "$(go env GOPATH)/bin/templ" generate -path ./internal/web
+          cache-dependency-path: api/go.sum
 
       - name: Build binaries
         env:
@@ -57,7 +51,7 @@ jobs:
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
           go build -trimpath -ldflags="-s -w" -o "budget-tui${EXT}" ./cmd/tui
-          go build -trimpath -ldflags="-s -w" -o "budget-web${EXT}" ./cmd/web
+          go build -trimpath -ldflags="-s -w" -o "budget-api${EXT}" ./cmd/api
 
       - name: Package (tar)
         if: matrix.archive == 'tar'
@@ -68,8 +62,8 @@ jobs:
         run: |
           NAME="budget-${TAG}-${GOOS}-${GOARCH}"
           mkdir "$NAME"
-          mv budget-tui budget-web "$NAME/"
-          cp README.md LICENSE "$NAME/" 2>/dev/null || true
+          mv budget-tui budget-api "$NAME/"
+          cp ../README.md "$NAME/" 2>/dev/null || true
           tar czf "${NAME}.tar.gz" "$NAME"
           echo "ASSET=${NAME}.tar.gz" >> "$GITHUB_ENV"
 
@@ -82,8 +76,8 @@ jobs:
         run: |
           NAME="budget-${TAG}-${GOOS}-${GOARCH}"
           mkdir "$NAME"
-          mv budget-tui.exe budget-web.exe "$NAME/"
-          cp README.md LICENSE "$NAME/" 2>/dev/null || true
+          mv budget-tui.exe budget-api.exe "$NAME/"
+          cp ../README.md "$NAME/" 2>/dev/null || true
           zip -r "${NAME}.zip" "$NAME"
           echo "ASSET=${NAME}.zip" >> "$GITHUB_ENV"
 
@@ -91,7 +85,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: budget-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ env.ASSET }}
+          path: api/${{ env.ASSET }}
           if-no-files-found: error
 
   docker:
@@ -132,7 +126,7 @@ jobs:
       - name: Build & push
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./api
           platforms: linux/amd64 #,linux/arm64 (arm builds take about 20 minutes)
           push: true
           tags: ${{ steps.meta.outputs.tags }}
