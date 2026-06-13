@@ -12,11 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as PublicRouteImport } from './routes/_public'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as PublicIndexRouteImport } from './routes/_public/index'
-import { Route as AuthedDashboardRouteImport } from './routes/_authed/dashboard'
-import { Route as AuthedAccountsRouteImport } from './routes/_authed/accounts'
+import { Route as AuthedTransactionsRouteImport } from './routes/_authed/transactions'
+import { Route as AuthedBudgetRouteImport } from './routes/_authed/budget'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as PublicAuthPathRouteImport } from './routes/_public/auth/$path'
 import { Route as AuthedSettingsPathRouteImport } from './routes/_authed/settings/$path'
+import { Route as AuthedAccountsAccountIdRouteImport } from './routes/_authed/accounts.$accountId'
 
 const PublicRoute = PublicRouteImport.update({
   id: '/_public',
@@ -31,14 +32,14 @@ const PublicIndexRoute = PublicIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PublicRoute,
 } as any)
-const AuthedDashboardRoute = AuthedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const AuthedTransactionsRoute = AuthedTransactionsRouteImport.update({
+  id: '/transactions',
+  path: '/transactions',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedAccountsRoute = AuthedAccountsRouteImport.update({
-  id: '/accounts',
-  path: '/accounts',
+const AuthedBudgetRoute = AuthedBudgetRouteImport.update({
+  id: '/budget',
+  path: '/budget',
   getParentRoute: () => AuthedRoute,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -56,19 +57,26 @@ const AuthedSettingsPathRoute = AuthedSettingsPathRouteImport.update({
   path: '/settings/$path',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedAccountsAccountIdRoute = AuthedAccountsAccountIdRouteImport.update({
+  id: '/accounts/$accountId',
+  path: '/accounts/$accountId',
+  getParentRoute: () => AuthedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof PublicIndexRoute
-  '/accounts': typeof AuthedAccountsRoute
-  '/dashboard': typeof AuthedDashboardRoute
+  '/budget': typeof AuthedBudgetRoute
+  '/transactions': typeof AuthedTransactionsRoute
+  '/accounts/$accountId': typeof AuthedAccountsAccountIdRoute
   '/settings/$path': typeof AuthedSettingsPathRoute
   '/auth/$path': typeof PublicAuthPathRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof PublicIndexRoute
-  '/accounts': typeof AuthedAccountsRoute
-  '/dashboard': typeof AuthedDashboardRoute
+  '/budget': typeof AuthedBudgetRoute
+  '/transactions': typeof AuthedTransactionsRoute
+  '/accounts/$accountId': typeof AuthedAccountsAccountIdRoute
   '/settings/$path': typeof AuthedSettingsPathRoute
   '/auth/$path': typeof PublicAuthPathRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -77,9 +85,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authed': typeof AuthedRouteWithChildren
   '/_public': typeof PublicRouteWithChildren
-  '/_authed/accounts': typeof AuthedAccountsRoute
-  '/_authed/dashboard': typeof AuthedDashboardRoute
+  '/_authed/budget': typeof AuthedBudgetRoute
+  '/_authed/transactions': typeof AuthedTransactionsRoute
   '/_public/': typeof PublicIndexRoute
+  '/_authed/accounts/$accountId': typeof AuthedAccountsAccountIdRoute
   '/_authed/settings/$path': typeof AuthedSettingsPathRoute
   '/_public/auth/$path': typeof PublicAuthPathRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -88,16 +97,18 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/accounts'
-    | '/dashboard'
+    | '/budget'
+    | '/transactions'
+    | '/accounts/$accountId'
     | '/settings/$path'
     | '/auth/$path'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/accounts'
-    | '/dashboard'
+    | '/budget'
+    | '/transactions'
+    | '/accounts/$accountId'
     | '/settings/$path'
     | '/auth/$path'
     | '/api/auth/$'
@@ -105,9 +116,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authed'
     | '/_public'
-    | '/_authed/accounts'
-    | '/_authed/dashboard'
+    | '/_authed/budget'
+    | '/_authed/transactions'
     | '/_public/'
+    | '/_authed/accounts/$accountId'
     | '/_authed/settings/$path'
     | '/_public/auth/$path'
     | '/api/auth/$'
@@ -142,18 +154,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicIndexRouteImport
       parentRoute: typeof PublicRoute
     }
-    '/_authed/dashboard': {
-      id: '/_authed/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthedDashboardRouteImport
+    '/_authed/transactions': {
+      id: '/_authed/transactions'
+      path: '/transactions'
+      fullPath: '/transactions'
+      preLoaderRoute: typeof AuthedTransactionsRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/accounts': {
-      id: '/_authed/accounts'
-      path: '/accounts'
-      fullPath: '/accounts'
-      preLoaderRoute: typeof AuthedAccountsRouteImport
+    '/_authed/budget': {
+      id: '/_authed/budget'
+      path: '/budget'
+      fullPath: '/budget'
+      preLoaderRoute: typeof AuthedBudgetRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/api/auth/$': {
@@ -177,18 +189,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSettingsPathRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/accounts/$accountId': {
+      id: '/_authed/accounts/$accountId'
+      path: '/accounts/$accountId'
+      fullPath: '/accounts/$accountId'
+      preLoaderRoute: typeof AuthedAccountsAccountIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
 interface AuthedRouteChildren {
-  AuthedAccountsRoute: typeof AuthedAccountsRoute
-  AuthedDashboardRoute: typeof AuthedDashboardRoute
+  AuthedBudgetRoute: typeof AuthedBudgetRoute
+  AuthedTransactionsRoute: typeof AuthedTransactionsRoute
+  AuthedAccountsAccountIdRoute: typeof AuthedAccountsAccountIdRoute
   AuthedSettingsPathRoute: typeof AuthedSettingsPathRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
-  AuthedAccountsRoute: AuthedAccountsRoute,
-  AuthedDashboardRoute: AuthedDashboardRoute,
+  AuthedBudgetRoute: AuthedBudgetRoute,
+  AuthedTransactionsRoute: AuthedTransactionsRoute,
+  AuthedAccountsAccountIdRoute: AuthedAccountsAccountIdRoute,
   AuthedSettingsPathRoute: AuthedSettingsPathRoute,
 }
 
