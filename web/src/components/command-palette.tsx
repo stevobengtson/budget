@@ -39,14 +39,14 @@ export function CommandPalette({
 					>
 						All Accounts
 					</CommandItem>
-					{(accounts ?? []).map((account) => (
+					{(accounts?.accounts ?? []).map((account) => (
 						<CommandItem
 							key={account.id}
 							onSelect={() =>
 								go(() =>
 									navigate({
 										to: "/accounts/$accountId",
-										params: { accountId: account.id },
+										params: { accountId: String(account.id) },
 									}),
 								)
 							}

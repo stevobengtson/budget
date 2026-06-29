@@ -1,14 +1,19 @@
 import { auth } from "@/lib/auth";
 
 export async function getSessionUser(headers: Headers) {
-  const session = await auth.api.getSession({ headers });
-  return session?.user ?? null;
+	const session = await auth.api.getSession({ headers });
+	return session?.user ?? null;
 }
 
 export async function requireUser(headers: Headers) {
-  const user = await getSessionUser(headers);
-  if (!user) {
-    throw new Response("Unauthorized", { status: 401 });
-  }
-  return user;
+	const user = await getSessionUser(headers);
+	if (!user) {
+		throw new Response("Unauthorized", { status: 401 });
+	}
+	return user;
+}
+
+export async function requireUserId(headers: Headers): Promise<string> {
+	const user = await requireUser(headers);
+	return user.id;
 }

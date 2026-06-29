@@ -78,12 +78,12 @@ export function AppSidebar({
 										</Link>
 									</SidebarMenuButton>
 								</SidebarMenuItem>
-								{(accounts ?? []).map((account) => (
+								{(accounts?.accounts ?? []).map((account) => (
 									<SidebarMenuItem key={account.id}>
 										<SidebarMenuButton asChild tooltip={account.name}>
 											<Link
 												to="/accounts/$accountId"
-												params={{ accountId: account.id }}
+												params={{ accountId: String(account.id) }}
 												activeProps={{ "data-active": true }}
 												className="justify-between"
 											>

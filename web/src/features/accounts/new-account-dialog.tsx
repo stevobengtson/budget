@@ -13,11 +13,12 @@ import {
 } from "#/components/ui/select.tsx";
 import type { AccountType } from "#/lib/api/types.ts";
 import { parseCents } from "#/lib/money.ts";
-import { accountKeys, createAccountFn } from "./queries.ts";
+import { accountKeys, createAccountMutation } from "./queries.ts";
 
 const TYPES: { value: AccountType; label: string }[] = [
 	{ value: "checking", label: "Checking" },
 	{ value: "savings", label: "Savings" },
+	{ value: "cash", label: "Cash" },
 	{ value: "credit", label: "Credit Card" },
 	{ value: "loan", label: "Loan" },
 ];
@@ -38,7 +39,7 @@ export function NewAccountDialog({
 	const isDebt = type === "credit" || type === "loan";
 
 	const create = useMutation({
-		mutationFn: createAccountFn,
+		mutationFn: createAccountMutation,
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: accountKeys.all });
 			onOpenChange(false);
@@ -64,9 +65,11 @@ export function NewAccountDialog({
 		create.mutate({
 			name,
 			type,
-			balanceCents: isDebt && balanceCents > 0 ? -balanceCents : balanceCents,
-			limitCents,
+			startingBalanceCents:
+				isDebt && balanceCents > 0 ? -balanceCents : balanceCents,
+			creditLimitCents: limitCents,
 			aprBps,
+			includeInPaydown: false,
 		});
 	}
 

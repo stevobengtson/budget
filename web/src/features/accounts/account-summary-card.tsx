@@ -1,10 +1,12 @@
 import { Amount } from "#/components/amount.tsx";
 import { StatCard } from "#/components/stat-card.tsx";
-import type { Account, AccountMonthSummary } from "#/lib/api/types.ts";
+import type { AccountMonthSummary } from "#/lib/api/types.ts";
+import type { Account } from "@/server/accounts";
 
 const TYPE_LABEL: Record<Account["type"], string> = {
 	checking: "Checking",
 	savings: "Savings",
+	cash: "Cash",
 	credit: "Credit Card",
 	loan: "Loan",
 };

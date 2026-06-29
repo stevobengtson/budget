@@ -35,4 +35,23 @@ describe("parseCents", () => {
 		expect(parseCents("abc")).toBeNull();
 		expect(parseCents("12.3.4")).toBeNull();
 	});
+	it("rejects more than two fractional digits (Go parity)", () => {
+		expect(parseCents("1.234")).toBeNull();
+	});
+	it("rejects multiple decimal points", () => {
+		expect(parseCents("1.2.3")).toBeNull();
+	});
+	it("rejects bare plus sign", () => {
+		expect(parseCents("+")).toBeNull();
+	});
+	it("parses leading plus and bare decimal", () => {
+		expect(parseCents("+10")).toBe(1000);
+		expect(parseCents(".5")).toBe(50);
+		expect(parseCents("1.05")).toBe(105);
+	});
+	it("parses padded negatives with currency formatting", () => {
+		expect(parseCents("$1,234.56")).toBe(123456);
+		expect(parseCents(" -50 ")).toBe(-5000);
+		expect(parseCents("-0.99")).toBe(-99);
+	});
 });

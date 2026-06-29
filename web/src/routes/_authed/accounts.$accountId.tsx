@@ -27,11 +27,11 @@ export const Route = createFileRoute("/_authed/accounts/$accountId")({
 	loaderDeps: ({ search }) => ({ month: search.month }),
 	loader: async ({ context: { queryClient }, deps, params }) => {
 		await Promise.all([
-			queryClient.ensureQueryData(accountQuery(params.accountId)),
+			queryClient.ensureQueryData(accountQuery(Number(params.accountId))),
 			queryClient.ensureQueryData(accountsQuery()),
 			queryClient.ensureQueryData(categoriesQuery()),
 			queryClient.ensureQueryData(
-				accountSummaryQuery(params.accountId, deps.month),
+				accountSummaryQuery(Number(params.accountId), deps.month),
 			),
 			queryClient.ensureQueryData(
 				transactionsQuery({ month: deps.month, accountId: params.accountId }),
@@ -45,9 +45,9 @@ function AccountTransactionsPage() {
 	const { accountId } = Route.useParams();
 	const { month, filter } = Route.useSearch();
 	const navigate = Route.useNavigate();
-	const { data: account } = useSuspenseQuery(accountQuery(accountId));
+	const { data: account } = useSuspenseQuery(accountQuery(Number(accountId)));
 	const { data: summary } = useSuspenseQuery(
-		accountSummaryQuery(accountId, month),
+		accountSummaryQuery(Number(accountId), month),
 	);
 
 	return (

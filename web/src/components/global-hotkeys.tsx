@@ -33,12 +33,12 @@ export function GlobalHotkeys({
 			handler: () => navigate({ to: "/transactions" }),
 			help: { label: "Go to All Accounts", group: "Navigation" },
 		},
-		...(accounts ?? []).slice(0, 7).map((account, i) => ({
+		...(accounts?.accounts ?? []).slice(0, 7).map((account, i) => ({
 			key: String(i + 3),
 			handler: () =>
 				navigate({
 					to: "/accounts/$accountId",
-					params: { accountId: account.id },
+					params: { accountId: String(account.id) },
 				}),
 			help: { label: `Go to ${account.name}`, group: "Navigation" },
 		})),

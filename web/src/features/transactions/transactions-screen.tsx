@@ -10,7 +10,7 @@ import { ConfirmDialog } from "#/components/confirm-dialog.tsx";
 import { Button } from "#/components/ui/button.tsx";
 import { accountsQuery } from "#/features/accounts/queries.ts";
 import { categoriesQuery } from "#/features/budget/queries.ts";
-import type { Transaction } from "#/lib/api/types.ts";
+import type { Account, Transaction } from "#/lib/api/types.ts";
 import { useAppHotkeys } from "#/lib/hotkeys.ts";
 import { FilterBar } from "./filter-bar.tsx";
 import {
@@ -38,7 +38,18 @@ export function TransactionsScreen({
 	const { data: transactions } = useSuspenseQuery(
 		transactionsQuery({ month, accountId }),
 	);
-	const { data: accounts } = useSuspenseQuery(accountsQuery());
+	const { data: accountsResponse } = useSuspenseQuery(accountsQuery());
+	// Convert AccountWithBalance[] to the legacy Account shape that transaction
+	// sub-components expect. Transactions haven't migrated off the fake layer yet;
+	// string-coercing ids here keeps TypeScript happy until that cutover happens.
+	const accounts: Account[] = accountsResponse.accounts.map((a) => ({
+		id: String(a.id),
+		name: a.name,
+		type: a.type,
+		balanceCents: a.balanceCents,
+		limitCents: a.creditLimitCents,
+		aprBps: a.aprBps,
+	}));
 	const { data: categories } = useSuspenseQuery(categoriesQuery());
 	const [deleting, setDeleting] = useState<Transaction | null>(null);
 	const [editing, setEditing] = useState<Transaction | null>(null);

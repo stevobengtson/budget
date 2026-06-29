@@ -1,4 +1,8 @@
-export type AccountType = "checking" | "savings" | "credit" | "loan";
+// Single source of truth lives in the Drizzle schema; import + re-export so
+// legacy fake-layer types stay in sync as new account types are added.
+import type { AccountType } from "@/db/schema/budget-schema";
+
+export type { AccountType };
 
 export interface Account {
 	id: string;
