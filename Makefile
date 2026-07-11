@@ -19,10 +19,10 @@ else
 endif
 TAILWIND_URL := https://github.com/tailwindlabs/tailwindcss/releases/download/$(TAILWIND_VERSION)/$(TAILWIND_ASSET)
 
-CSS_SRC := ./pkg/shadcntempl/tailwind/input.css
+CSS_SRC := ./internal/web/tailwind/input.css
 CSS_OUT := ./internal/web/static/app.css
 
-.PHONY: build build-tui build-web run web tui test clean setup seed db-path db-delete db-migrate db-reset db-status templ tools tailwind tailwind-watch css theme
+.PHONY: build build-tui build-web run web tui test clean setup seed db-path db-delete db-migrate db-reset db-status templ tools tailwind tailwind-watch css
 
 setup: tools
 	@command -v go >/dev/null 2>&1 || { echo "ERROR: go not found — install from https://go.dev/dl/"; exit 1; }
@@ -72,12 +72,6 @@ tui: run
 
 test: templ
 	go test ./...
-
-# Fetch a shadcn theme preset and overwrite pkg/shadcntempl/theme/theme.css.
-# Usage: make theme PRESET=b6FTKD8F6
-#    or: make theme URL=https://ui.shadcn.com/r/themes/xyz.json
-theme:
-	go run ./cmd/shadcntempl-theme -out ./pkg/shadcntempl/theme/theme.css $(if $(URL),-url $(URL),)$(if $(PRESET), -preset $(PRESET),)
 
 clean:
 	rm -rf ./bin/tui ./bin/web $(CSS_OUT)

@@ -107,32 +107,29 @@ func (h *Handlers) TransactionsCreate(c *gin.Context) {
 func (h *Handlers) TransactionsEdit(c *gin.Context) {
 	ctx := c.Request.Context()
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	all, _ := h.store.ListTransactions(ctx, store.TxFilter{Limit: 100000})
-	var t *store.Transaction
-	for i := range all {
-		if all[i].ID == id {
-			t = &all[i]
-			break
-		}
-	}
-	if t == nil {
+	t, err := h.store.GetTransaction(ctx, id)
+	if err != nil {
 		c.String(http.StatusNotFound, "tx not found")
-		return
-	}
-	if t.TransferPairID != nil {
-		c.String(http.StatusBadRequest, "transfers are not editable; delete and recreate")
 		return
 	}
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
 	d := views.TxFormData{
-		Editing:    true,
-		ID:         t.ID,
-		Date:       t.Date.Format("2006-01-02"),
-		AccountID:  t.AccountID,
-		CategoryID: t.CategoryID,
-		Accounts:   accts,
-		Categories: cats,
+		Editing:           true,
+		ID:                t.ID,
+		Date:              t.Date.Format("2006-01-02"),
+		AccountID:         t.AccountID,
+		CategoryID:        t.CategoryID,
+		TransferAccountID: t.TransferAccountID,
+		Accounts:          accts,
+		Categories:        cats,
+	}
+	// A transfer's category lives on the outflow (spending) leg. When editing
+	// the inflow leg, surface the pair's category so it's visible and editable.
+	if t.TransferPairID != nil && t.CategoryID == nil {
+		if pair, err := h.store.GetTransaction(ctx, *t.TransferPairID); err == nil {
+			d.CategoryID = pair.CategoryID
+		}
 	}
 	if t.Payee != nil {
 		d.Payee = *t.Payee
@@ -170,23 +167,18 @@ func (h *Handlers) TransactionsDelete(c *gin.Context) {
 func (h *Handlers) TransactionsToggleCleared(c *gin.Context) {
 	ctx := c.Request.Context()
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	all, _ := h.store.ListTransactions(ctx, store.TxFilter{Limit: 100000})
-	var t *store.Transaction
-	for i := range all {
-		if all[i].ID == id {
-			t = &all[i]
-			break
-		}
-	}
-	if t == nil || t.TransferPairID != nil {
+	t, err := h.store.GetTransaction(ctx, id)
+	if err != nil {
 		c.String(http.StatusBadRequest, "not toggleable")
 		return
 	}
-	t.Cleared = !t.Cleared
-	if err := h.store.UpdateTransaction(ctx, *t); err != nil {
+	// For a transfer leg SetCleared flips both legs; the paired row updates on
+	// the next full render (HTMX partial-sync is handled separately).
+	if err := h.store.SetCleared(ctx, id, !t.Cleared); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
+	t.Cleared = !t.Cleared
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
 	render(c, http.StatusOK, views.TransactionRow(*t, accts, cats))
@@ -234,6 +226,28 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 	}
 	if notes != "" {
 		notesPtr = &notes
+	}
+
+	// Editing an existing transfer leg: update both legs in place rather than
+	// deleting and recreating, so ids and the pair linkage survive.
+	if id != 0 {
+		existing, err := h.store.GetTransaction(ctx, id)
+		if err != nil {
+			return err
+		}
+		if existing.TransferPairID != nil {
+			if transferTo == nil {
+				return errInvalid("transfer requires a destination account")
+			}
+			if outCents+inCents <= 0 {
+				return errInvalid("transfer amount required")
+			}
+			return h.store.UpdateTransfer(ctx, id, store.TransferLegEdit{
+				Date: t, AccountID: acctID, TransferAccountID: *transferTo,
+				OutflowCents: outCents, InflowCents: inCents,
+				CategoryID: catPtr, Notes: notesPtr,
+			})
+		}
 	}
 
 	if transferTo != nil {

@@ -638,3 +638,173 @@ func TestSinkingFundCarryover(t *testing.T) {
 		t.Errorf("after Feb spend, available = %d, want 19500", r.AvailableCents)
 	}
 }
+
+func TestUpdateTransfer(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	sav, _ := s.CreateAccount(ctx, Account{Name: "Sav", Type: TypeChecking})
+	wallet, _ := s.CreateAccount(ctx, Account{Name: "Wallet", Type: TypeChecking})
+	gid, _ := s.CreateGroup(ctx, "Bills", 0)
+	cat, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "CC Payment"})
+
+	// $100 transfer: Chk (out) -> Sav (in), category on the from-leg.
+	outID, inID, err := s.CreateTransfer(ctx, TransferInput{
+		Date: time.Now(), FromAccountID: chk, ToAccountID: sav,
+		AmountCents: 10_000, CategoryID: &cat,
+	})
+	if err != nil {
+		t.Fatalf("create transfer: %v", err)
+	}
+
+	date := time.Now()
+
+	// Rule 2: change the out leg's outflow to $50 -> the in leg's inflow mirrors.
+	if err := s.UpdateTransfer(ctx, outID, TransferLegEdit{
+		Date: date, AccountID: chk, TransferAccountID: sav,
+		OutflowCents: 5_000, CategoryID: &cat,
+	}); err != nil {
+		t.Fatalf("update amount: %v", err)
+	}
+	out := getTx(t, s, outID)
+	in := getTx(t, s, inID)
+	if out.OutflowCents != 5_000 || out.InflowCents != 0 {
+		t.Errorf("out leg = (%d,%d), want (5000,0)", out.OutflowCents, out.InflowCents)
+	}
+	if in.InflowCents != 5_000 || in.OutflowCents != 0 {
+		t.Errorf("in leg = (%d,%d), want inflow 5000", in.OutflowCents, in.InflowCents)
+	}
+
+	// Rule 2 (direction flip): flip the edited leg from outflow to inflow ->
+	// the paired leg flips the opposite way, and the category follows the
+	// spending (outflow) leg, which is now the pair.
+	if err := s.UpdateTransfer(ctx, outID, TransferLegEdit{
+		Date: date, AccountID: chk, TransferAccountID: sav,
+		InflowCents: 5_000, CategoryID: &cat,
+	}); err != nil {
+		t.Fatalf("update flip: %v", err)
+	}
+	out = getTx(t, s, outID)
+	in = getTx(t, s, inID)
+	if out.InflowCents != 5_000 || out.OutflowCents != 0 {
+		t.Errorf("edited leg after flip = (%d,%d), want inflow 5000", out.OutflowCents, out.InflowCents)
+	}
+	if in.OutflowCents != 5_000 || in.InflowCents != 0 {
+		t.Errorf("paired leg after flip = (%d,%d), want outflow 5000", in.OutflowCents, in.InflowCents)
+	}
+	if out.CategoryID != nil {
+		t.Errorf("inflow leg should be uncategorized, got %v", *out.CategoryID)
+	}
+	if in.CategoryID == nil || *in.CategoryID != cat {
+		t.Errorf("category should follow the outflow (spending) leg")
+	}
+
+	// Restore the original direction for the remaining checks.
+	mustUpdate(t, s, outID, TransferLegEdit{
+		Date: date, AccountID: chk, TransferAccountID: sav,
+		OutflowCents: 5_000, CategoryID: &cat,
+	})
+
+	// Rule 1: change the edited leg's account only. The paired leg keeps its
+	// own posted account, but its back-pointer follows so the label stays truthful.
+	mustUpdate(t, s, outID, TransferLegEdit{
+		Date: date, AccountID: wallet, TransferAccountID: sav,
+		OutflowCents: 5_000, CategoryID: &cat,
+	})
+	out = getTx(t, s, outID)
+	in = getTx(t, s, inID)
+	if out.AccountID != wallet {
+		t.Errorf("edited leg account = %d, want wallet %d", out.AccountID, wallet)
+	}
+	if in.AccountID != sav {
+		t.Errorf("paired leg account moved to %d, should stay at sav %d", in.AccountID, sav)
+	}
+	if in.TransferAccountID == nil || *in.TransferAccountID != wallet {
+		t.Errorf("paired leg back-pointer = %v, want wallet %d (truthful label)", in.TransferAccountID, wallet)
+	}
+
+	// Rule 6: change the edited leg's "transfer to" -> the paired leg moves.
+	mustUpdate(t, s, outID, TransferLegEdit{
+		Date: date, AccountID: wallet, TransferAccountID: chk,
+		OutflowCents: 5_000, CategoryID: &cat,
+	})
+	out = getTx(t, s, outID)
+	in = getTx(t, s, inID)
+	if in.AccountID != chk {
+		t.Errorf("paired leg should move to chk %d, got %d", chk, in.AccountID)
+	}
+	if out.TransferAccountID == nil || *out.TransferAccountID != chk {
+		t.Errorf("edited leg transfer_account = %v, want chk %d", out.TransferAccountID, chk)
+	}
+
+	// Rule 4: date applies to both legs.
+	newDate := time.Now().AddDate(0, 0, -3)
+	mustUpdate(t, s, outID, TransferLegEdit{
+		Date: newDate, AccountID: wallet, TransferAccountID: chk,
+		OutflowCents: 5_000, CategoryID: &cat,
+	})
+	out = getTx(t, s, outID)
+	in = getTx(t, s, inID)
+	if out.Date.Format("2006-01-02") != newDate.Format("2006-01-02") ||
+		in.Date.Format("2006-01-02") != newDate.Format("2006-01-02") {
+		t.Errorf("both legs should share date %v: out=%v in=%v", newDate, out.Date, in.Date)
+	}
+
+	// Guard: from and to accounts must differ.
+	if err := s.UpdateTransfer(ctx, outID, TransferLegEdit{
+		Date: date, AccountID: chk, TransferAccountID: chk, OutflowCents: 5_000,
+	}); err == nil {
+		t.Error("expected error when from == to")
+	}
+
+	// Guard: updating a non-transfer row is rejected.
+	plain, _ := s.CreateTransaction(ctx, Transaction{Date: date, AccountID: chk, OutflowCents: 100})
+	if err := s.UpdateTransfer(ctx, plain, TransferLegEdit{
+		Date: date, AccountID: chk, TransferAccountID: sav, OutflowCents: 100,
+	}); err == nil {
+		t.Error("expected error when leg is not a transfer")
+	}
+}
+
+func TestSetClearedTransfer(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	sav, _ := s.CreateAccount(ctx, Account{Name: "Sav", Type: TypeChecking})
+
+	outID, inID, _ := s.CreateTransfer(ctx, TransferInput{
+		Date: time.Now(), FromAccountID: chk, ToAccountID: sav, AmountCents: 10_000,
+	})
+
+	// Rule 3: toggling cleared on one leg applies to both.
+	if err := s.SetCleared(ctx, inID, true); err != nil {
+		t.Fatalf("set cleared: %v", err)
+	}
+	if !getTx(t, s, outID).Cleared || !getTx(t, s, inID).Cleared {
+		t.Error("both legs should be cleared")
+	}
+	if err := s.SetCleared(ctx, outID, false); err != nil {
+		t.Fatalf("unset cleared: %v", err)
+	}
+	if getTx(t, s, outID).Cleared || getTx(t, s, inID).Cleared {
+		t.Error("both legs should be uncleared")
+	}
+}
+
+func getTx(t *testing.T, s *Store, id int64) *Transaction {
+	t.Helper()
+	tx, err := s.GetTransaction(context.Background(), id)
+	if err != nil {
+		t.Fatalf("get tx %d: %v", id, err)
+	}
+	return tx
+}
+
+func mustUpdate(t *testing.T, s *Store, legID int64, in TransferLegEdit) {
+	t.Helper()
+	if err := s.UpdateTransfer(context.Background(), legID, in); err != nil {
+		t.Fatalf("update transfer: %v", err)
+	}
+}

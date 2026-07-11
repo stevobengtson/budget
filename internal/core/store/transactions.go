@@ -75,6 +75,138 @@ func (s *Store) UpdateTransaction(ctx context.Context, t Transaction) error {
 	return err
 }
 
+// GetTransaction fetches a single transaction by id.
+func (s *Store) GetTransaction(ctx context.Context, id int64) (*Transaction, error) {
+	q := `SELECT id, date, account_id, category_id, transfer_account_id, transfer_pair_id,
+	             payee, notes, outflow_cents, inflow_cents, cleared, created_at
+	      FROM transactions WHERE id=?`
+	var t Transaction
+	var cat, transferAcc, pair sql.NullInt64
+	var payee, notes sql.NullString
+	err := s.queryOne(ctx, q, id).Scan(&t.ID, &t.Date, &t.AccountID, &cat, &transferAcc, &pair,
+		&payee, &notes, &t.OutflowCents, &t.InflowCents, &t.Cleared, &t.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	t.CategoryID = intPtr(cat)
+	t.TransferAccountID = intPtr(transferAcc)
+	t.TransferPairID = intPtr(pair)
+	t.Payee = strPtr(payee)
+	t.Notes = strPtr(notes)
+	return &t, nil
+}
+
+// TransferLegEdit describes the desired new state of the ONE leg the user
+// edited. UpdateTransfer keeps the paired leg consistent:
+//   - the amount mirrors with the opposite direction (edit outflow -> pair inflow)
+//   - date and cleared always match on both legs
+//   - the paired leg's account follows this leg's "transfer to" selection
+//   - the paired leg's transfer_account back-points at this leg's account, so
+//     the "from/to" label stays truthful
+//   - the category always lands on the outflow (spending) leg per envelope rules;
+//     the inflow leg is left uncategorized
+type TransferLegEdit struct {
+	Date              time.Time
+	AccountID         int64 // this leg's account
+	TransferAccountID int64 // this leg's counter-account (where the pair posts)
+	OutflowCents      int64 // exactly one of Outflow/Inflow must be > 0
+	InflowCents       int64
+	CategoryID        *int64
+	Notes             *string
+}
+
+// UpdateTransfer updates both legs of the transfer that legID belongs to,
+// atomically, from the edited leg's new state. See TransferLegEdit.
+func (s *Store) UpdateTransfer(ctx context.Context, legID int64, in TransferLegEdit) error {
+	if in.OutflowCents < 0 || in.InflowCents < 0 {
+		return errors.New("outflow/inflow must be non-negative")
+	}
+	if (in.OutflowCents > 0) == (in.InflowCents > 0) {
+		return errors.New("transfer leg must have exactly one of outflow/inflow")
+	}
+	if in.AccountID == in.TransferAccountID {
+		return errors.New("from and to accounts must differ")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var pair sql.NullInt64
+	if err := s.txQueryOne(ctx, tx, `SELECT transfer_pair_id FROM transactions WHERE id=?`, legID).Scan(&pair); err != nil {
+		return err
+	}
+	if !pair.Valid {
+		return errors.New("transaction is not part of a transfer")
+	}
+	pairID := pair.Int64
+
+	dateStr := in.Date.Format("2006-01-02")
+	// The category belongs on whichever leg carries the outflow (the spending
+	// side). When the edited leg is the outflow, it keeps the category and the
+	// pair is cleared; otherwise the pair becomes the outflow and holds it.
+	editedIsOutflow := in.OutflowCents > 0
+	var editedCat, pairCat *int64
+	if editedIsOutflow {
+		editedCat = in.CategoryID
+	} else {
+		pairCat = in.CategoryID
+	}
+
+	// Edited leg: exactly the values the user chose.
+	if _, err := s.txExec(ctx, tx,
+		`UPDATE transactions
+		 SET date=?, account_id=?, transfer_account_id=?, category_id=?, notes=?,
+		     outflow_cents=?, inflow_cents=?, cleared=?
+		 WHERE id=?`,
+		dateStr, in.AccountID, in.TransferAccountID, nullInt(editedCat), nullStr(in.Notes),
+		in.OutflowCents, in.InflowCents, false, legID); err != nil {
+		return fmt.Errorf("update edited leg: %w", err)
+	}
+
+	// Paired leg: mirror amount/direction; account follows "transfer to";
+	// back-pointer follows the edited leg's account.
+	if _, err := s.txExec(ctx, tx,
+		`UPDATE transactions
+		 SET date=?, account_id=?, transfer_account_id=?, category_id=?, notes=?,
+		     outflow_cents=?, inflow_cents=?, cleared=?
+		 WHERE id=?`,
+		dateStr, in.TransferAccountID, in.AccountID, nullInt(pairCat), nullStr(in.Notes),
+		in.InflowCents, in.OutflowCents, false, pairID); err != nil {
+		return fmt.Errorf("update paired leg: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// SetCleared sets the cleared flag on a transaction. If it's part of a
+// transfer, both legs are updated so their cleared state stays identical.
+func (s *Store) SetCleared(ctx context.Context, id int64, cleared bool) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var pair sql.NullInt64
+	if err := s.txQueryOne(ctx, tx, `SELECT transfer_pair_id FROM transactions WHERE id=?`, id).Scan(&pair); err != nil {
+		return err
+	}
+	ids := []any{id}
+	q := `UPDATE transactions SET cleared=? WHERE id IN (?`
+	if pair.Valid {
+		q += `, ?`
+		ids = append(ids, pair.Int64)
+	}
+	q += `)`
+	if _, err := s.txExec(ctx, tx, q, append([]any{cleared}, ids...)...); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // DeleteTransaction removes a transaction. If it's part of a transfer, both
 // legs are removed atomically.
 func (s *Store) DeleteTransaction(ctx context.Context, id int64) error {

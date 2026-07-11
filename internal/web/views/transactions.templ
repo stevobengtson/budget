@@ -184,41 +184,29 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 }
 
 templ txClearCell(t store.Transaction) {
-	if t.TransferAccountID != nil {
-		@button.Button(button.Props{
-			Variant:  button.VariantGhost,
-			Size:     button.SizeSmall,
-			Disabled: true,
-			Class:    "bg-emerald-600 text-white font-bold ring-1 ring-emerald-500/40 hover:bg-emerald-600",
-			Attrs:    templ.Attributes{"title": "Transfers are auto-cleared"},
-		}) {
-			✓
-		}
-	} else {
-		<form hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" class="inline">
-			if t.Cleared {
-				@button.Button(button.Props{
-					Type:    "submit",
-					Variant: button.VariantGhost,
-					Size:    button.SizeSmall,
-					Class:   "bg-emerald-600 text-white font-bold ring-1 ring-emerald-500/40 hover:bg-emerald-600/90 hover:text-white",
-					Attrs:   templ.Attributes{"title": "Cleared — click to unclear"},
-				}) {
-					✓
-				}
-			} else {
-				@button.Button(button.Props{
-					Type:    "submit",
-					Variant: button.VariantOutline,
-					Size:    button.SizeSmall,
-					Class:   "text-muted-foreground",
-					Attrs:   templ.Attributes{"title": "Not cleared — click to clear"},
-				}) {
-					·
-				}
+	<form hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" class="inline">
+		if t.Cleared {
+			@button.Button(button.Props{
+				Type:    "submit",
+				Variant: button.VariantGhost,
+				Size:    button.SizeSmall,
+				Class:   "bg-emerald-600 text-white font-bold ring-1 ring-emerald-500/40 hover:bg-emerald-600/90 hover:text-white",
+				Attrs:   templ.Attributes{"title": "Cleared — click to unclear"},
+			}) {
+				✓
 			}
-		</form>
-	}
+		} else {
+			@button.Button(button.Props{
+				Type:    "submit",
+				Variant: button.VariantOutline,
+				Size:    button.SizeSmall,
+				Class:   "text-muted-foreground",
+				Attrs:   templ.Attributes{"title": "Not cleared — click to clear"},
+			}) {
+				·
+			}
+		}
+	</form>
 }
 
 templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {

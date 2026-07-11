@@ -131,7 +131,7 @@ The web interface mirrors every TUI tab with the same Catppuccin Mocha theme. Ea
 
 ## Quick start
 
-**Requirements:** [Go 1.21+](https://go.dev/dl/)
+**Requirements:** [Go 1.26+](https://go.dev/dl/)
 
 ```bash
 git clone https://github.com/sbengtson/budget
@@ -380,6 +380,7 @@ The `Source` column labels each row (`✓ spent`, `→ assigned`, `· default`).
 ```
 cmd/tui/main.go             tui binary entrypoint (builds to ./bin/tui/budget)
 cmd/web/main.go             web binary entrypoint (builds to ./bin/web/budget)
+cmd/shadcntempl-theme/      tool: fetch a shadcn theme preset into pkg/shadcntempl/theme
 internal/cli/               shared Cobra commands (root flags, config/db/migrate/seed)
 internal/core/config/       runtime configuration loading
 internal/core/db/           SQLite/Postgres open + embedded goose migrations
@@ -388,7 +389,8 @@ internal/core/store/        persistence layer (one file per aggregate)
 internal/core/paydown/      debt amortization projection (pure Go, no DB)
 internal/core/format/       presentation helpers shared by both UIs (goal summaries)
 internal/tui/               Bubble Tea screens and components
-internal/web/               Gin + Templ + HTMX web server and handlers
+internal/web/               Gin + Templ + HTMX web server, handlers, and views
+pkg/shadcntempl/            shadcn/ui-style Templ + Tailwind v4 component library
 ```
 
 Each binary links only its own UI: building the tui pulls in no web
