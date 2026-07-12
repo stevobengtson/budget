@@ -18,6 +18,16 @@ abstraction. No separate JS frontend — the web UI is Go templates + HTMX.
 
 All commands run from the repo root via the `Makefile`.
 
+**Devbox (preferred toolchain).** `devbox.json` pins the exact tool versions
+(go, templ, goose, air, tailwindcss_4, sqlite) — the single source of truth,
+matched to `go.mod` + the Makefile. Work inside `devbox shell` (or `devbox run
+<script>`; scripts: `web`, `tui`, `dev`, `test`, `migrate`, `seed`). The shell's
+`init_hook` exports `TAILWIND`/`TEMPL` to the nix binaries, so `make` uses them
+and **skips the tailwind download + `go install` steps**. `.air.toml` uses
+`${TAILWIND}`/`${TEMPL}` with fallbacks so `make dev` works in and out of Devbox.
+No CGO — `modernc.org/sqlite` is pure Go, so no compiler in the shell.
+When adding a tool (later: postgres, mailpit), `devbox add <pkg>` and pin it here.
+
 ```bash
 make setup          # go mod download + install goose; installs templ + tailwind CLIs
 make build          # build both binaries -> bin/tui/budget, bin/web/budget

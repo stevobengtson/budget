@@ -131,7 +131,7 @@ The web interface mirrors every TUI tab with the same Catppuccin Mocha theme. Ea
 
 ## Quick start
 
-**Requirements:** [Go 1.26+](https://go.dev/dl/)
+**Requirements:** [Go 1.26+](https://go.dev/dl/) — or nothing but [Devbox](https://www.jetify.com/devbox) (see below).
 
 ```bash
 git clone https://github.com/sbengtson/budget
@@ -140,6 +140,27 @@ make setup    # download deps + install goose
 make seed     # load 3 months of realistic demo data
 make run      # launch the TUI
 ```
+
+### With Devbox (no host toolchain)
+
+[Devbox](https://www.jetify.com/devbox) provisions an isolated shell with the
+exact pinned tool versions (Go, templ, tailwind, goose, air, sqlite) — no Docker,
+no global installs. `devbox.json` is the single source of truth for those versions.
+
+```bash
+devbox shell   # enter the shell; tools land on PATH, versions print on entry
+make seed      # same Makefile targets work inside
+make run       # TUI  (or: make web)
+```
+
+Or run a target without entering the shell:
+
+```bash
+devbox run web     # scripts: web · tui · dev · test · migrate · seed
+```
+
+Inside the shell, `make` uses the Devbox-provided binaries (via `TAILWIND`/`TEMPL`
+env), so the tailwind download and `go install` steps are skipped.
 
 To open the web interface instead:
 
