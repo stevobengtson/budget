@@ -8,7 +8,7 @@ tmp_dir = "tmp"
 [build]
 args_bin = []
 bin = "./bin/web/budget"
-cmd = "./bin/tailwindcss -i ./internal/web/tailwind/input.css -o ./internal/web/static/app.css --minify && templ generate -path ./internal/web && go build -o ./bin/web/budget ./cmd/web"
+cmd = "${TAILWIND:-./bin/tailwindcss} -i ./internal/web/tailwind/input.css -o ./internal/web/static/app.css --minify && ${TEMPL:-templ} generate -path ./internal/web && go build -o ./bin/web/budget ./cmd/web"
 delay = 1000
 entrypoint = ["./bin/web/budget"]
 exclude_dir = [

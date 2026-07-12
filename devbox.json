@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.17.2/.schema/devbox.schema.json",
+  "packages": [
+    "go@1.26.2",
+    "templ@0.3.1001",
+    "goose@3.27.1",
+    "air@1.65.3",
+    "tailwindcss_4@4.3.0",
+    "sqlite@latest"
+  ],
+  "env": {
+    "DB_PATH": "./data/budget.db",
+    "GOFLAGS": "-mod=mod"
+  },
+  "shell": {
+    "init_hook": [
+      "export TAILWIND=$(command -v tailwindcss)",
+      "export TEMPL=$(command -v templ)",
+      "echo \"devbox ready — go $(go env GOVERSION) · templ $(templ --version) · tailwind v4.3.0 · $(goose --version 2>&1)\""
+    ],
+    "scripts": {
+      "web": "make web",
+      "tui": "make run",
+      "dev": "make dev",
+      "test": "make test",
+      "migrate": "make db-migrate",
+      "seed": "make db-seed"
+    }
+  }
+}
