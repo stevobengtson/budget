@@ -3,7 +3,7 @@ BIN_WEB := ./bin/web/budget
 CMD_TUI := ./cmd/tui
 CMD_WEB := ./cmd/web
 MIGRATIONS := ./internal/core/db/migrations/sqlite
-DB_PATH := ./budget.db
+DB_PATH := ./data/budget.db
 
 TEMPL    ?= templ
 TAILWIND ?= ./bin/tailwindcss
@@ -86,7 +86,7 @@ db-migrate:
 
 db-reset: db-delete db-migrate
 
-seed: db-migrate build-tui
+db-seed: db-migrate build-tui
 	$(BIN_TUI) --db $(DB_PATH) db seed
 
 db-status:
