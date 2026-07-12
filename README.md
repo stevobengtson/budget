@@ -131,26 +131,29 @@ The web interface mirrors every TUI tab with the same Catppuccin Mocha theme. Ea
 
 ## Quick start
 
-**Requirements:** [Go 1.26+](https://go.dev/dl/) — or nothing but [Devbox](https://www.jetify.com/devbox) (see below).
+**Requirements:** [Task](https://taskfile.dev) + [Go 1.26+](https://go.dev/dl/) — or nothing but [Devbox](https://www.jetify.com/devbox) (see below), which brings both.
 
 ```bash
 git clone https://github.com/sbengtson/budget
 cd budget
-make setup    # download deps + install goose
-make seed     # load 3 months of realistic demo data
-make run      # launch the TUI
+task setup    # download deps + install goose
+task db:seed  # load 3 months of realistic demo data
+task run      # launch the TUI
 ```
+
+Run `task` with no args for the full task list.
 
 ### With Devbox (no host toolchain)
 
 [Devbox](https://www.jetify.com/devbox) provisions an isolated shell with the
-exact pinned tool versions (Go, templ, tailwind, goose, air, sqlite) — no Docker,
-no global installs. `devbox.json` is the single source of truth for those versions.
+exact pinned tool versions (Go, Task, templ, tailwind, goose, air, sqlite) — no
+Docker, no global installs. `devbox.json` is the single source of truth for those
+versions.
 
 ```bash
 devbox shell   # enter the shell; tools land on PATH, versions print on entry
-make seed      # same Makefile targets work inside
-make run       # TUI  (or: make web)
+task db:seed   # same tasks work inside
+task run       # TUI  (or: task web)
 ```
 
 Or run a target without entering the shell:
@@ -159,21 +162,21 @@ Or run a target without entering the shell:
 devbox run web     # scripts: web · tui · dev · test · migrate · seed
 ```
 
-Inside the shell, `make` uses the Devbox-provided binaries (via `TAILWIND`/`TEMPL`
+Inside the shell, Task uses the Devbox-provided binaries (via `TAILWIND`/`TEMPL`
 env), so the tailwind download and `go install` steps are skipped.
 
 To open the web interface instead:
 
 ```bash
-make seed     # if you haven't already
+task db:seed              # if you haven't already
 ./bin/web/budget          # serves http://localhost:8080
 ```
 
 To start fresh with your own data:
 
 ```bash
-make db-reset  # wipe the database
-make run       # TUI — auto-migrates on first open
+task db:reset  # wipe the database
+task run       # TUI — auto-migrates on first open
 # or
 ./bin/web/budget  # web — auto-migrates on first request
 ```
@@ -287,21 +290,21 @@ The destination is wiped (TRUNCATE on Postgres / DELETE on SQLite) and primary k
 ## Development
 
 ```bash
-make setup      # install Go module deps + goose CLI
-make build      # compile both binaries to ./bin/tui/budget and ./bin/web/budget
-make test       # run the full test suite
-make seed       # load demo data into ./data/budget.db
-make clean      # remove the compiled binary
+task setup      # install Go module deps + goose CLI
+task build      # compile both binaries to ./bin/tui/budget and ./bin/web/budget
+task test       # run the full test suite
+task db:seed    # load demo data into ./data/budget.db
+task clean      # remove the compiled binary
 ```
 
 Database commands:
 
 ```bash
-make db-path    # print the configured database path
-make db-migrate # run pending migrations (goose up)
-make db-reset   # delete the database and re-run migrations
-make db-status  # show goose migration status
-make db-delete  # delete the database file (and WAL/SHM)
+task db:path    # print the configured database path
+task db:migrate # run pending migrations (goose up)
+task db:reset   # delete the database and re-run migrations
+task db:status  # show goose migration status
+task db:delete  # delete the database file (and WAL/SHM)
 ```
 
 ---

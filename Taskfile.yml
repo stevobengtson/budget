@@ -1,0 +1,167 @@
+# Task runner — https://taskfile.dev. Replaces the old Makefile.
+# Inside `devbox shell`, TAILWIND/TEMPL are exported to the nix binaries, so the
+# tailwind download + `go install` steps below are skipped automatically.
+version: "3"
+
+vars:
+  BIN_TUI: ./bin/tui/budget
+  BIN_WEB: ./bin/web/budget
+  CMD_TUI: ./cmd/tui
+  CMD_WEB: ./cmd/web
+  MIGRATIONS: ./internal/core/db/migrations/sqlite
+  DB_PATH: '{{.DB_PATH | default "./data/budget.db"}}'
+
+  # Overridden by devbox env (nix paths); default to bundled/PATH binaries.
+  TEMPL: '{{.TEMPL | default "templ"}}'
+  TAILWIND: '{{.TAILWIND | default "./bin/tailwindcss"}}'
+
+  CSS_SRC: ./internal/web/tailwind/input.css
+  CSS_OUT: ./internal/web/static/app.css
+
+  # Tailwind v4 standalone CLI (only used when TAILWIND is the bundled binary).
+  TAILWIND_VERSION: v4.3.0
+  TAILWIND_OS: '{{if eq OS "darwin"}}macos{{else}}linux{{end}}'
+  TAILWIND_ARCH: '{{if eq ARCH "arm64"}}arm64{{else}}x64{{end}}'
+  TAILWIND_ASSET: 'tailwindcss-{{.TAILWIND_OS}}-{{.TAILWIND_ARCH}}'
+  TAILWIND_URL: 'https://github.com/tailwindlabs/tailwindcss/releases/download/{{.TAILWIND_VERSION}}/{{.TAILWIND_ASSET}}'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  setup:
+    desc: Install Go deps + goose; ensure templ + tailwind CLIs present
+    deps: [tools]
+    cmds:
+      - cmd: 'command -v go >/dev/null 2>&1 || { echo "ERROR: go not found — install from https://go.dev/dl/"; exit 1; }'
+        silent: true
+      - go mod download
+      - go install github.com/pressly/goose/v3/cmd/goose@latest
+      - cmd: "echo \"Setup complete. Run 'task run' for the TUI or 'task web' to serve HTTP.\""
+        silent: true
+
+  tools:
+    desc: Ensure templ + tailwind CLIs are available
+    deps: [tailwind-cli]
+    cmds:
+      - cmd: command -v {{.TEMPL}} >/dev/null 2>&1 || go install github.com/a-h/templ/cmd/templ@latest
+        silent: true
+
+  # Downloads the standalone tailwind binary only when TAILWIND points at a
+  # missing file (mirrors the Makefile file-target). Skipped when TAILWIND is a
+  # nix/PATH binary that already exists.
+  tailwind-cli:
+    internal: true
+    status:
+      - test -f "{{.TAILWIND}}" || command -v "{{.TAILWIND}}" >/dev/null 2>&1
+    cmds:
+      - mkdir -p "$(dirname "{{.TAILWIND}}")"
+      - echo "→ downloading {{.TAILWIND_URL}}"
+      - curl -fsSL -o "{{.TAILWIND}}" "{{.TAILWIND_URL}}"
+      - chmod +x "{{.TAILWIND}}"
+
+  templ:
+    desc: Generate Go from .templ files
+    deps: [tools]
+    cmds:
+      - "{{.TEMPL}} generate -path ./internal/web"
+
+  css:
+    desc: Compile Tailwind CSS
+    deps: [tailwind-cli]
+    cmds:
+      - '{{.TAILWIND}} -i {{.CSS_SRC}} -o {{.CSS_OUT}} --minify'
+
+  tailwind:
+    desc: Alias for css
+    deps: [css]
+
+  tailwind-watch:
+    desc: Watch + recompile Tailwind CSS
+    deps: [tailwind-cli]
+    cmds:
+      - '{{.TAILWIND}} -i {{.CSS_SRC}} -o {{.CSS_OUT}} --watch'
+
+  build:tui:
+    desc: Build the TUI binary
+    cmds:
+      - go build -o {{.BIN_TUI}} {{.CMD_TUI}}
+
+  build:web:
+    desc: Build the web binary (regenerates css + templ first)
+    deps: [css, templ]
+    cmds:
+      - go build -o {{.BIN_WEB}} {{.CMD_WEB}}
+
+  build:
+    desc: Build both binaries
+    deps: [build:tui, build:web]
+
+  run:
+    desc: Build + launch the TUI
+    deps: [build:tui]
+    cmds:
+      - "{{.BIN_TUI}}"
+
+  tui:
+    desc: Alias for run
+    deps: [run]
+
+  web:
+    desc: Build + launch the web server
+    deps: [build:web]
+    cmds:
+      - "{{.BIN_WEB}}"
+
+  dev:
+    desc: Hot-reload web server via air
+    cmds:
+      - air
+
+  test:
+    desc: templ generate + go test ./...
+    deps: [templ]
+    cmds:
+      - go test ./...
+
+  clean:
+    desc: Remove built binaries + compiled CSS
+    cmds:
+      - rm -rf ./bin/tui ./bin/web {{.CSS_OUT}}
+
+  db:path:
+    desc: Print the DB path
+    cmds:
+      - echo {{.DB_PATH}}
+    silent: true
+
+  db:delete:
+    desc: Delete the SQLite DB (+ wal/shm)
+    cmds:
+      - rm -f {{.DB_PATH}} {{.DB_PATH}}-shm {{.DB_PATH}}-wal
+
+  db:migrate:
+    desc: Run goose migrations up
+    cmds:
+      - goose -dir {{.MIGRATIONS}} sqlite3 {{.DB_PATH}} up
+
+  db:reset:
+    desc: Delete DB + re-migrate
+    cmds:
+      - task: db:delete
+      - task: db:migrate
+
+  db:status:
+    desc: Show goose migration status
+    cmds:
+      - goose -dir {{.MIGRATIONS}} sqlite3 {{.DB_PATH}} status
+
+  db:seed:
+    desc: Migrate + load demo data via the TUI binary
+    deps: [build:tui]
+    cmds:
+      - task: db:migrate
+      - "{{.BIN_TUI}} --db {{.DB_PATH}} db seed"

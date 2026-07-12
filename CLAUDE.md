@@ -16,39 +16,41 @@ abstraction. No separate JS frontend — the web UI is Go templates + HTMX.
 
 ## Build & Run
 
-All commands run from the repo root via the `Makefile`.
+All commands run from the repo root via [Task](https://taskfile.dev)
+(`Taskfile.yml`). Run `task` with no args to list targets. (The old `Makefile`
+was removed in favor of Task on 2026-07-12.)
 
 **Devbox (preferred toolchain).** `devbox.json` pins the exact tool versions
-(go, templ, goose, air, tailwindcss_4, sqlite) — the single source of truth,
-matched to `go.mod` + the Makefile. Work inside `devbox shell` (or `devbox run
-<script>`; scripts: `web`, `tui`, `dev`, `test`, `migrate`, `seed`). The shell's
-`init_hook` exports `TAILWIND`/`TEMPL` to the nix binaries, so `make` uses them
-and **skips the tailwind download + `go install` steps**. `.air.toml` uses
-`${TAILWIND}`/`${TEMPL}` with fallbacks so `make dev` works in and out of Devbox.
+(go, go-task, templ, goose, air, tailwindcss_4, sqlite) — the single source of
+truth, matched to `go.mod` + the Taskfile. Work inside `devbox shell` (or `devbox
+run <script>`; scripts: `web`, `tui`, `dev`, `test`, `migrate`, `seed`). The
+shell's `init_hook` exports `TAILWIND`/`TEMPL` to the nix binaries, so Task uses
+them and **skips the tailwind download + `go install` steps**. `.air.toml` uses
+`${TAILWIND}`/`${TEMPL}` with fallbacks so `task dev` works in and out of Devbox.
 No CGO — `modernc.org/sqlite` is pure Go, so no compiler in the shell.
 When adding a tool (later: postgres, mailpit), `devbox add <pkg>` and pin it here.
 
 ```bash
-make setup          # go mod download + install goose; installs templ + tailwind CLIs
-make build          # build both binaries -> bin/tui/budget, bin/web/budget
-make run            # build + launch TUI (alias: make tui)
-make web            # build + launch web server (regenerates css + templ first)
-make dev            # hot-reload via air
-make test           # templ generate + go test ./...
+task setup          # go mod download + install goose; installs templ + tailwind CLIs
+task build          # build both binaries -> bin/tui/budget, bin/web/budget
+task run            # build + launch TUI (alias: task tui)
+task web            # build + launch web server (regenerates css + templ first)
+task dev            # hot-reload via air
+task test           # templ generate + go test ./...
 
 # Single test:
 go test ./internal/core/store/ -run TestAccountCRUD -v
 
 # Codegen (needed after editing .templ files or Tailwind sources):
-make templ          # templ generate for internal/web
-make css            # compile Tailwind -> internal/web/static/app.css
-make tailwind-watch # watch mode
+task templ          # templ generate for internal/web
+task css            # compile Tailwind -> internal/web/static/app.css
+task tailwind-watch # watch mode
 
-# Database (SQLite, default DB_PATH=./budget.db):
-make db-migrate     # goose up
-make db-reset       # delete DB + re-migrate
-make db-status      # goose migration status
-make seed           # migrate + load demo data (via TUI binary)
+# Database (SQLite, default DB_PATH=./data/budget.db):
+task db:migrate     # goose up
+task db:reset       # delete DB + re-migrate
+task db:status      # goose migration status
+task db:seed        # migrate + load demo data (via TUI binary)
 ```
 
 The Tailwind entry point and theme tokens live in
@@ -103,7 +105,7 @@ dialog, label, selectbox, ...), styled via Tailwind v4.
   add schema changes to **both** dirs.
 - **Config precedence**: CLI flag → `BUDGET_*` env → `budget.yaml` → defaults.
 - **Web is server-rendered**: Templ generates Go; HTMX drives partial updates.
-  After editing a `.templ` file, run `make templ` (or `make test`, which does it)
+  After editing a `.templ` file, run `task templ` (or `task test`, which does it)
   before building — the `*_templ.go` files are checked in.
 - **Shared core, thin UIs**: `internal/cli` and `internal/core` carry no UI deps;
   TUI and web are the only UI packages.
@@ -111,7 +113,7 @@ dialog, label, selectbox, ...), styled via Tailwind v4.
 ## Key Rules
 
 - NEVER commit API keys or secrets — use environment variables.
-- Run `make test` before considering backend/core work done.
-- After editing `.templ` or Tailwind sources, regenerate (`make templ` / `make css`).
+- Run `task test` before considering backend/core work done.
+- After editing `.templ` or Tailwind sources, regenerate (`task templ` / `task css`).
 - Keep SQLite and Postgres migration directories in sync.
 - Do not suggest or create commits, merges, or PRs — the user does all of this.

@@ -6,7 +6,8 @@
     "goose@3.27.1",
     "air@1.65.3",
     "tailwindcss_4@4.3.0",
-    "sqlite@latest"
+    "sqlite@latest",
+    "go-task@latest"
   ],
   "env": {
     "DB_PATH": "./data/budget.db",
@@ -19,12 +20,12 @@
       "echo \"devbox ready — go $(go env GOVERSION) · templ $(templ --version) · tailwind v4.3.0 · $(goose --version 2>&1)\""
     ],
     "scripts": {
-      "web": "make web",
-      "tui": "make run",
-      "dev": "make dev",
-      "test": "make test",
-      "migrate": "make db-migrate",
-      "seed": "make db-seed"
+      "web":     "task web",
+      "tui":     "task run",
+      "dev":     "task dev",
+      "test":    "task test",
+      "migrate": "task db:migrate",
+      "seed":    "task db:seed"
     }
   }
 }
