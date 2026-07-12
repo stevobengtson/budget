@@ -7,13 +7,13 @@ import (
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/paydown"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/pkg/shadcntempl/badge"
-	"github.com/sbengtson/budget/pkg/shadcntempl/button"
-	"github.com/sbengtson/budget/pkg/shadcntempl/card"
-	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
-	"github.com/sbengtson/budget/pkg/shadcntempl/input"
-	"github.com/sbengtson/budget/pkg/shadcntempl/label"
-	"github.com/sbengtson/budget/pkg/shadcntempl/table"
+	"github.com/templui/templui/components/badge"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/label"
+	"github.com/templui/templui/components/table"
 )
 
 // PaydownPageSize is the number of schedule rows shown per paginated
@@ -44,14 +44,14 @@ templ PaydownPage(d PaydownData) {
 					Horizon (months)
 				}
 				@input.Input(input.Props{
-					ID:    "pd-horizon",
-					Name:  "horizon",
-					Type:  "number",
-					Value: strconv.Itoa(d.Horizon),
-					Class: "w-24 tabular-nums",
-					Attrs: templ.Attributes{"min": "12", "max": "360", "step": "12"},
+					ID:         "pd-horizon",
+					Name:       "horizon",
+					Type:       input.TypeNumber,
+					Value:      strconv.Itoa(d.Horizon),
+					Class:      "w-24 tabular-nums",
+					Attributes: templ.Attributes{"min": "12", "max": "360", "step": "12"},
 				})
-				@button.Button(button.Props{Type: "submit", Size: button.SizeSmall, Variant: button.VariantOutline}) {
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}) {
 					apply
 				}
 			</form>
@@ -113,8 +113,8 @@ templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, pag
 				<div class="flex flex-wrap items-center gap-2 lg:ml-auto">
 					@button.Button(button.Props{
 						Variant: button.VariantOutline,
-						Size:    button.SizeSmall,
-						Attrs: templ.Attributes{
+						Size:    button.SizeSm,
+						Attributes: templ.Attributes{
 							"hx-get":    fmt.Sprintf("/paydown/%d/payment-form", acct.ID),
 							"hx-target": "#modal",
 							"hx-swap":   "innerHTML",
@@ -124,8 +124,8 @@ templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, pag
 					}
 					@button.Button(button.Props{
 						Variant: button.VariantOutline,
-						Size:    button.SizeSmall,
-						Attrs: templ.Attributes{
+						Size:    button.SizeSm,
+						Attributes: templ.Attributes{
 							"hx-get":    fmt.Sprintf("/paydown/%d/category-form", acct.ID),
 							"hx-target": "#modal",
 							"hx-swap":   "innerHTML",
@@ -135,8 +135,8 @@ templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, pag
 					}
 					@button.Button(button.Props{
 						Variant: button.VariantDestructive,
-						Size:    button.SizeSmall,
-						Attrs: templ.Attributes{
+						Size:    button.SizeSm,
+						Attributes: templ.Attributes{
 							"hx-post":    fmt.Sprintf("/paydown/%d/exclude", acct.ID),
 							"hx-confirm": "Remove from paydown?",
 						},
@@ -179,26 +179,26 @@ templ PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) {
 		rows := p.Rows[start:end]
 	}}
 	@paydownSpinner(p.AccountID)
-	@table.Table(table.Props{}) {
-		@table.Header(table.Props{}) {
-			@table.Row(table.Props{}) {
-				@table.Head(table.Props{}) { Month }
-				@table.Head(table.Props{Class: "text-right"}) { Interest }
-				@table.Head(table.Props{Class: "text-right"}) { Payment }
-				@table.Head(table.Props{Class: "hidden md:table-cell"}) { Source }
-				@table.Head(table.Props{Class: "text-right"}) { Balance }
+	@table.Table() {
+		@table.Header() {
+			@table.Row() {
+				@table.Head() { Month }
+				@table.Head(table.HeadProps{Class: "text-right"}) { Interest }
+				@table.Head(table.HeadProps{Class: "text-right"}) { Payment }
+				@table.Head(table.HeadProps{Class: "hidden md:table-cell"}) { Source }
+				@table.Head(table.HeadProps{Class: "text-right"}) { Balance }
 			}
 		}
-		@table.Body(table.Props{}) {
+		@table.Body() {
 			for _, r := range rows {
-				@table.Row(table.Props{}) {
-					@table.Cell(table.Props{Class: "whitespace-nowrap"}) { { r.Month.Format("Jan 2006") } }
-					@table.Cell(table.Props{Class: "text-right tabular-nums text-red-500"}) { { money.Format(r.InterestCents) } }
-					@table.Cell(table.Props{Class: "text-right tabular-nums text-emerald-500"}) { { money.Format(r.PaymentCents) } }
-					@table.Cell(table.Props{Class: "hidden md:table-cell"}) {
+				@table.Row() {
+					@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) { { r.Month.Format("Jan 2006") } }
+					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-red-500"}) { { money.Format(r.InterestCents) } }
+					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-emerald-500"}) { { money.Format(r.PaymentCents) } }
+					@table.Cell(table.CellProps{Class: "hidden md:table-cell"}) {
 						@PaydownSource(r.PaymentSource)
 					}
-					@table.Cell(table.Props{Class: "text-right tabular-nums"}) { { money.Format(r.BalanceCents) } }
+					@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) { { money.Format(r.BalanceCents) } }
 				}
 			}
 		}
@@ -238,8 +238,8 @@ templ paydownPagerLink(acctID int64, horizon, target int, enabled bool) {
 	if enabled {
 		@button.Button(button.Props{
 			Variant: button.VariantOutline,
-			Size:    button.SizeSmall,
-			Attrs: templ.Attributes{
+			Size:    button.SizeSm,
+			Attributes: templ.Attributes{
 				"hx-get":       fmt.Sprintf("/paydown/%d/rows?horizon=%d&page=%d", acctID, horizon, target),
 				"hx-target":    fmt.Sprintf("#pd-rows-%d", acctID),
 				"hx-swap":      "innerHTML",
@@ -251,7 +251,7 @@ templ paydownPagerLink(acctID int64, horizon, target int, enabled bool) {
 	} else {
 		@button.Button(button.Props{
 			Variant:  button.VariantOutline,
-			Size:     button.SizeSmall,
+			Size:     button.SizeSm,
 			Disabled: true,
 		}) {
 			{ children... }
@@ -272,9 +272,9 @@ templ PaydownSource(s paydown.PaymentSource) {
 // PaymentModal renders a centered card with a single-input form for
 // updating the fallback monthly payment on an account.
 templ PaymentModal(acct store.AccountWithBalance) {
-	@dialog.Content(dialog.Props{}) {
-		@dialog.Header(dialog.Props{}) {
-			@dialog.Title(dialog.Props{}) {
+	@dialogPanel("") {
+		@dialog.Header() {
+			@dialog.Title() {
 				Edit monthly payment — { acct.Name }
 			}
 		}
@@ -287,7 +287,7 @@ templ PaymentModal(acct store.AccountWithBalance) {
 						Value:       money.Format(*acct.MonthlyPaymentCents),
 						Placeholder: "200.00",
 						Class:       "tabular-nums",
-						Attrs:       templ.Attributes{"autofocus": ""},
+						Attributes:  templ.Attributes{"autofocus": ""},
 					})
 				} else {
 					@input.Input(input.Props{
@@ -295,7 +295,7 @@ templ PaymentModal(acct store.AccountWithBalance) {
 						Name:        "amount",
 						Placeholder: "200.00",
 						Class:       "tabular-nums",
-						Attrs:       templ.Attributes{"autofocus": ""},
+						Attributes:  templ.Attributes{"autofocus": ""},
 					})
 				}
 			}
@@ -303,11 +303,11 @@ templ PaymentModal(acct store.AccountWithBalance) {
 				Leave blank to clear. The amount is used for any month that has no spent
 				or assigned data in the linked category.
 			</p>
-			@dialog.Footer(dialog.Props{}) {
+			@dialog.Footer() {
 				@button.Button(button.Props{
 					Variant: button.VariantOutline,
 					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
 					cancel
 				}
@@ -325,9 +325,9 @@ templ PaymentModal(acct store.AccountWithBalance) {
 // group), which the shared selectbox helper doesn't model, so we emit
 // the markup directly using selectbox's class signature.
 templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups []store.CategoryGroup) {
-	@dialog.Content(dialog.Props{}) {
-		@dialog.Header(dialog.Props{}) {
-			@dialog.Title(dialog.Props{}) {
+	@dialogPanel("") {
+		@dialog.Header() {
+			@dialog.Title() {
 				Link payment category — { acct.Name }
 			}
 		}
@@ -358,11 +358,11 @@ templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups
 				For each projected month the engine picks <strong>spent</strong> in this
 				category, then <strong>assigned</strong>, then the default monthly payment.
 			</p>
-			@dialog.Footer(dialog.Props{}) {
+			@dialog.Footer() {
 				@button.Button(button.Props{
 					Variant: button.VariantOutline,
 					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
 					cancel
 				}

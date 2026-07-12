@@ -5,12 +5,11 @@ import (
 	"strconv"
 
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/pkg/shadcntempl/badge"
-	"github.com/sbengtson/budget/pkg/shadcntempl/button"
-	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
-	"github.com/sbengtson/budget/pkg/shadcntempl/input"
-	"github.com/sbengtson/budget/pkg/shadcntempl/selectbox"
-	"github.com/sbengtson/budget/pkg/shadcntempl/table"
+	"github.com/templui/templui/components/badge"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/table"
 )
 
 type CategoriesData struct {
@@ -36,7 +35,7 @@ templ CategoriesPage(d CategoriesData) {
 				Required:    true,
 				Class:       "w-64",
 			})
-			@button.Button(button.Props{Type: "submit", Size: button.SizeSmall}) {
+			@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
 				+ group
 			}
 		</form>
@@ -45,16 +44,16 @@ templ CategoriesPage(d CategoriesData) {
 			<h2 class="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
 				{ g.Name }
 			</h2>
-			@table.Table(table.Props{}) {
-				@table.Header(table.Props{}) {
-					@table.Row(table.Props{}) {
-						@table.Head(table.Props{Class: "w-[45%]"}) { Name }
-						@table.Head(table.Props{Class: "w-[20%] text-right"}) { Goal }
-						@table.Head(table.Props{Class: "w-[20%]"}) { Due }
-						@table.Head(table.Props{Class: "w-[15%]"}) { }
+			@table.Table() {
+				@table.Header() {
+					@table.Row() {
+						@table.Head(table.HeadProps{Class: "w-[45%]"}) { Name }
+						@table.Head(table.HeadProps{Class: "w-[20%] text-right"}) { Goal }
+						@table.Head(table.HeadProps{Class: "w-[20%]"}) { Due }
+						@table.Head(table.HeadProps{Class: "w-[15%]"}) { }
 					}
 				}
-				@table.Body(table.Props{}) {
+				@table.Body() {
 					for _, c := range d.Cats {
 						if c.GroupID == g.ID {
 							@CategoryRow(c)
@@ -81,11 +80,11 @@ templ CategoriesPage(d CategoriesData) {
 					Class:       "w-44 tabular-nums",
 				})
 				@input.Input(input.Props{
-					Type:  "date",
+					Type:  input.TypeDate,
 					Name:  "goal_due",
 					Class: "w-44",
 				})
-				@button.Button(button.Props{Type: "submit", Size: button.SizeSmall, Variant: button.VariantOutline}) {
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}) {
 					+ add
 				}
 			</form>
@@ -94,8 +93,8 @@ templ CategoriesPage(d CategoriesData) {
 }
 
 templ CategoryRow(c store.Category) {
-	@table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("cat-row-%d", c.ID)}}) {
-		@table.Cell(table.Props{}) {
+	@table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("cat-row-%d", c.ID)}}) {
+		@table.Cell() {
 			<span class="font-medium">{ c.Name }</span>
 			if c.IsIncome {
 				<span class="ml-2">
@@ -105,23 +104,24 @@ templ CategoryRow(c store.Category) {
 				</span>
 			}
 		}
-		@table.Cell(table.Props{Class: "text-right tabular-nums text-muted-foreground"}) {
+		@table.Cell(table.CellProps{Class: "text-right tabular-nums text-muted-foreground"}) {
 			if c.GoalCents != nil {
 				${ formatCents(*c.GoalCents) }
 			}
 		}
-		@table.Cell(table.Props{Class: "text-muted-foreground"}) {
+		@table.Cell(table.CellProps{Class: "text-muted-foreground"}) {
 			if c.GoalDueDate != nil {
 				{ c.GoalDueDate.Format("2006-01-02") }
 			}
 		}
-		@table.Cell(table.Props{Class: "whitespace-nowrap"}) {
+		@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
 			if !c.IsIncome {
-				@button.Link(fmt.Sprintf("/categories/%d/edit", c.ID), button.Props{
+				@button.Button(button.Props{
+					Href:    fmt.Sprintf("/categories/%d/edit", c.ID),
 					Variant: button.VariantOutline,
-					Size:    button.SizeSmall,
+					Size:    button.SizeSm,
 					Class:   "mr-1",
-					Attrs: templ.Attributes{
+					Attributes: templ.Attributes{
 						"hx-get":    fmt.Sprintf("/categories/%d/edit", c.ID),
 						"hx-target": "#modal",
 						"hx-swap":   "innerHTML",
@@ -131,8 +131,8 @@ templ CategoryRow(c store.Category) {
 				}
 				@button.Button(button.Props{
 					Variant: button.VariantDestructive,
-					Size:    button.SizeSmall,
-					Attrs: templ.Attributes{
+					Size:    button.SizeSm,
+					Attributes: templ.Attributes{
 						"hx-post":    fmt.Sprintf("/categories/%d/archive", c.ID),
 						"hx-confirm": "Archive this category?",
 						"hx-target":  fmt.Sprintf("#cat-row-%d", c.ID),
@@ -159,30 +159,30 @@ type CategoryFormData struct {
 }
 
 templ CategoryForm(d CategoryFormData) {
-	@dialog.Content(dialog.Props{}) {
+	@dialogPanel("") {
 		<form
 			hx-put={ fmt.Sprintf("/categories/%d", d.ID) }
 			hx-target="body"
 			hx-swap="outerHTML"
 			class="grid gap-4"
 		>
-			@dialog.Header(dialog.Props{}) {
-				@dialog.Title(dialog.Props{}) {
+			@dialog.Header() {
+				@dialog.Title() {
 					Edit category
 				}
 			}
 			<div class="grid gap-3">
 				@formRow("cat-name", "Name") {
 					@input.Input(input.Props{
-						ID:       "cat-name",
-						Name:     "name",
-						Value:    d.Name,
-						Required: true,
-						Attrs:    templ.Attributes{"autofocus": ""},
+						ID:         "cat-name",
+						Name:       "name",
+						Value:      d.Name,
+						Required:   true,
+						Attributes: templ.Attributes{"autofocus": ""},
 					})
 				}
 				@formRow("cat-group", "Group") {
-					@selectbox.Select(selectbox.Props{
+					@SelectField(SelectFieldProps{
 						ID:   "cat-group",
 						Name: "group_id",
 					}, categoryGroupOptions(d.Groups, d.GroupID))
@@ -200,18 +200,18 @@ templ CategoryForm(d CategoryFormData) {
 					@formRow("cat-due", "Goal due") {
 						@input.Input(input.Props{
 							ID:    "cat-due",
-							Type:  "date",
+							Type:  input.TypeDate,
 							Name:  "goal_due",
 							Value: d.GoalDue,
 						})
 					}
 				</div>
 			</div>
-			@dialog.Footer(dialog.Props{}) {
+			@dialog.Footer() {
 				@button.Button(button.Props{
 					Variant: button.VariantOutline,
 					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
 					cancel
 				}
@@ -223,10 +223,10 @@ templ CategoryForm(d CategoryFormData) {
 	}
 }
 
-func categoryGroupOptions(groups []store.CategoryGroup, selected int64) []selectbox.Option {
-	out := make([]selectbox.Option, 0, len(groups))
+func categoryGroupOptions(groups []store.CategoryGroup, selected int64) []Opt {
+	out := make([]Opt, 0, len(groups))
 	for _, g := range groups {
-		out = append(out, selectbox.Option{
+		out = append(out, Opt{
 			Value:    strconv.FormatInt(g.ID, 10),
 			Label:    g.Name,
 			Selected: g.ID == selected,

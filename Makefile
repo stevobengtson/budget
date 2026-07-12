@@ -41,7 +41,6 @@ $(TAILWIND):
 
 templ: tools
 	$(TEMPL) generate -path ./internal/web
-	$(TEMPL) generate -path ./pkg/shadcntempl
 
 css: $(TAILWIND)
 	$(TAILWIND) -i $(CSS_SRC) -o $(CSS_OUT) --minify

@@ -7,12 +7,11 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/pkg/shadcntempl/button"
-	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
-	"github.com/sbengtson/budget/pkg/shadcntempl/input"
-	"github.com/sbengtson/budget/pkg/shadcntempl/label"
-	"github.com/sbengtson/budget/pkg/shadcntempl/selectbox"
-	"github.com/sbengtson/budget/pkg/shadcntempl/table"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/label"
+	"github.com/templui/templui/components/table"
 )
 
 type TransactionsData struct {
@@ -39,9 +38,10 @@ templ TransactionsPage(d TransactionsData) {
 templ TransactionsBody(d TransactionsData) {
 	<div class="mb-4 flex items-center justify-between gap-4">
 		<h1 class="text-2xl font-semibold tracking-tight">Transactions <span class="ml-2 text-sm font-normal text-muted-foreground">({ strconv.Itoa(d.Total) })</span></h1>
-		@button.Link("/transactions/new", button.Props{
-			Size: button.SizeSmall,
-			Attrs: templ.Attributes{
+		@button.Button(button.Props{
+			Href: "/transactions/new",
+			Size: button.SizeSm,
+			Attributes: templ.Attributes{
 				"hx-get":    "/transactions/new",
 				"hx-target": "#modal",
 				"hx-swap":   "innerHTML",
@@ -53,13 +53,13 @@ templ TransactionsBody(d TransactionsData) {
 
 	<div class="mb-4 flex flex-wrap items-center gap-3">
 		<div class="flex items-center gap-2">
-			@button.Link(txMonthHref(d, d.PrevMonth), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+			@button.Button(button.Props{Href: txMonthHref(d, d.PrevMonth), Variant: button.VariantOutline, Size: button.SizeSm}) {
 				‹ prev
 			}
-			@button.Link(txMonthHref(d, d.Today), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+			@button.Button(button.Props{Href: txMonthHref(d, d.Today), Variant: button.VariantOutline, Size: button.SizeSm}) {
 				today
 			}
-			@button.Link(txMonthHref(d, d.NextMonth), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+			@button.Button(button.Props{Href: txMonthHref(d, d.NextMonth), Variant: button.VariantOutline, Size: button.SizeSm}) {
 				next ›
 			}
 		</div>
@@ -73,31 +73,31 @@ templ TransactionsBody(d TransactionsData) {
 			@label.Label(label.Props{For: "tx-account-filter", Class: "text-muted-foreground"}) {
 				Account
 			}
-			@selectbox.Select(selectbox.Props{
-				ID:    "tx-account-filter",
-				Name:  "account",
-				Class: "w-48",
-				Attrs: templ.Attributes{"onchange": "this.form.submit()"},
+			@SelectField(SelectFieldProps{
+				ID:         "tx-account-filter",
+				Name:       "account",
+				Class:      "w-48",
+				Attributes: templ.Attributes{"onchange": "this.form.submit()"},
 			}, accountFilterOptions(d.Accounts, d.FilterAccount))
 			<noscript>
-				@button.Button(button.Props{Type: "submit", Size: button.SizeSmall, Variant: button.VariantOutline}) {
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}) {
 					filter
 				}
 			</noscript>
 		</form>
 	</div>
 
-	@table.Table(table.Props{}) {
-		@table.Header(table.Props{}) {
-			@table.Row(table.Props{}) {
-				@table.Head(table.Props{}) { Date }
-				@table.Head(table.Props{}) { Account }
-				@table.Head(table.Props{}) { Category / Transfer }
-				@table.Head(table.Props{}) { Payee }
-				@table.Head(table.Props{Class: "text-right"}) { Outflow }
-				@table.Head(table.Props{Class: "text-right"}) { Inflow }
-				@table.Head(table.Props{Class: "text-center"}) { ✓ }
-				@table.Head(table.Props{}) { }
+	@table.Table() {
+		@table.Header() {
+			@table.Row() {
+				@table.Head() { Date }
+				@table.Head() { Account }
+				@table.Head() { Category / Transfer }
+				@table.Head() { Payee }
+				@table.Head(table.HeadProps{Class: "text-right"}) { Outflow }
+				@table.Head(table.HeadProps{Class: "text-right"}) { Inflow }
+				@table.Head(table.HeadProps{Class: "text-center"}) { ✓ }
+				@table.Head() { }
 			}
 		}
 		<tbody id="tx-rows" class="[&_tr:last-child]:border-0">
@@ -105,7 +105,7 @@ templ TransactionsBody(d TransactionsData) {
 				if i > 0 && !sameDay(d.Rows[i-1].Date, t.Date) {
 					<tr><td colspan="8" class="h-2 bg-muted/30 p-0"></td></tr>
 				}
-				@TransactionRow(t, d.Accounts, d.Categories)
+				@TransactionRow(t, d.Accounts, d.Categories, false)
 			}
 		</tbody>
 	}
@@ -113,13 +113,13 @@ templ TransactionsBody(d TransactionsData) {
 	if d.Total > d.PageSize {
 		<div class="mt-4 flex items-center gap-3 text-sm text-muted-foreground">
 			if d.Page > 1 {
-				@button.Link(transactionsPageHref(d, d.Page-1), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				@button.Button(button.Props{Href: transactionsPageHref(d, d.Page-1), Variant: button.VariantOutline, Size: button.SizeSm}) {
 					‹ prev
 				}
 			}
 			<span>page { strconv.Itoa(d.Page) } of { strconv.Itoa((d.Total + d.PageSize - 1) / d.PageSize) }</span>
 			if d.Page * d.PageSize < d.Total {
-				@button.Link(transactionsPageHref(d, d.Page+1), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				@button.Button(button.Props{Href: transactionsPageHref(d, d.Page+1), Variant: button.VariantOutline, Size: button.SizeSm}) {
 					next ›
 				}
 			}
@@ -127,39 +127,44 @@ templ TransactionsBody(d TransactionsData) {
 	}
 }
 
-templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
-	@table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("tx-%d", t.ID)}}) {
-		@table.Cell(table.Props{Class: "whitespace-nowrap"}) {
+templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category, oob bool) {
+	{{ attrs := templ.Attributes{"id": fmt.Sprintf("tx-%d", t.ID)} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	@table.Row(table.RowProps{Attributes: attrs}) {
+		@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
 			{ t.Date.Format("Jan 2, 2006") }
 		}
-		@table.Cell(table.Props{}) { { accountName(accts, t.AccountID) } }
-		@table.Cell(table.Props{}) {
+		@table.Cell() { { accountName(accts, t.AccountID) } }
+		@table.Cell() {
 			@TxCategoryCell(t, accts, cats)
 		}
-		@table.Cell(table.Props{}) {
+		@table.Cell() {
 			if t.Payee != nil {
 				{ *t.Payee }
 			}
 		}
-		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+		@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
 			if t.OutflowCents > 0 {
 				<span class="text-red-500">{ money.Format(t.OutflowCents) }</span>
 			}
 		}
-		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+		@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
 			if t.InflowCents > 0 {
 				<span class="text-emerald-500">{ money.Format(t.InflowCents) }</span>
 			}
 		}
-		@table.Cell(table.Props{Class: "text-center"}) {
+		@table.Cell(table.CellProps{Class: "text-center"}) {
 			@txClearCell(t)
 		}
-		@table.Cell(table.Props{Class: "whitespace-nowrap"}) {
-			@button.Link(fmt.Sprintf("/transactions/%d/edit", t.ID), button.Props{
+		@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
+			@button.Button(button.Props{
+				Href:    fmt.Sprintf("/transactions/%d/edit", t.ID),
 				Variant: button.VariantOutline,
-				Size:    button.SizeSmall,
+				Size:    button.SizeSm,
 				Class:   "mr-1",
-				Attrs: templ.Attributes{
+				Attributes: templ.Attributes{
 					"hx-get":    fmt.Sprintf("/transactions/%d/edit", t.ID),
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
@@ -169,8 +174,8 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 			}
 			@button.Button(button.Props{
 				Variant: button.VariantDestructive,
-				Size:    button.SizeSmall,
-				Attrs: templ.Attributes{
+				Size:    button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-delete":  fmt.Sprintf("/transactions/%d", t.ID),
 					"hx-target":  fmt.Sprintf("#tx-%d", t.ID),
 					"hx-swap":    "outerHTML",
@@ -183,15 +188,29 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 	}
 }
 
+// TxUpdateResult is the response to an inline edit save. It replaces the edited
+// row (primary swap into #tx-<id>) and, for a transfer, refreshes the paired
+// leg via an out-of-band swap — wrapped in a <template> so the bare <tr>
+// survives the browser's table-parsing rules. It also empties the modal.
+templ TxUpdateResult(t store.Transaction, pair *store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
+	@TransactionRow(t, accts, cats, false)
+	if pair != nil {
+		<template>
+			@TransactionRow(*pair, accts, cats, true)
+		</template>
+	}
+	<div id="modal" class="modal-mount" hx-swap-oob="true"></div>
+}
+
 templ txClearCell(t store.Transaction) {
 	<form hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" class="inline">
 		if t.Cleared {
 			@button.Button(button.Props{
 				Type:    "submit",
 				Variant: button.VariantGhost,
-				Size:    button.SizeSmall,
+				Size:    button.SizeSm,
 				Class:   "bg-emerald-600 text-white font-bold ring-1 ring-emerald-500/40 hover:bg-emerald-600/90 hover:text-white",
-				Attrs:   templ.Attributes{"title": "Cleared — click to unclear"},
+				Attributes:   templ.Attributes{"title": "Cleared — click to unclear"},
 			}) {
 				✓
 			}
@@ -199,9 +218,9 @@ templ txClearCell(t store.Transaction) {
 			@button.Button(button.Props{
 				Type:    "submit",
 				Variant: button.VariantOutline,
-				Size:    button.SizeSmall,
+				Size:    button.SizeSm,
 				Class:   "text-muted-foreground",
-				Attrs:   templ.Attributes{"title": "Not cleared — click to clear"},
+				Attributes:   templ.Attributes{"title": "Not cleared — click to clear"},
 			}) {
 				·
 			}
@@ -231,20 +250,22 @@ templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats
 }
 
 templ TransactionForm(d TxFormData) {
-	@dialog.Content(dialog.Props{Class: "max-w-xl"}) {
+	@dialogPanel("max-w-xl") {
 		<form
 			id="tx-form-inner"
 			if d.Editing {
 				hx-put={ fmt.Sprintf("/transactions/%d", d.ID) }
+				hx-target={ fmt.Sprintf("#tx-%d", d.ID) }
+				hx-swap="outerHTML"
 			} else {
 				hx-post="/transactions"
+				hx-target="#tx-rows"
+				hx-swap="innerHTML"
 			}
-			hx-target="#tx-rows"
-			hx-swap="innerHTML"
 			class="grid gap-4"
 		>
-			@dialog.Header(dialog.Props{}) {
-				@dialog.Title(dialog.Props{}) {
+			@dialog.Header() {
+				@dialog.Title() {
 					if d.Editing {
 						Edit transaction
 					} else {
@@ -254,13 +275,13 @@ templ TransactionForm(d TxFormData) {
 			}
 			<div class="grid gap-3">
 				@formRow("tx-date", "Date") {
-					@input.Input(input.Props{ID: "tx-date", Type: "date", Name: "date", Value: d.Date, Required: true})
+					@input.Input(input.Props{ID: "tx-date", Type: input.TypeDate, Name: "date", Value: d.Date, Required: true})
 				}
 				@formRow("tx-account", "Account") {
-					@selectbox.Select(selectbox.Props{ID: "tx-account", Name: "account_id", Required: true}, accountOptions(d.Accounts, d.AccountID))
+					@SelectField(SelectFieldProps{ID: "tx-account", Name: "account_id", Required: true}, accountOptions(d.Accounts, d.AccountID))
 				}
 				@formRow("tx-category", "Category") {
-					@selectbox.Select(selectbox.Props{ID: "tx-category", Name: "category_id", Placeholder: "(none)"}, categoryOptions(d.Categories, d.CategoryID))
+					@SelectField(SelectFieldProps{ID: "tx-category", Name: "category_id", Placeholder: "(none)"}, categoryOptions(d.Categories, d.CategoryID))
 				}
 				@formRow("tx-payee", "Payee") {
 					@input.Input(input.Props{ID: "tx-payee", Name: "payee", Value: d.Payee})
@@ -277,14 +298,14 @@ templ TransactionForm(d TxFormData) {
 					}
 				</div>
 				@formRow("tx-transfer", "Transfer to") {
-					@selectbox.Select(selectbox.Props{ID: "tx-transfer", Name: "transfer_to", Placeholder: "(none)"}, transferOptions(d.Accounts, d.TransferAccountID))
+					@SelectField(SelectFieldProps{ID: "tx-transfer", Name: "transfer_to", Placeholder: "(none)"}, transferOptions(d.Accounts, d.TransferAccountID))
 				}
 			</div>
-			@dialog.Footer(dialog.Props{}) {
+			@dialog.Footer() {
 				@button.Button(button.Props{
 					Variant: button.VariantOutline,
 					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
 					cancel
 				}
@@ -322,11 +343,11 @@ type TxFormData struct {
 	Categories        []store.Category
 }
 
-func accountFilterOptions(accts []store.AccountWithBalance, selected *int64) []selectbox.Option {
-	out := make([]selectbox.Option, 0, len(accts)+1)
-	out = append(out, selectbox.Option{Value: "", Label: "All accounts", Selected: selected == nil})
+func accountFilterOptions(accts []store.AccountWithBalance, selected *int64) []Opt {
+	out := make([]Opt, 0, len(accts)+1)
+	out = append(out, Opt{Value: "", Label: "All accounts", Selected: selected == nil})
 	for _, a := range accts {
-		out = append(out, selectbox.Option{
+		out = append(out, Opt{
 			Value:    strconv.FormatInt(a.ID, 10),
 			Label:    a.Name,
 			Selected: selected != nil && *selected == a.ID,
@@ -335,10 +356,10 @@ func accountFilterOptions(accts []store.AccountWithBalance, selected *int64) []s
 	return out
 }
 
-func accountOptions(accts []store.AccountWithBalance, selectedID int64) []selectbox.Option {
-	out := make([]selectbox.Option, 0, len(accts))
+func accountOptions(accts []store.AccountWithBalance, selectedID int64) []Opt {
+	out := make([]Opt, 0, len(accts))
 	for _, a := range accts {
-		out = append(out, selectbox.Option{
+		out = append(out, Opt{
 			Value:    strconv.FormatInt(a.ID, 10),
 			Label:    a.Name,
 			Selected: a.ID == selectedID,
@@ -347,10 +368,10 @@ func accountOptions(accts []store.AccountWithBalance, selectedID int64) []select
 	return out
 }
 
-func categoryOptions(cats []store.Category, selected *int64) []selectbox.Option {
-	out := make([]selectbox.Option, 0, len(cats))
+func categoryOptions(cats []store.Category, selected *int64) []Opt {
+	out := make([]Opt, 0, len(cats))
 	for _, c := range cats {
-		out = append(out, selectbox.Option{
+		out = append(out, Opt{
 			Value:    strconv.FormatInt(c.ID, 10),
 			Label:    c.Name,
 			Selected: selected != nil && *selected == c.ID,
@@ -359,10 +380,10 @@ func categoryOptions(cats []store.Category, selected *int64) []selectbox.Option 
 	return out
 }
 
-func transferOptions(accts []store.AccountWithBalance, selected *int64) []selectbox.Option {
-	out := make([]selectbox.Option, 0, len(accts))
+func transferOptions(accts []store.AccountWithBalance, selected *int64) []Opt {
+	out := make([]Opt, 0, len(accts))
 	for _, a := range accts {
-		out = append(out, selectbox.Option{
+		out = append(out, Opt{
 			Value:    strconv.FormatInt(a.ID, 10),
 			Label:    a.Name,
 			Selected: selected != nil && *selected == a.ID,

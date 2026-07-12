@@ -14,14 +14,13 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/pkg/shadcntempl/button"
-	"github.com/sbengtson/budget/pkg/shadcntempl/card"
-	"github.com/sbengtson/budget/pkg/shadcntempl/checkbox"
-	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
-	"github.com/sbengtson/budget/pkg/shadcntempl/input"
-	"github.com/sbengtson/budget/pkg/shadcntempl/label"
-	"github.com/sbengtson/budget/pkg/shadcntempl/selectbox"
-	"github.com/sbengtson/budget/pkg/shadcntempl/table"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/checkbox"
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/label"
+	"github.com/templui/templui/components/table"
 )
 
 type AccountsData struct {
@@ -88,9 +87,10 @@ func AccountsPage(d AccountsData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Link("/accounts/new", button.Props{
-				Size: button.SizeSmall,
-				Attrs: templ.Attributes{
+			templ_7745c5c3_Err = button.Button(button.Props{
+				Href: "/accounts/new",
+				Size: button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-get":    "/accounts/new",
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
@@ -157,7 +157,7 @@ func AccountsPage(d AccountsData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Head(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -183,7 +183,7 @@ func AccountsPage(d AccountsData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Head(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -209,7 +209,7 @@ func AccountsPage(d AccountsData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Head(table.Props{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -235,7 +235,7 @@ func AccountsPage(d AccountsData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Head(table.Props{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -261,7 +261,7 @@ func AccountsPage(d AccountsData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Head(table.Props{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -287,7 +287,7 @@ func AccountsPage(d AccountsData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Head(table.Props{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -295,19 +295,19 @@ func AccountsPage(d AccountsData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = table.Head(table.Props{}).Render(ctx, templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Head().Render(ctx, templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Row(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = table.Header(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = table.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -335,13 +335,13 @@ func AccountsPage(d AccountsData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = table.Body(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = table.Body().Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Table(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Table().Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -592,7 +592,7 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(a.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/accounts.templ`, Line: 92, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/accounts.templ`, Line: 92, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 				if templ_7745c5c3_Err != nil {
@@ -600,7 +600,7 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "font-medium"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "font-medium"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -623,7 +623,7 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(string(a.Type))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/accounts.templ`, Line: 93, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/accounts.templ`, Line: 93, Col: 81}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {
@@ -631,7 +631,7 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -657,7 +657,7 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-right tabular-nums"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var29), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right tabular-nums"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var29), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -690,7 +690,7 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-right tabular-nums"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right tabular-nums"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -723,7 +723,7 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-right tabular-nums"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var32), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right tabular-nums"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var32), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -764,7 +764,7 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-right tabular-nums"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var34), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right tabular-nums"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var34), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -802,11 +802,12 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Link(fmt.Sprintf("/accounts/%d/edit", a.ID), button.Props{
+				templ_7745c5c3_Err = button.Button(button.Props{
+					Href:    fmt.Sprintf("/accounts/%d/edit", a.ID),
 					Variant: button.VariantOutline,
-					Size:    button.SizeSmall,
+					Size:    button.SizeSm,
 					Class:   "mr-1",
-					Attrs: templ.Attributes{
+					Attributes: templ.Attributes{
 						"hx-get":    fmt.Sprintf("/accounts/%d/edit", a.ID),
 						"hx-target": "#modal",
 						"hx-swap":   "innerHTML",
@@ -839,8 +840,8 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 				})
 				templ_7745c5c3_Err = button.Button(button.Props{
 					Variant: button.VariantDestructive,
-					Size:    button.SizeSmall,
-					Attrs: templ.Attributes{
+					Size:    button.SizeSm,
+					Attributes: templ.Attributes{
 						"hx-post":    fmt.Sprintf("/accounts/%d/archive", a.ID),
 						"hx-target":  fmt.Sprintf("#acct-%d", a.ID),
 						"hx-swap":    "outerHTML",
@@ -852,13 +853,13 @@ func AccountRow(a store.AccountWithBalance) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "whitespace-nowrap"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var36), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "whitespace-nowrap"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var36), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("acct-%d", a.ID)}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("acct-%d", a.ID)}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -925,7 +926,7 @@ func AccountForm(d AccountFormData) templ.Component {
 				var templ_7745c5c3_Var41 string
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/accounts/%d", d.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/accounts.templ`, Line: 160, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/accounts.templ`, Line: 161, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -982,13 +983,13 @@ func AccountForm(d AccountFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Title(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var43), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Title().Render(templ.WithChildren(ctx, templ_7745c5c3_Var43), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Header(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var42), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var42), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1030,7 +1031,7 @@ func AccountForm(d AccountFormData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = selectbox.Select(selectbox.Props{ID: "acct-type", Name: "type"}, accountTypeOptions(d.Type)).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = SelectField(SelectFieldProps{ID: "acct-type", Name: "type"}, accountTypeOptions(d.Type)).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1139,6 +1140,7 @@ func AccountForm(d AccountFormData) templ.Component {
 			templ_7745c5c3_Err = checkbox.Checkbox(checkbox.Props{
 				ID:      "acct-paydown",
 				Name:    "include_in_paydown",
+				Value:   "1",
 				Checked: d.IncludeInPaydown,
 			}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
@@ -1182,7 +1184,7 @@ func AccountForm(d AccountFormData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = selectbox.Select(selectbox.Props{
+				templ_7745c5c3_Err = SelectField(SelectFieldProps{
 					ID:          "acct-paycat",
 					Name:        "payment_category_id",
 					Placeholder: "(none)",
@@ -1231,9 +1233,9 @@ func AccountForm(d AccountFormData) templ.Component {
 					return nil
 				})
 				templ_7745c5c3_Err = button.Button(button.Props{
-					Variant: button.VariantOutline,
-					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Variant:    button.VariantOutline,
+					Type:       "button",
+					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var53), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -1266,7 +1268,7 @@ func AccountForm(d AccountFormData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Footer(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var52), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Footer().Render(templ.WithChildren(ctx, templ_7745c5c3_Var52), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1276,7 +1278,7 @@ func AccountForm(d AccountFormData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = dialog.Content(dialog.Props{Class: "max-w-xl"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var40), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = dialogPanel("max-w-xl").Render(templ.WithChildren(ctx, templ_7745c5c3_Var40), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1284,11 +1286,11 @@ func AccountForm(d AccountFormData) templ.Component {
 	})
 }
 
-func accountTypeOptions(selected string) []selectbox.Option {
+func accountTypeOptions(selected string) []Opt {
 	types := []string{"checking", "savings", "cash", "credit", "loan"}
-	out := make([]selectbox.Option, 0, len(types))
+	out := make([]Opt, 0, len(types))
 	for _, t := range types {
-		out = append(out, selectbox.Option{
+		out = append(out, Opt{
 			Value:    t,
 			Label:    t,
 			Selected: t == selected,
@@ -1297,10 +1299,10 @@ func accountTypeOptions(selected string) []selectbox.Option {
 	return out
 }
 
-func paymentCategoryOptions(cats []store.Category, selected *int64) []selectbox.Option {
-	out := make([]selectbox.Option, 0, len(cats))
+func paymentCategoryOptions(cats []store.Category, selected *int64) []Opt {
+	out := make([]Opt, 0, len(cats))
 	for _, c := range cats {
-		out = append(out, selectbox.Option{
+		out = append(out, Opt{
 			Value:    strconv.FormatInt(c.ID, 10),
 			Label:    c.Name,
 			Selected: selected != nil && *selected == c.ID,

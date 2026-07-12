@@ -60,12 +60,11 @@
   .htmx-request .htmx-indicator,
   .htmx-request.htmx-indicator { opacity: 1; }
 
-  /* Modal overlay carried over from the old legacy.css: the shadcntempl
-     `dialog.Content` component only renders the inner card and relies on this
-     host wrapper (#modal has class `modal-mount`) for the fixed, dimmed,
-     centered backdrop. htmx swaps a rendered fragment into #modal, and the
-     :not(:empty) guard keeps the overlay hidden until a modal is open. Remove
-     once dialogs no longer depend on shadcntempl. */
+  /* Modal overlay carried over from the old legacy.css: the app's dialog
+     partial only renders the inner card and relies on this host wrapper
+     (#modal has class `modal-mount`) for the fixed, dimmed, centered backdrop.
+     htmx swaps a rendered fragment into #modal, and the :not(:empty) guard
+     keeps the overlay hidden until a modal is open. */
   .modal-mount:not(:empty) {
     position: fixed;
     inset: 0;

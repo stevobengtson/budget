@@ -7,11 +7,11 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/pkg/shadcntempl/button"
-	"github.com/sbengtson/budget/pkg/shadcntempl/card"
-	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
-	"github.com/sbengtson/budget/pkg/shadcntempl/input"
-	"github.com/sbengtson/budget/pkg/shadcntempl/table"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/table"
 )
 
 type IncomeData struct {
@@ -30,13 +30,13 @@ templ IncomePage(d IncomeData) {
 		<div class="mb-4 flex items-center justify-between gap-4">
 			<h1 class="text-2xl font-semibold tracking-tight">Income · { incomeMonthLabel(d.Month) }</h1>
 			<div class="flex items-center gap-2">
-				@button.Link("/budget/income?month="+d.PrevMonth, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				@button.Button(button.Props{Href: "/budget/income?month=" + d.PrevMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
 					‹ prev
 				}
-				@button.Link("/budget/income?month="+d.Today, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				@button.Button(button.Props{Href: "/budget/income?month=" + d.Today, Variant: button.VariantOutline, Size: button.SizeSm}) {
 					today
 				}
-				@button.Link("/budget/income?month="+d.NextMonth, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+				@button.Button(button.Props{Href: "/budget/income?month=" + d.NextMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
 					next ›
 				}
 			</div>
@@ -56,8 +56,8 @@ templ IncomePage(d IncomeData) {
 			<div class="flex flex-wrap items-center gap-2">
 				@button.Button(button.Props{
 					Variant: button.VariantOutline,
-					Size:    button.SizeSmall,
-					Attrs: templ.Attributes{
+					Size:    button.SizeSm,
+					Attributes: templ.Attributes{
 						"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
 						"hx-confirm": "Copy all entries from the previous month into this one?",
 						"title":      "Copy every entry from " + d.PrevMonth + " into this month",
@@ -65,9 +65,10 @@ templ IncomePage(d IncomeData) {
 				}) {
 					← copy from prev
 				}
-				@button.Link("/budget/income/new?month="+d.Month, button.Props{
-					Size: button.SizeSmall,
-					Attrs: templ.Attributes{
+				@button.Button(button.Props{
+					Href: "/budget/income/new?month=" + d.Month,
+					Size: button.SizeSm,
+					Attributes: templ.Attributes{
 						"hx-get":    "/budget/income/new?month=" + d.Month,
 						"hx-target": "#modal",
 						"hx-swap":   "innerHTML",
@@ -83,12 +84,12 @@ templ IncomePage(d IncomeData) {
 				No income entries yet for this month. Add one with the <strong>+ new</strong> button.
 			</p>
 		} else {
-			@table.Table(table.Props{}) {
-				@table.Header(table.Props{}) {
-					@table.Row(table.Props{}) {
-						@table.Head(table.Props{}) { Source }
-						@table.Head(table.Props{Class: "text-right"}) { Amount }
-						@table.Head(table.Props{}) { }
+			@table.Table() {
+				@table.Header() {
+					@table.Row() {
+						@table.Head() { Source }
+						@table.Head(table.HeadProps{Class: "text-right"}) { Amount }
+						@table.Head() { }
 					}
 				}
 				<tbody id="income-rows" class="[&_tr:last-child]:border-0">
@@ -118,17 +119,18 @@ templ incomeStatSigned(label string, cents int64) {
 }
 
 templ IncomeRow(month string, r store.Income) {
-	@table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("income-%d", r.ID)}}) {
-		@table.Cell(table.Props{Class: "font-medium"}) { { r.Name } }
-		@table.Cell(table.Props{Class: "text-right tabular-nums text-emerald-500"}) {
+	@table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("income-%d", r.ID)}}) {
+		@table.Cell(table.CellProps{Class: "font-medium"}) { { r.Name } }
+		@table.Cell(table.CellProps{Class: "text-right tabular-nums text-emerald-500"}) {
 			{ money.Format(r.AmountCents) }
 		}
-		@table.Cell(table.Props{Class: "whitespace-nowrap"}) {
-			@button.Link(fmt.Sprintf("/budget/income/%d/edit?month=%s", r.ID, month), button.Props{
+		@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
+			@button.Button(button.Props{
+				Href:    fmt.Sprintf("/budget/income/%d/edit?month=%s", r.ID, month),
 				Variant: button.VariantOutline,
-				Size:    button.SizeSmall,
+				Size:    button.SizeSm,
 				Class:   "mr-1",
-				Attrs: templ.Attributes{
+				Attributes: templ.Attributes{
 					"hx-get":    fmt.Sprintf("/budget/income/%d/edit?month=%s", r.ID, month),
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
@@ -138,8 +140,8 @@ templ IncomeRow(month string, r store.Income) {
 			}
 			@button.Button(button.Props{
 				Variant: button.VariantDestructive,
-				Size:    button.SizeSmall,
-				Attrs: templ.Attributes{
+				Size:    button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-delete":  fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month),
 					"hx-target":  fmt.Sprintf("#income-%d", r.ID),
 					"hx-swap":    "outerHTML",
@@ -161,7 +163,7 @@ type IncomeFormData struct {
 }
 
 templ IncomeForm(d IncomeFormData) {
-	@dialog.Content(dialog.Props{}) {
+	@dialogPanel("") {
 		<form
 			if d.Editing {
 				hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", d.ID, d.Month) }
@@ -172,15 +174,15 @@ templ IncomeForm(d IncomeFormData) {
 			hx-swap="innerHTML"
 			class="grid gap-4"
 		>
-			@dialog.Header(dialog.Props{}) {
-				@dialog.Title(dialog.Props{}) {
+			@dialog.Header() {
+				@dialog.Title() {
 					if d.Editing {
 						Edit income
 					} else {
 						New income
 					}
 				}
-				@dialog.Description(dialog.Props{}) {
+				@dialog.Description() {
 					{ incomeMonthLabel(d.Month) }
 				}
 			}
@@ -192,7 +194,7 @@ templ IncomeForm(d IncomeFormData) {
 						Value:       d.Name,
 						Required:    true,
 						Placeholder: "Salary",
-						Attrs:       templ.Attributes{"autofocus": ""},
+						Attributes:  templ.Attributes{"autofocus": ""},
 					})
 				}
 				@formRow("income-amount", "Amount") {
@@ -205,11 +207,11 @@ templ IncomeForm(d IncomeFormData) {
 					})
 				}
 			</div>
-			@dialog.Footer(dialog.Props{}) {
+			@dialog.Footer() {
 				@button.Button(button.Props{
 					Variant: button.VariantOutline,
 					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
 					cancel
 				}

@@ -147,12 +147,29 @@ func (h *Handlers) TransactionsEdit(c *gin.Context) {
 }
 
 func (h *Handlers) TransactionsUpdate(c *gin.Context) {
+	ctx := c.Request.Context()
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err := h.upsertTransaction(c, id); err != nil {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	h.renderTxRows(c)
+	// Swap only the edited row (plus the paired transfer leg, if any) instead of
+	// re-rendering the whole list. If the row can't be reloaded, fall back to a
+	// full row refresh.
+	t, err := h.store.GetTransaction(ctx, id)
+	if err != nil {
+		h.renderTxRows(c)
+		return
+	}
+	var pair *store.Transaction
+	if t.TransferPairID != nil {
+		if p, err := h.store.GetTransaction(ctx, *t.TransferPairID); err == nil {
+			pair = p
+		}
+	}
+	accts, _ := h.store.ListAccounts(ctx, true)
+	cats, _ := h.store.ListCategories(ctx, true)
+	render(c, http.StatusOK, views.TxUpdateResult(*t, pair, accts, cats))
 }
 
 func (h *Handlers) TransactionsDelete(c *gin.Context) {
@@ -181,7 +198,7 @@ func (h *Handlers) TransactionsToggleCleared(c *gin.Context) {
 	t.Cleared = !t.Cleared
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
-	render(c, http.StatusOK, views.TransactionRow(*t, accts, cats))
+	render(c, http.StatusOK, views.TransactionRow(*t, accts, cats, false))
 }
 
 // upsertTransaction creates (id==0) or updates a transaction or transfer
@@ -311,7 +328,7 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 	c.Status(http.StatusOK)
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	for _, t := range rows {
-		_ = views.TransactionRow(t, accts, cats).Render(ctx, c.Writer)
+		_ = views.TransactionRow(t, accts, cats, false).Render(ctx, c.Writer)
 	}
 	_, _ = c.Writer.WriteString(`<div id="modal" class="modal-mount" hx-swap-oob="true"></div>`)
 }

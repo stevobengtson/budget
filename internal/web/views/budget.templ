@@ -7,11 +7,11 @@ import (
 	"github.com/sbengtson/budget/internal/core/format"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/pkg/shadcntempl/badge"
-	"github.com/sbengtson/budget/pkg/shadcntempl/button"
-	"github.com/sbengtson/budget/pkg/shadcntempl/card"
-	"github.com/sbengtson/budget/pkg/shadcntempl/input"
-	"github.com/sbengtson/budget/pkg/shadcntempl/table"
+	"github.com/templui/templui/components/badge"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/table"
 )
 
 type BudgetData struct {
@@ -37,28 +37,41 @@ templ BudgetMonthSelector(d BudgetData) {
 	<div class="mb-4 flex items-center justify-between gap-4">
 		<h1 class="text-2xl font-semibold tracking-tight">Budget · { formatMonth(d.Month) }</h1>
 		<div class="flex items-center gap-2">
-			@button.Link("/budget?month="+d.PrevMonth, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+			@button.Button(button.Props{Href: "/budget?month=" + d.PrevMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
 				‹ prev
 			}
-			@button.Link("/budget?month="+nowMonth(), button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+			@button.Button(button.Props{Href: "/budget?month=" + nowMonth(), Variant: button.VariantOutline, Size: button.SizeSm}) {
 				today
 			}
-			@button.Link("/budget?month="+d.NextMonth, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}) {
+			@button.Button(button.Props{Href: "/budget?month=" + d.NextMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
 				next ›
 			}
 		</div>
 	</div>
 }
 
+// BudgetBanner renders the summary stat cards inside a stable #budget-banner
+// container so a single assignment save can refresh it via an out-of-band swap
+// (pass oob=true) without touching the rest of the page.
 templ BudgetBanner(d BudgetData) {
-	<div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
-		@bannerStat("Estimated", money.Format(d.Estimated), "text-foreground")
-		@bannerStat("Actual", money.Format(d.Actual), "text-foreground")
-		@bannerStat("Budgeted", money.Format(d.Budgeted), "text-foreground")
-		@bannerStatSigned("Remain", d.Remain)
-		@bannerStatSigned("Est−Act", d.EstAct)
+	@budgetBanner(d, false)
+}
+
+templ budgetBanner(d BudgetData, oob bool) {
+	{{ attrs := templ.Attributes{"id": "budget-banner"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	<div { attrs... }>
+		<div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+			@bannerStat("Estimated", money.Format(d.Estimated), "text-foreground")
+			@bannerStat("Actual", money.Format(d.Actual), "text-foreground")
+			@bannerStat("Budgeted", money.Format(d.Budgeted), "text-foreground")
+			@bannerStatSigned("Remain", d.Remain)
+			@bannerStatSigned("Est−Act", d.EstAct)
+		</div>
+		<p class="mb-4 text-xs text-muted-foreground">Tip: <a class="underline underline-offset-4 hover:text-foreground" href="/budget/income">manage income</a> in this month.</p>
 	</div>
-	<p class="mb-4 text-xs text-muted-foreground">Tip: <a class="underline underline-offset-4 hover:text-foreground" href="/budget/income">manage income</a> in this month.</p>
 }
 
 templ bannerStat(label, value, valueClass string) {
@@ -80,22 +93,22 @@ templ bannerStatSigned(label string, cents int64) {
 templ BudgetCreditSection(d BudgetData) {
 	if len(d.CreditRows) > 0 {
 		<h2 class="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Credit</h2>
-		@table.Table(table.Props{}) {
-			@table.Header(table.Props{}) {
-				@table.Row(table.Props{}) {
-					@table.Head(table.Props{}) { Account }
-					@table.Head(table.Props{}) { Purchases }
-					@table.Head(table.Props{}) { Payments }
-					@table.Head(table.Props{}) { Owing }
+		@table.Table() {
+			@table.Header() {
+				@table.Row() {
+					@table.Head() { Account }
+					@table.Head() { Purchases }
+					@table.Head() { Payments }
+					@table.Head() { Owing }
 				}
 			}
-			@table.Body(table.Props{}) {
+			@table.Body() {
 				for _, ca := range d.CreditRows {
-					@table.Row(table.Props{}) {
-						@table.Cell(table.Props{}) { { ca.AccountName } }
-						@table.Cell(table.Props{Class: "tabular-nums text-red-500"}) { { money.Format(ca.PurchasesCents) } }
-						@table.Cell(table.Props{Class: "tabular-nums text-emerald-500"}) { { money.Format(ca.PaymentsCents) } }
-						@table.Cell(table.Props{Class: "tabular-nums"}) {
+					@table.Row() {
+						@table.Cell() { { ca.AccountName } }
+						@table.Cell(table.CellProps{Class: "tabular-nums text-red-500"}) { { money.Format(ca.PurchasesCents) } }
+						@table.Cell(table.CellProps{Class: "tabular-nums text-emerald-500"}) { { money.Format(ca.PaymentsCents) } }
+						@table.Cell(table.CellProps{Class: "tabular-nums"}) {
 							@SignedMoney(ca.OwingCents)
 						}
 					}
@@ -106,23 +119,22 @@ templ BudgetCreditSection(d BudgetData) {
 }
 
 templ BudgetTable(d BudgetData) {
-	{{ assigned, spent, available := budgetTotals(d.GroupedRows) }}
 	@table.Table(table.Props{Class: "mt-2"}) {
-		@table.Header(table.Props{}) {
-			@table.Row(table.Props{}) {
-				@table.Head(table.Props{Class: "w-[34%]"}) { Group / Category }
-				@table.Head(table.Props{}) { Assigned }
-				@table.Head(table.Props{}) { Spent }
-				@table.Head(table.Props{}) { Available }
-				@table.Head(table.Props{}) { Goal }
-				@table.Head(table.Props{}) { }
+		@table.Header() {
+			@table.Row() {
+				@table.Head(table.HeadProps{Class: "w-[34%]"}) { Group / Category }
+				@table.Head() { Assigned }
+				@table.Head() { Spent }
+				@table.Head() { Available }
+				@table.Head() { Goal }
+				@table.Head() { }
 			}
 		}
-		@table.Body(table.Props{}) {
+		@table.Body() {
 			for _, group := range d.GroupedRows {
 				if len(group) > 0 {
-					@table.Row(table.Props{Class: "bg-muted/40 hover:bg-muted/40"}) {
-						@table.Cell(table.Props{Attrs: templ.Attributes{"colspan": "6", "class": "p-2 align-middle font-semibold uppercase tracking-wide text-xs text-muted-foreground"}}) {
+					@table.Row(table.RowProps{Class: "bg-muted/40 hover:bg-muted/40"}) {
+						@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle font-semibold uppercase tracking-wide text-xs text-muted-foreground"}}) {
 							{ group[0].GroupName }
 						}
 					}
@@ -132,18 +144,32 @@ templ BudgetTable(d BudgetData) {
 				}
 			}
 		}
-		@table.Footer(table.Props{}) {
-			@table.Row(table.Props{}) {
-				@table.Cell(table.Props{Class: "font-semibold"}) { Totals }
-				@table.Cell(table.Props{Class: "tabular-nums font-semibold"}) { { money.Format(assigned) } }
-				@table.Cell(table.Props{Class: "tabular-nums font-semibold"}) { { money.Format(spent) } }
-				@table.Cell(table.Props{Class: "tabular-nums font-semibold"}) {
-					@SignedMoney(available)
-				}
-				@table.Cell(table.Props{}) { }
-				@table.Cell(table.Props{}) { }
-			}
+		@table.Footer() {
+			@BudgetTotalsRow(d, false)
 		}
+	}
+}
+
+// BudgetTotalsRow is the footer totals row, factored out with a stable
+// #budget-totals id so an assignment save can refresh just the totals via an
+// out-of-band swap (oob=true) instead of re-rendering the whole table. When
+// swapped OOB it must be wrapped in a <template> by the caller, because the
+// browser strips a bare <tr> that isn't already inside a table.
+templ BudgetTotalsRow(d BudgetData, oob bool) {
+	{{ assigned, spent, available := budgetTotals(d.GroupedRows) }}
+	{{ attrs := templ.Attributes{"id": "budget-totals"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	@table.Row(table.RowProps{Attributes: attrs}) {
+		@table.Cell(table.CellProps{Class: "font-semibold"}) { Totals }
+		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) { { money.Format(assigned) } }
+		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) { { money.Format(spent) } }
+		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) {
+			@SignedMoney(available)
+		}
+		@table.Cell() { }
+		@table.Cell() { }
 	}
 }
 
@@ -152,12 +178,11 @@ templ BudgetBody(d BudgetData) {
 	@BudgetRegion(d)
 }
 
-// BudgetRegion wraps everything that depends on saved assignments — banner
-// stats, the credit table, and the main budget table with its totals — in
-// a single swappable container. The per-row assign form targets this id so
-// every save refreshes banner + totals consistently, without per-element
-// out-of-band swaps (which are unreliable when the primary swap target is
-// a <tr> inside a <tbody>).
+// BudgetRegion is the initial-render container for the assignment-dependent
+// sections: banner stats, the credit table, and the main budget table. On the
+// full page load it renders everything; incremental assignment saves no longer
+// swap this whole region — they replace just the edited row and refresh the
+// banner + totals via out-of-band swaps (see BudgetAssignResult).
 templ BudgetRegion(d BudgetData) {
 	<div id="budget-region">
 		@BudgetBanner(d)
@@ -166,13 +191,26 @@ templ BudgetRegion(d BudgetData) {
 	</div>
 }
 
+// BudgetAssignResult is the response to a single assignment save. It replaces
+// the edited category row (primary swap into #cat-<id>) and refreshes the two
+// things a save can move: the footer totals and the summary banner. The totals
+// <tr> is wrapped in a <template> so htmx's out-of-band swap survives the
+// browser's table-parsing rules; the banner is a <div> and needs no wrapper.
+templ BudgetAssignResult(month string, edited store.CategoryBudget, d BudgetData) {
+	@BudgetRow(month, edited)
+	<template>
+		@BudgetTotalsRow(d, true)
+	</template>
+	@budgetBanner(d, true)
+}
+
 templ BudgetRow(month string, r store.CategoryBudget) {
-	@table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("cat-%d", r.CategoryID)}}) {
-		@table.Cell(table.Props{Class: "pl-6"}) { { r.CategoryName } }
-		@table.Cell(table.Props{}) {
+	@table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("cat-%d", r.CategoryID)}}) {
+		@table.Cell(table.CellProps{Class: "pl-6"}) { { r.CategoryName } }
+		@table.Cell() {
 			<form
 				hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
-				hx-target="#budget-region"
+				hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
 				hx-swap="outerHTML"
 				class="flex items-center gap-2"
 			>
@@ -181,17 +219,17 @@ templ BudgetRow(month string, r store.CategoryBudget) {
 					Value: money.Format(r.AssignedCents),
 					Class: "h-8 w-28 text-right tabular-nums",
 				})
-				@button.Button(button.Props{Type: "submit", Size: button.SizeSmall}) {
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
 					save
 				}
 				@button.Button(button.Props{
 					Type:    "button",
 					Variant: button.VariantGhost,
-					Size:    button.SizeSmall,
+					Size:    button.SizeSm,
 					Class:   "text-muted-foreground hover:text-foreground",
-					Attrs: templ.Attributes{
+					Attributes: templ.Attributes{
 						"hx-post":   fmt.Sprintf("/budget/assign/%d/copy-prev?month=%s", r.CategoryID, month),
-						"hx-target": "#budget-region",
+						"hx-target": fmt.Sprintf("#cat-%d", r.CategoryID),
 						"hx-swap":   "outerHTML",
 						"title":     "Copy from previous month",
 					},
@@ -200,14 +238,14 @@ templ BudgetRow(month string, r store.CategoryBudget) {
 				}
 			</form>
 		}
-		@table.Cell(table.Props{Class: "tabular-nums"}) { { money.Format(r.SpentCents) } }
-		@table.Cell(table.Props{Class: "tabular-nums"}) {
+		@table.Cell(table.CellProps{Class: "tabular-nums"}) { { money.Format(r.SpentCents) } }
+		@table.Cell(table.CellProps{Class: "tabular-nums"}) {
 			@SignedMoney(r.AvailableCents)
 		}
-		@table.Cell(table.Props{}) {
+		@table.Cell() {
 			@GoalCell(r)
 		}
-		@table.Cell(table.Props{}) { }
+		@table.Cell() { }
 	}
 }
 

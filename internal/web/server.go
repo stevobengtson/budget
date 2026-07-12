@@ -5,8 +5,11 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"path"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	templuicomponents "github.com/templui/templui/components"
 
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/handlers"
@@ -32,8 +35,35 @@ func NewServer(s *store.Store) *Server {
 	staticSub, _ := fs.Sub(staticFS, "static")
 	r.StaticFS("/static", http.FS(staticSub))
 
+	// templUI component scripts (input/checkbox/dialog/label/popover/selectbox)
+	// are referenced by each component's Script() as /templui/js/<name>.min.js.
+	// The templui module embeds these files in components.TemplFiles; serve them
+	// from there (mirrors utils.SetupScriptRoutes, which only supports the stdlib
+	// http.ServeMux, not Gin). Without this route selectbox.js never loads and the
+	// JS-driven selectboxes are inert.
+	r.GET("/templui/js/:file", serveTemplUIScript)
+
 	srv.routes()
 	return srv
+}
+
+// serveTemplUIScript serves a templUI component's embedded JavaScript by file
+// name (e.g. "selectbox.min.js"), reading it from components.TemplFiles under
+// its component directory (e.g. "selectbox/selectbox.min.js").
+func serveTemplUIScript(c *gin.Context) {
+	file := c.Param("file")
+	if file == "" || strings.Contains(file, "..") || strings.Contains(file, "/") {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	component := strings.TrimSuffix(strings.TrimSuffix(file, ".min.js"), ".js")
+	data, err := templuicomponents.TemplFiles.ReadFile(path.Join(component, file))
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=31536000")
+	c.Data(http.StatusOK, "application/javascript; charset=utf-8", data)
 }
 
 func (s *Server) Handler() http.Handler { return s.engine }

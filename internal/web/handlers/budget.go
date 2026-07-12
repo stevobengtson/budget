@@ -119,12 +119,24 @@ func (h *Handlers) BudgetAssign(c *gin.Context) {
 		return
 	}
 
-	data, _, err := h.budgetData(ctx, month)
+	data, rows, err := h.budgetData(ctx, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	render(c, http.StatusOK, views.BudgetRegion(data))
+	render(c, http.StatusOK, views.BudgetAssignResult(month, findCatRow(rows, catID), data))
+}
+
+// findCatRow returns the budget row for the given category from a flat
+// MonthBudget slice, so a single-row swap can render just the edited category
+// without a second store round-trip. Returns a zero row if not found.
+func findCatRow(rows []store.CategoryBudget, catID int64) store.CategoryBudget {
+	for _, r := range rows {
+		if r.CategoryID == catID {
+			return r
+		}
+	}
+	return store.CategoryBudget{}
 }
 
 // BudgetAssignCopyPrev replaces the current month's assignment for a
@@ -150,10 +162,10 @@ func (h *Handlers) BudgetAssignCopyPrev(c *gin.Context) {
 		return
 	}
 
-	data, _, err := h.budgetData(ctx, month)
+	data, rows, err := h.budgetData(ctx, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	render(c, http.StatusOK, views.BudgetRegion(data))
+	render(c, http.StatusOK, views.BudgetAssignResult(month, findCatRow(rows, catID), data))
 }

@@ -30,7 +30,7 @@ make test           # templ generate + go test ./...
 go test ./internal/core/store/ -run TestAccountCRUD -v
 
 # Codegen (needed after editing .templ files or Tailwind sources):
-make templ          # templ generate for internal/web + pkg/shadcntempl
+make templ          # templ generate for internal/web
 make css            # compile Tailwind -> internal/web/static/app.css
 make tailwind-watch # watch mode
 
@@ -39,10 +39,10 @@ make db-migrate     # goose up
 make db-reset       # delete DB + re-migrate
 make db-status      # goose migration status
 make seed           # migrate + load demo data (via TUI binary)
-
-# shadcn theme preset -> pkg/shadcntempl/theme/theme.css:
-make theme PRESET=<id>      # or: make theme URL=<themes json url>
 ```
+
+The Tailwind entry point and theme tokens live in
+`internal/web/tailwind/{input.css,theme.css}`.
 
 Web listen address comes from `--addr`, else config `web.addr` (default `:8080`).
 
@@ -51,7 +51,6 @@ Web listen address comes from `--addr`, else config `web.addr` (default `:8080`)
 ```
 cmd/tui/main.go            TUI binary entrypoint (Bubble Tea)
 cmd/web/main.go            Web binary entrypoint (opens db, builds store, serves Gin)
-cmd/shadcntempl-theme/     Tool: fetch a shadcn theme preset -> theme.css
 
 internal/cli/              Shared Cobra/Viper CLI: root flags, config, db/migrate/seed
                            subcommands. Imports only internal/core, never a UI package.
@@ -70,17 +69,19 @@ internal/tui/              Bubble Tea screens/components (accounts, budget, cate
                            transactions, paydown, forms, styles, bootstrap).
 
 internal/web/              Web app.
-  server.go                Gin router + embedded static FS.
+  server.go                Gin router + embedded static FS. Serves templUI
+                           component JS at /templui/js/*.min.js from the
+                           templui module's embedded TemplFiles.
   handlers/                HTTP handlers (budget, accounts, categories, income,
                            transactions, paydown; render/stub helpers).
   views/                   Templ templates (.templ) + generated *_templ.go.
+  tailwind/                input.css (Tailwind entry) + theme.css (OKLCH tokens).
   static/                  app.css (Tailwind build), htmx.min.js, favicon.
-
-pkg/shadcntempl/           Reusable shadcn/ui-style Templ + Tailwind v4 component library
-                           (button, table, card, badge, input, checkbox, dialog, label,
-                           selectbox). One subpackage per component; theme/ holds OKLCH
-                           token blocks. Vendored, intended to be extractable as its own module.
 ```
+
+The web UI's shared components come from upstream
+`github.com/templui/templui` (button, table, card, badge, input, checkbox,
+dialog, label, selectbox, ...), styled via Tailwind v4.
 
 ## Key Patterns
 

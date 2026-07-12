@@ -6,14 +6,13 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/pkg/shadcntempl/button"
-	"github.com/sbengtson/budget/pkg/shadcntempl/card"
-	"github.com/sbengtson/budget/pkg/shadcntempl/checkbox"
-	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
-	"github.com/sbengtson/budget/pkg/shadcntempl/input"
-	"github.com/sbengtson/budget/pkg/shadcntempl/label"
-	"github.com/sbengtson/budget/pkg/shadcntempl/selectbox"
-	"github.com/sbengtson/budget/pkg/shadcntempl/table"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/checkbox"
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/label"
+	"github.com/templui/templui/components/table"
 )
 
 type AccountsData struct {
@@ -29,9 +28,10 @@ templ AccountsPage(d AccountsData) {
 	@Layout("Accounts", "accounts") {
 		<div class="mb-4 flex items-center justify-between gap-4">
 			<h1 class="text-2xl font-semibold tracking-tight">Accounts</h1>
-			@button.Link("/accounts/new", button.Props{
-				Size: button.SizeSmall,
-				Attrs: templ.Attributes{
+			@button.Button(button.Props{
+				Href: "/accounts/new",
+				Size: button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-get":    "/accounts/new",
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
@@ -41,19 +41,19 @@ templ AccountsPage(d AccountsData) {
 			}
 		</div>
 
-		@table.Table(table.Props{}) {
-			@table.Header(table.Props{}) {
-				@table.Row(table.Props{}) {
-					@table.Head(table.Props{}) { Name }
-					@table.Head(table.Props{}) { Type }
-					@table.Head(table.Props{Class: "text-right"}) { Balance }
-					@table.Head(table.Props{Class: "text-right"}) { Limit }
-					@table.Head(table.Props{Class: "text-right"}) { APR }
-					@table.Head(table.Props{Class: "text-right"}) { Available }
-					@table.Head(table.Props{}) { }
+		@table.Table() {
+			@table.Header() {
+				@table.Row() {
+					@table.Head() { Name }
+					@table.Head() { Type }
+					@table.Head(table.HeadProps{Class: "text-right"}) { Balance }
+					@table.Head(table.HeadProps{Class: "text-right"}) { Limit }
+					@table.Head(table.HeadProps{Class: "text-right"}) { APR }
+					@table.Head(table.HeadProps{Class: "text-right"}) { Available }
+					@table.Head() { }
 				}
 			}
-			@table.Body(table.Props{}) {
+			@table.Body() {
 				for _, a := range d.Rows {
 					@AccountRow(a)
 				}
@@ -88,33 +88,34 @@ templ acctStatSigned(label string, cents int64) {
 }
 
 templ AccountRow(a store.AccountWithBalance) {
-	@table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("acct-%d", a.ID)}}) {
-		@table.Cell(table.Props{Class: "font-medium"}) { { a.Name } }
-		@table.Cell(table.Props{Class: "text-muted-foreground"}) { { string(a.Type) } }
-		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+	@table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("acct-%d", a.ID)}}) {
+		@table.Cell(table.CellProps{Class: "font-medium"}) { { a.Name } }
+		@table.Cell(table.CellProps{Class: "text-muted-foreground"}) { { string(a.Type) } }
+		@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
 			@SignedMoney(a.BalanceCents)
 		}
-		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+		@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
 			if a.CreditLimitCents != nil {
 				{ money.Format(*a.CreditLimitCents) }
 			}
 		}
-		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+		@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
 			if a.AprBps != nil {
 				{ fmt.Sprintf("%.2f%%", float64(*a.AprBps)/100.0) }
 			}
 		}
-		@table.Cell(table.Props{Class: "text-right tabular-nums"}) {
+		@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
 			if a.CreditLimitCents != nil {
 				<span class="text-emerald-500">{ money.Format(availableCredit(a)) }</span>
 			}
 		}
-		@table.Cell(table.Props{Class: "whitespace-nowrap"}) {
-			@button.Link(fmt.Sprintf("/accounts/%d/edit", a.ID), button.Props{
+		@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
+			@button.Button(button.Props{
+				Href:    fmt.Sprintf("/accounts/%d/edit", a.ID),
 				Variant: button.VariantOutline,
-				Size:    button.SizeSmall,
+				Size:    button.SizeSm,
 				Class:   "mr-1",
-				Attrs: templ.Attributes{
+				Attributes: templ.Attributes{
 					"hx-get":    fmt.Sprintf("/accounts/%d/edit", a.ID),
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
@@ -124,8 +125,8 @@ templ AccountRow(a store.AccountWithBalance) {
 			}
 			@button.Button(button.Props{
 				Variant: button.VariantDestructive,
-				Size:    button.SizeSmall,
-				Attrs: templ.Attributes{
+				Size:    button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-post":    fmt.Sprintf("/accounts/%d/archive", a.ID),
 					"hx-target":  fmt.Sprintf("#acct-%d", a.ID),
 					"hx-swap":    "outerHTML",
@@ -153,7 +154,7 @@ type AccountFormData struct {
 }
 
 templ AccountForm(d AccountFormData) {
-	@dialog.Content(dialog.Props{Class: "max-w-xl"}) {
+	@dialogPanel("max-w-xl") {
 		<form
 			id="acct-form-inner"
 			if d.Editing {
@@ -165,8 +166,8 @@ templ AccountForm(d AccountFormData) {
 			hx-swap="innerHTML"
 			class="grid gap-4"
 		>
-			@dialog.Header(dialog.Props{}) {
-				@dialog.Title(dialog.Props{}) {
+			@dialog.Header() {
+				@dialog.Title() {
 					if d.Editing {
 						Edit account
 					} else {
@@ -179,7 +180,7 @@ templ AccountForm(d AccountFormData) {
 					@input.Input(input.Props{ID: "acct-name", Name: "name", Value: d.Name, Required: true})
 				}
 				@formRow("acct-type", "Type") {
-					@selectbox.Select(selectbox.Props{ID: "acct-type", Name: "type"}, accountTypeOptions(d.Type))
+					@SelectField(SelectFieldProps{ID: "acct-type", Name: "type"}, accountTypeOptions(d.Type))
 				}
 				<div class="grid grid-cols-2 gap-3">
 					@formRow("acct-start", "Starting balance") {
@@ -199,6 +200,7 @@ templ AccountForm(d AccountFormData) {
 					@checkbox.Checkbox(checkbox.Props{
 						ID:      "acct-paydown",
 						Name:    "include_in_paydown",
+						Value:   "1",
 						Checked: d.IncludeInPaydown,
 					})
 					@label.Label(label.Props{For: "acct-paydown"}) {
@@ -206,18 +208,18 @@ templ AccountForm(d AccountFormData) {
 					}
 				</div>
 				@formRow("acct-paycat", "Payment category") {
-					@selectbox.Select(selectbox.Props{
+					@SelectField(SelectFieldProps{
 						ID:          "acct-paycat",
 						Name:        "payment_category_id",
 						Placeholder: "(none)",
 					}, paymentCategoryOptions(d.Categories, d.PaymentCategoryID))
 				}
 			</div>
-			@dialog.Footer(dialog.Props{}) {
+			@dialog.Footer() {
 				@button.Button(button.Props{
 					Variant: button.VariantOutline,
 					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
 					cancel
 				}
@@ -229,11 +231,11 @@ templ AccountForm(d AccountFormData) {
 	}
 }
 
-func accountTypeOptions(selected string) []selectbox.Option {
+func accountTypeOptions(selected string) []Opt {
 	types := []string{"checking", "savings", "cash", "credit", "loan"}
-	out := make([]selectbox.Option, 0, len(types))
+	out := make([]Opt, 0, len(types))
 	for _, t := range types {
-		out = append(out, selectbox.Option{
+		out = append(out, Opt{
 			Value:    t,
 			Label:    t,
 			Selected: t == selected,
@@ -242,10 +244,10 @@ func accountTypeOptions(selected string) []selectbox.Option {
 	return out
 }
 
-func paymentCategoryOptions(cats []store.Category, selected *int64) []selectbox.Option {
-	out := make([]selectbox.Option, 0, len(cats))
+func paymentCategoryOptions(cats []store.Category, selected *int64) []Opt {
+	out := make([]Opt, 0, len(cats))
 	for _, c := range cats {
-		out = append(out, selectbox.Option{
+		out = append(out, Opt{
 			Value:    strconv.FormatInt(c.ID, 10),
 			Label:    c.Name,
 			Selected: selected != nil && *selected == c.ID,

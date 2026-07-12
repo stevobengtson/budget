@@ -13,12 +13,11 @@ import (
 	"strconv"
 
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/pkg/shadcntempl/badge"
-	"github.com/sbengtson/budget/pkg/shadcntempl/button"
-	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
-	"github.com/sbengtson/budget/pkg/shadcntempl/input"
-	"github.com/sbengtson/budget/pkg/shadcntempl/selectbox"
-	"github.com/sbengtson/budget/pkg/shadcntempl/table"
+	"github.com/templui/templui/components/badge"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/table"
 )
 
 type CategoriesData struct {
@@ -90,7 +89,7 @@ func CategoriesPage(d CategoriesData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Button(button.Props{Type: "submit", Size: button.SizeSmall}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = button.Button(button.Props{Type: "submit", Size: button.SizeSm}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -106,7 +105,7 @@ func CategoriesPage(d CategoriesData) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(g.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/categories.templ`, Line: 46, Col: 12}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/categories.templ`, Line: 45, Col: 12}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -170,7 +169,7 @@ func CategoriesPage(d CategoriesData) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = table.Head(table.Props{Class: "w-[45%]"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "w-[45%]"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var8), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -196,7 +195,7 @@ func CategoriesPage(d CategoriesData) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = table.Head(table.Props{Class: "w-[20%] text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "w-[20%] text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -222,7 +221,7 @@ func CategoriesPage(d CategoriesData) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = table.Head(table.Props{Class: "w-[20%]"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "w-[20%]"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -230,19 +229,19 @@ func CategoriesPage(d CategoriesData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = table.Head(table.Props{Class: "w-[15%]"}).Render(ctx, templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "w-[15%]"}).Render(ctx, templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Row(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Header(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -272,13 +271,13 @@ func CategoriesPage(d CategoriesData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Body(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Body().Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = table.Table(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = table.Table().Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -289,7 +288,7 @@ func CategoriesPage(d CategoriesData) templ.Component {
 				var templ_7745c5c3_Var12 string
 				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(g.ID, 10))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/categories.templ`, Line: 71, Col: 76}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/categories.templ`, Line: 70, Col: 76}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {
@@ -317,7 +316,7 @@ func CategoriesPage(d CategoriesData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				templ_7745c5c3_Err = input.Input(input.Props{
-					Type:  "date",
+					Type:  input.TypeDate,
 					Name:  "goal_due",
 					Class: "w-44",
 				}).Render(ctx, templ_7745c5c3_Buffer)
@@ -342,7 +341,7 @@ func CategoriesPage(d CategoriesData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Type: "submit", Size: button.SizeSmall, Variant: button.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -413,7 +412,7 @@ func CategoryRow(c store.Category) templ.Component {
 				var templ_7745c5c3_Var17 string
 				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(c.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/categories.templ`, Line: 99, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/categories.templ`, Line: 98, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 				if templ_7745c5c3_Err != nil {
@@ -457,7 +456,7 @@ func CategoryRow(c store.Category) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell().Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -485,7 +484,7 @@ func CategoryRow(c store.Category) templ.Component {
 					var templ_7745c5c3_Var20 string
 					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(formatCents(*c.GoalCents))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/categories.templ`, Line: 110, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/categories.templ`, Line: 109, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 					if templ_7745c5c3_Err != nil {
@@ -494,7 +493,7 @@ func CategoryRow(c store.Category) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-right tabular-nums text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right tabular-nums text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -518,7 +517,7 @@ func CategoryRow(c store.Category) templ.Component {
 					var templ_7745c5c3_Var22 string
 					templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(c.GoalDueDate.Format("2006-01-02"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/categories.templ`, Line: 115, Col: 40}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/categories.templ`, Line: 114, Col: 40}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 					if templ_7745c5c3_Err != nil {
@@ -527,7 +526,7 @@ func CategoryRow(c store.Category) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-muted-foreground"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -566,11 +565,12 @@ func CategoryRow(c store.Category) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = button.Link(fmt.Sprintf("/categories/%d/edit", c.ID), button.Props{
+					templ_7745c5c3_Err = button.Button(button.Props{
+						Href:    fmt.Sprintf("/categories/%d/edit", c.ID),
 						Variant: button.VariantOutline,
-						Size:    button.SizeSmall,
+						Size:    button.SizeSm,
 						Class:   "mr-1",
-						Attrs: templ.Attributes{
+						Attributes: templ.Attributes{
 							"hx-get":    fmt.Sprintf("/categories/%d/edit", c.ID),
 							"hx-target": "#modal",
 							"hx-swap":   "innerHTML",
@@ -603,8 +603,8 @@ func CategoryRow(c store.Category) templ.Component {
 					})
 					templ_7745c5c3_Err = button.Button(button.Props{
 						Variant: button.VariantDestructive,
-						Size:    button.SizeSmall,
-						Attrs: templ.Attributes{
+						Size:    button.SizeSm,
+						Attributes: templ.Attributes{
 							"hx-post":    fmt.Sprintf("/categories/%d/archive", c.ID),
 							"hx-confirm": "Archive this category?",
 							"hx-target":  fmt.Sprintf("#cat-row-%d", c.ID),
@@ -617,13 +617,13 @@ func CategoryRow(c store.Category) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "whitespace-nowrap"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var23), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "whitespace-nowrap"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var23), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("cat-row-%d", c.ID)}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("cat-row-%d", c.ID)}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -723,13 +723,13 @@ func CategoryForm(d CategoryFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Title(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Title().Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Header(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var29), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var29), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -750,11 +750,11 @@ func CategoryForm(d CategoryFormData) templ.Component {
 				}
 				ctx = templ.InitializeContext(ctx)
 				templ_7745c5c3_Err = input.Input(input.Props{
-					ID:       "cat-name",
-					Name:     "name",
-					Value:    d.Name,
-					Required: true,
-					Attrs:    templ.Attributes{"autofocus": ""},
+					ID:         "cat-name",
+					Name:       "name",
+					Value:      d.Name,
+					Required:   true,
+					Attributes: templ.Attributes{"autofocus": ""},
 				}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -777,7 +777,7 @@ func CategoryForm(d CategoryFormData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = selectbox.Select(selectbox.Props{
+				templ_7745c5c3_Err = SelectField(SelectFieldProps{
 					ID:   "cat-group",
 					Name: "group_id",
 				}, categoryGroupOptions(d.Groups, d.GroupID)).Render(ctx, templ_7745c5c3_Buffer)
@@ -836,7 +836,7 @@ func CategoryForm(d CategoryFormData) templ.Component {
 				ctx = templ.InitializeContext(ctx)
 				templ_7745c5c3_Err = input.Input(input.Props{
 					ID:    "cat-due",
-					Type:  "date",
+					Type:  input.TypeDate,
 					Name:  "goal_due",
 					Value: d.GoalDue,
 				}).Render(ctx, templ_7745c5c3_Buffer)
@@ -884,9 +884,9 @@ func CategoryForm(d CategoryFormData) templ.Component {
 					return nil
 				})
 				templ_7745c5c3_Err = button.Button(button.Props{
-					Variant: button.VariantOutline,
-					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Variant:    button.VariantOutline,
+					Type:       "button",
+					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var36), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -919,7 +919,7 @@ func CategoryForm(d CategoryFormData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Footer(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var35), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Footer().Render(templ.WithChildren(ctx, templ_7745c5c3_Var35), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -929,7 +929,7 @@ func CategoryForm(d CategoryFormData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = dialog.Content(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = dialogPanel("").Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -937,10 +937,10 @@ func CategoryForm(d CategoryFormData) templ.Component {
 	})
 }
 
-func categoryGroupOptions(groups []store.CategoryGroup, selected int64) []selectbox.Option {
-	out := make([]selectbox.Option, 0, len(groups))
+func categoryGroupOptions(groups []store.CategoryGroup, selected int64) []Opt {
+	out := make([]Opt, 0, len(groups))
 	for _, g := range groups {
-		out = append(out, selectbox.Option{
+		out = append(out, Opt{
 			Value:    strconv.FormatInt(g.ID, 10),
 			Label:    g.Name,
 			Selected: g.ID == selected,

@@ -15,13 +15,13 @@ import (
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/paydown"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/pkg/shadcntempl/badge"
-	"github.com/sbengtson/budget/pkg/shadcntempl/button"
-	"github.com/sbengtson/budget/pkg/shadcntempl/card"
-	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
-	"github.com/sbengtson/budget/pkg/shadcntempl/input"
-	"github.com/sbengtson/budget/pkg/shadcntempl/label"
-	"github.com/sbengtson/budget/pkg/shadcntempl/table"
+	"github.com/templui/templui/components/badge"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/label"
+	"github.com/templui/templui/components/table"
 )
 
 // PaydownPageSize is the number of schedule rows shown per paginated
@@ -113,12 +113,12 @@ func PaydownPage(d PaydownData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = input.Input(input.Props{
-				ID:    "pd-horizon",
-				Name:  "horizon",
-				Type:  "number",
-				Value: strconv.Itoa(d.Horizon),
-				Class: "w-24 tabular-nums",
-				Attrs: templ.Attributes{"min": "12", "max": "360", "step": "12"},
+				ID:         "pd-horizon",
+				Name:       "horizon",
+				Type:       input.TypeNumber,
+				Value:      strconv.Itoa(d.Horizon),
+				Class:      "w-24 tabular-nums",
+				Attributes: templ.Attributes{"min": "12", "max": "360", "step": "12"},
 			}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -141,7 +141,7 @@ func PaydownPage(d PaydownData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Button(button.Props{Type: "submit", Size: button.SizeSmall, Variant: button.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -438,8 +438,8 @@ func PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, page
 			})
 			templ_7745c5c3_Err = button.Button(button.Props{
 				Variant: button.VariantOutline,
-				Size:    button.SizeSmall,
-				Attrs: templ.Attributes{
+				Size:    button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-get":    fmt.Sprintf("/paydown/%d/payment-form", acct.ID),
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
@@ -468,8 +468,8 @@ func PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, page
 			})
 			templ_7745c5c3_Err = button.Button(button.Props{
 				Variant: button.VariantOutline,
-				Size:    button.SizeSmall,
-				Attrs: templ.Attributes{
+				Size:    button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-get":    fmt.Sprintf("/paydown/%d/category-form", acct.ID),
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
@@ -498,8 +498,8 @@ func PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, page
 			})
 			templ_7745c5c3_Err = button.Button(button.Props{
 				Variant: button.VariantDestructive,
-				Size:    button.SizeSmall,
-				Attrs: templ.Attributes{
+				Size:    button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-post":    fmt.Sprintf("/paydown/%d/exclude", acct.ID),
 					"hx-confirm": "Remove from paydown?",
 				},
@@ -648,7 +648,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Head(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var28), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var28), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -674,7 +674,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Head(table.Props{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var29), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var29), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -700,7 +700,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Head(table.Props{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -726,7 +726,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Head(table.Props{Class: "hidden md:table-cell"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var31), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "hidden md:table-cell"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var31), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -752,19 +752,19 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Head(table.Props{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var32), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var32), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = table.Row(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Header(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var26), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var26), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -812,7 +812,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 							var templ_7745c5c3_Var36 string
 							templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(r.Month.Format("Jan 2006"))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/paydown.templ`, Line: 195, Col: 88}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/paydown.templ`, Line: 195, Col: 92}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 							if templ_7745c5c3_Err != nil {
@@ -820,7 +820,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Cell(table.Props{Class: "whitespace-nowrap"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var35), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "whitespace-nowrap"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var35), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -843,7 +843,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 							var templ_7745c5c3_Var38 string
 							templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(r.InterestCents))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/paydown.templ`, Line: 196, Col: 110}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/paydown.templ`, Line: 196, Col: 114}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 							if templ_7745c5c3_Err != nil {
@@ -851,7 +851,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-right tabular-nums text-red-500"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var37), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right tabular-nums text-red-500"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var37), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -874,7 +874,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 							var templ_7745c5c3_Var40 string
 							templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(r.PaymentCents))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/paydown.templ`, Line: 197, Col: 113}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/paydown.templ`, Line: 197, Col: 117}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 							if templ_7745c5c3_Err != nil {
@@ -882,7 +882,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-right tabular-nums text-emerald-500"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var39), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right tabular-nums text-emerald-500"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var39), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -908,7 +908,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Cell(table.Props{Class: "hidden md:table-cell"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var41), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "hidden md:table-cell"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var41), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -931,7 +931,7 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 							var templ_7745c5c3_Var43 string
 							templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(r.BalanceCents))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/paydown.templ`, Line: 201, Col: 96}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/paydown.templ`, Line: 201, Col: 100}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 							if templ_7745c5c3_Err != nil {
@@ -939,26 +939,26 @@ func PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) templ.Comp
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-right tabular-nums"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var42), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right tabular-nums"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var42), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Row(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var34), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var34), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Body(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var33), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Body().Render(templ.WithChildren(ctx, templ_7745c5c3_Var33), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = table.Table(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = table.Table().Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1150,8 +1150,8 @@ func paydownPagerLink(acctID int64, horizon, target int, enabled bool) templ.Com
 			})
 			templ_7745c5c3_Err = button.Button(button.Props{
 				Variant: button.VariantOutline,
-				Size:    button.SizeSmall,
-				Attrs: templ.Attributes{
+				Size:    button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-get":       fmt.Sprintf("/paydown/%d/rows?horizon=%d&page=%d", acctID, horizon, target),
 					"hx-target":    fmt.Sprintf("#pd-rows-%d", acctID),
 					"hx-swap":      "innerHTML",
@@ -1182,7 +1182,7 @@ func paydownPagerLink(acctID int64, horizon, target int, enabled bool) templ.Com
 			})
 			templ_7745c5c3_Err = button.Button(button.Props{
 				Variant:  button.VariantOutline,
-				Size:     button.SizeSmall,
+				Size:     button.SizeSm,
 				Disabled: true,
 			}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var53), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
@@ -1308,13 +1308,13 @@ func PaymentModal(acct store.AccountWithBalance) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Title(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var58), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Title().Render(templ.WithChildren(ctx, templ_7745c5c3_Var58), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Header(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var57), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var57), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1354,7 +1354,7 @@ func PaymentModal(acct store.AccountWithBalance) templ.Component {
 						Value:       money.Format(*acct.MonthlyPaymentCents),
 						Placeholder: "200.00",
 						Class:       "tabular-nums",
-						Attrs:       templ.Attributes{"autofocus": ""},
+						Attributes:  templ.Attributes{"autofocus": ""},
 					}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -1365,7 +1365,7 @@ func PaymentModal(acct store.AccountWithBalance) templ.Component {
 						Name:        "amount",
 						Placeholder: "200.00",
 						Class:       "tabular-nums",
-						Attrs:       templ.Attributes{"autofocus": ""},
+						Attributes:  templ.Attributes{"autofocus": ""},
 					}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -1412,9 +1412,9 @@ func PaymentModal(acct store.AccountWithBalance) templ.Component {
 					return nil
 				})
 				templ_7745c5c3_Err = button.Button(button.Props{
-					Variant: button.VariantOutline,
-					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Variant:    button.VariantOutline,
+					Type:       "button",
+					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var63), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -1447,7 +1447,7 @@ func PaymentModal(acct store.AccountWithBalance) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Footer(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var62), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Footer().Render(templ.WithChildren(ctx, templ_7745c5c3_Var62), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1457,7 +1457,7 @@ func PaymentModal(acct store.AccountWithBalance) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = dialog.Content(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var56), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = dialogPanel("").Render(templ.WithChildren(ctx, templ_7745c5c3_Var56), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1542,13 +1542,13 @@ func CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups 
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Title(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var68), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Title().Render(templ.WithChildren(ctx, templ_7745c5c3_Var68), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Header(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var67), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var67), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1720,9 +1720,9 @@ func CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups 
 					return nil
 				})
 				templ_7745c5c3_Err = button.Button(button.Props{
-					Variant: button.VariantOutline,
-					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Variant:    button.VariantOutline,
+					Type:       "button",
+					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var78), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -1755,7 +1755,7 @@ func CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups 
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Footer(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var77), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Footer().Render(templ.WithChildren(ctx, templ_7745c5c3_Var77), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1765,7 +1765,7 @@ func CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups 
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = dialog.Content(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var66), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = dialogPanel("").Render(templ.WithChildren(ctx, templ_7745c5c3_Var66), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

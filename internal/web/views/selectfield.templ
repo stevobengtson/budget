@@ -1,0 +1,72 @@
+package views
+
+import "github.com/templui/templui/components/selectbox"
+
+// Opt is the view-local option model. It stands in for the selectbox option
+// type that the option-builder helpers used to return, so the helpers stay
+// decoupled from the underlying selectbox implementation.
+type Opt struct {
+	Value    string
+	Label    string
+	Selected bool
+}
+
+// SelectFieldProps configures a SelectField.
+//
+// It adapts the app's simple "one <select> with a flat option list" needs
+// onto templUI's compositional selectbox (a hidden input + custom popover
+// widget driven by templUI's selectbox.js). Class lands on the outer
+// container (e.g. width); Attributes are spread onto the hidden input that
+// actually posts the value — that is where an onchange handler must live for
+// templUI to fire it (the widget dispatches a `change` event on that input).
+type SelectFieldProps struct {
+	ID          string
+	Name        string
+	Required    bool
+	Placeholder string
+	Class       string
+	Attributes  templ.Attributes
+}
+
+// SelectField renders a single-select field using templUI's selectbox.
+//
+// templUI's selectbox.js initialises via event delegation on `document` plus a
+// MutationObserver on <body>, so instances injected by HTMX after page load
+// (e.g. the transaction form swapped into #modal) initialise automatically —
+// no per-swap wiring is required. The JS also populates the hidden input's
+// value from the pre-selected Item on init, so the correct value posts even if
+// the user never opens the dropdown.
+templ SelectField(p SelectFieldProps, opts []Opt) {
+	@selectbox.SelectBox(selectbox.Props{Class: p.Class}) {
+		@selectbox.Trigger(selectbox.TriggerProps{
+			ID:         p.ID,
+			Name:       p.Name,
+			Attributes: selectFieldAttrs(p),
+		}) {
+			@selectbox.Value(selectbox.ValueProps{Placeholder: p.Placeholder})
+		}
+		@selectbox.Content() {
+			for _, o := range opts {
+				@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected}) {
+					{ o.Label }
+				}
+			}
+		}
+	}
+}
+
+// selectFieldAttrs merges the caller's extra attributes with a conditional
+// `required` marker. templUI has no Required field; the attribute is spread
+// onto the hidden input. Note: `required` on a type="hidden" input is barred
+// from HTML5 constraint validation, so this preserves intent only — server
+// handlers remain the source of truth for required fields.
+func selectFieldAttrs(p SelectFieldProps) templ.Attributes {
+	attrs := templ.Attributes{}
+	for k, v := range p.Attributes {
+		attrs[k] = v
+	}
+	if p.Required {
+		attrs["required"] = true
+	}
+	return attrs
+}

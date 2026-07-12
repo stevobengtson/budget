@@ -15,11 +15,11 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/pkg/shadcntempl/button"
-	"github.com/sbengtson/budget/pkg/shadcntempl/card"
-	"github.com/sbengtson/budget/pkg/shadcntempl/dialog"
-	"github.com/sbengtson/budget/pkg/shadcntempl/input"
-	"github.com/sbengtson/budget/pkg/shadcntempl/table"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/table"
 )
 
 type IncomeData struct {
@@ -101,7 +101,7 @@ func IncomePage(d IncomeData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Link("/budget/income?month="+d.PrevMonth, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = button.Button(button.Props{Href: "/budget/income?month=" + d.PrevMonth, Variant: button.VariantOutline, Size: button.SizeSm}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -123,7 +123,7 @@ func IncomePage(d IncomeData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Link("/budget/income?month="+d.Today, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = button.Button(button.Props{Href: "/budget/income?month=" + d.Today, Variant: button.VariantOutline, Size: button.SizeSm}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -145,7 +145,7 @@ func IncomePage(d IncomeData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Link("/budget/income?month="+d.NextMonth, button.Props{Variant: button.VariantOutline, Size: button.SizeSmall}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = button.Button(button.Props{Href: "/budget/income?month=" + d.NextMonth, Variant: button.VariantOutline, Size: button.SizeSm}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -206,8 +206,8 @@ func IncomePage(d IncomeData) templ.Component {
 			})
 			templ_7745c5c3_Err = button.Button(button.Props{
 				Variant: button.VariantOutline,
-				Size:    button.SizeSmall,
-				Attrs: templ.Attributes{
+				Size:    button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
 					"hx-confirm": "Copy all entries from the previous month into this one?",
 					"title":      "Copy every entry from " + d.PrevMonth + " into this month",
@@ -234,9 +234,10 @@ func IncomePage(d IncomeData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Link("/budget/income/new?month="+d.Month, button.Props{
-				Size: button.SizeSmall,
-				Attrs: templ.Attributes{
+			templ_7745c5c3_Err = button.Button(button.Props{
+				Href: "/budget/income/new?month=" + d.Month,
+				Size: button.SizeSm,
+				Attributes: templ.Attributes{
 					"hx-get":    "/budget/income/new?month=" + d.Month,
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
@@ -309,7 +310,7 @@ func IncomePage(d IncomeData) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = table.Head(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = table.Head().Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -335,7 +336,7 @@ func IncomePage(d IncomeData) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = table.Head(table.Props{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = table.Head(table.HeadProps{Class: "text-right"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -343,19 +344,19 @@ func IncomePage(d IncomeData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = table.Head(table.Props{}).Render(ctx, templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = table.Head().Render(ctx, templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Row(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Row().Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Header(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -375,7 +376,7 @@ func IncomePage(d IncomeData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = table.Table(table.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = table.Table().Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -430,7 +431,7 @@ func incomeStat(label, value, valueClass string) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 106, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 107, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -465,7 +466,7 @@ func incomeStat(label, value, valueClass string) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 107, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 108, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -525,7 +526,7 @@ func incomeStatSigned(label string, cents int64) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 113, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 114, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 			if templ_7745c5c3_Err != nil {
@@ -601,7 +602,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(r.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 122, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 123, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 				if templ_7745c5c3_Err != nil {
@@ -609,7 +610,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "font-medium"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var26), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "font-medium"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var26), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -632,7 +633,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				var templ_7745c5c3_Var29 string
 				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(r.AmountCents))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 124, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 125, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 				if templ_7745c5c3_Err != nil {
@@ -640,7 +641,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "text-right tabular-nums text-emerald-500"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var28), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right tabular-nums text-emerald-500"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var28), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -678,11 +679,12 @@ func IncomeRow(month string, r store.Income) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Link(fmt.Sprintf("/budget/income/%d/edit?month=%s", r.ID, month), button.Props{
+				templ_7745c5c3_Err = button.Button(button.Props{
+					Href:    fmt.Sprintf("/budget/income/%d/edit?month=%s", r.ID, month),
 					Variant: button.VariantOutline,
-					Size:    button.SizeSmall,
+					Size:    button.SizeSm,
 					Class:   "mr-1",
-					Attrs: templ.Attributes{
+					Attributes: templ.Attributes{
 						"hx-get":    fmt.Sprintf("/budget/income/%d/edit?month=%s", r.ID, month),
 						"hx-target": "#modal",
 						"hx-swap":   "innerHTML",
@@ -715,8 +717,8 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				})
 				templ_7745c5c3_Err = button.Button(button.Props{
 					Variant: button.VariantDestructive,
-					Size:    button.SizeSmall,
-					Attrs: templ.Attributes{
+					Size:    button.SizeSm,
+					Attributes: templ.Attributes{
 						"hx-delete":  fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month),
 						"hx-target":  fmt.Sprintf("#income-%d", r.ID),
 						"hx-swap":    "outerHTML",
@@ -728,13 +730,13 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.Props{Class: "whitespace-nowrap"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "whitespace-nowrap"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = table.Row(table.Props{Attrs: templ.Attributes{"id": fmt.Sprintf("income-%d", r.ID)}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("income-%d", r.ID)}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var25), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -795,7 +797,7 @@ func IncomeForm(d IncomeFormData) templ.Component {
 				var templ_7745c5c3_Var35 string
 				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/budget/income/%d?month=%s", d.ID, d.Month))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 167, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 169, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 				if templ_7745c5c3_Err != nil {
@@ -813,7 +815,7 @@ func IncomeForm(d IncomeFormData) templ.Component {
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs("/budget/income?month=" + d.Month)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 169, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 171, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 				if templ_7745c5c3_Err != nil {
@@ -865,7 +867,7 @@ func IncomeForm(d IncomeFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Title(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var38), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Title().Render(templ.WithChildren(ctx, templ_7745c5c3_Var38), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -888,7 +890,7 @@ func IncomeForm(d IncomeFormData) templ.Component {
 					var templ_7745c5c3_Var40 string
 					templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(incomeMonthLabel(d.Month))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 184, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/income.templ`, Line: 186, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 					if templ_7745c5c3_Err != nil {
@@ -896,13 +898,13 @@ func IncomeForm(d IncomeFormData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Description(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var39), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Description().Render(templ.WithChildren(ctx, templ_7745c5c3_Var39), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Header(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var37), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Header().Render(templ.WithChildren(ctx, templ_7745c5c3_Var37), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -928,7 +930,7 @@ func IncomeForm(d IncomeFormData) templ.Component {
 					Value:       d.Name,
 					Required:    true,
 					Placeholder: "Salary",
-					Attrs:       templ.Attributes{"autofocus": ""},
+					Attributes:  templ.Attributes{"autofocus": ""},
 				}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -1002,9 +1004,9 @@ func IncomeForm(d IncomeFormData) templ.Component {
 					return nil
 				})
 				templ_7745c5c3_Err = button.Button(button.Props{
-					Variant: button.VariantOutline,
-					Type:    "button",
-					Attrs:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Variant:    button.VariantOutline,
+					Type:       "button",
+					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var44), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -1037,7 +1039,7 @@ func IncomeForm(d IncomeFormData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Footer(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var43), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Footer().Render(templ.WithChildren(ctx, templ_7745c5c3_Var43), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1047,7 +1049,7 @@ func IncomeForm(d IncomeFormData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = dialog.Content(dialog.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var34), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = dialogPanel("").Render(templ.WithChildren(ctx, templ_7745c5c3_Var34), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

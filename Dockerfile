@@ -40,8 +40,7 @@ RUN set -eux; \
     curl -fsSL -o /usr/local/bin/tailwindcss \
       "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/${asset}"; \
     chmod +x /usr/local/bin/tailwindcss; \
-    /usr/local/bin/tailwindcss -i ./pkg/shadcntempl/tailwind/input.css -o ./internal/web/static/app.css --minify; \
-    templ generate -path ./pkg/shadcntempl; \
+    /usr/local/bin/tailwindcss -i ./internal/web/tailwind/input.css -o ./internal/web/static/app.css --minify; \
     templ generate -path ./internal/web; \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/budget ./cmd/web
 
