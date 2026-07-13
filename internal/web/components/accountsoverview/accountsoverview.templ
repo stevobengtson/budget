@@ -1,0 +1,60 @@
+package accountsoverview
+
+import (
+	"strconv"
+
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/templui/templui/components/card"
+)
+
+// AccountsOverview renders a grouped account list (Cash/Credit/Loan) with an
+// estimated net-worth footer. Self-contained: pass the raw account slice and it
+// does its own grouping and totaling. Reusable on any page.
+templ AccountsOverview(accts []store.AccountWithBalance) {
+	{{ buckets, net := group(accts) }}
+	@card.Card(card.Props{Class: "p-4"}) {
+		<div class="mb-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+			Accounts Overview
+		</div>
+		<div class="space-y-3">
+			for _, b := range buckets {
+				<div class="border-t border-border pt-3 first:border-t-0 first:pt-0">
+					<div class="flex items-center justify-between font-medium">
+						<span>
+							{ b.Name } <span class="text-muted-foreground">({ strconv.Itoa(len(b.Accounts)) })</span>
+						</span>
+						<span class="tabular-nums">{ money.Format(b.TotalCents) }</span>
+					</div>
+					<div class="mt-1 space-y-0.5">
+						for _, a := range b.Accounts {
+							<div class="flex items-center justify-between pl-3 text-sm">
+								<span class="text-foreground">
+									<span class="text-muted-foreground">└ </span>{ a.Name }
+								</span>
+								<span class="tabular-nums text-foreground">{ money.Format(displayCents(a)) }</span>
+							</div>
+						}
+					</div>
+				</div>
+			}
+		</div>
+		<div class="mt-3 flex items-center justify-between border-t border-border pt-3 font-semibold">
+			<span>Est. Net Worth</span>
+			@signedMoney(net)
+		</div>
+	}
+}
+
+// signedMoney colors an amount green/red/muted by sign. Duplicated locally
+// (rather than importing views.SignedMoney) to keep this component package free
+// of a dependency on the views package.
+templ signedMoney(cents int64) {
+	if cents > 0 {
+		<span class="tabular-nums text-emerald-500">{ money.Format(cents) }</span>
+	} else if cents < 0 {
+		<span class="tabular-nums text-red-500">{ money.Format(cents) }</span>
+	} else {
+		<span class="tabular-nums text-muted-foreground">{ money.Format(cents) }</span>
+	}
+}

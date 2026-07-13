@@ -7,6 +7,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/format"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/accountsoverview"
 	"github.com/templui/templui/components/badge"
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/card"
@@ -25,6 +26,7 @@ type BudgetData struct {
 	EstAct      int64
 	CreditRows  []store.CreditActivity
 	GroupedRows [][]store.CategoryBudget // grouped by GroupName order, no Income
+	Accounts    []store.AccountWithBalance
 }
 
 templ BudgetPage(d BudgetData) {
@@ -175,7 +177,14 @@ templ BudgetTotalsRow(d BudgetData, oob bool) {
 
 templ BudgetBody(d BudgetData) {
 	@BudgetMonthSelector(d)
-	@BudgetRegion(d)
+	<div class="flex items-start gap-6">
+		<aside class="sticky top-20 hidden w-72 shrink-0 lg:block">
+			@accountsoverview.AccountsOverview(d.Accounts)
+		</aside>
+		<div class="min-w-0 flex-1">
+			@BudgetRegion(d)
+		</div>
+	</div>
 }
 
 // BudgetRegion is the initial-render container for the assignment-dependent

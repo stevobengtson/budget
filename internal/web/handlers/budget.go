@@ -47,6 +47,11 @@ func (h *Handlers) budgetData(ctx context.Context, month string) (views.BudgetDa
 	actual, _ := h.store.ActualIncomeForMonth(ctx, month)
 	credit, _ := h.store.CreditCardActivityForMonth(ctx, month)
 
+	accts, err := h.store.ListAccounts(ctx, false) // exclude archived
+	if err != nil {
+		return views.BudgetData{}, nil, fmt.Errorf("list accounts: %w", err)
+	}
+
 	creditFiltered := credit[:0]
 	for _, ca := range credit {
 		if ca.PurchasesCents != 0 || ca.PaymentsCents != 0 {
@@ -76,6 +81,7 @@ func (h *Handlers) budgetData(ctx context.Context, month string) (views.BudgetDa
 		EstAct:      incTotal - actual,
 		CreditRows:  creditFiltered,
 		GroupedRows: grouped,
+		Accounts:    accts,
 	}, rows, nil
 }
 
