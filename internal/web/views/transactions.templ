@@ -7,6 +7,7 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/monthselector"
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/input"
@@ -52,17 +53,7 @@ templ TransactionsBody(d TransactionsData) {
 	</div>
 
 	<div class="mb-4 flex flex-wrap items-center gap-3">
-		<div class="flex items-center gap-2">
-			@button.Button(button.Props{Href: txMonthHref(d, d.PrevMonth), Variant: button.VariantOutline, Size: button.SizeSm}) {
-				‹ prev
-			}
-			@button.Button(button.Props{Href: txMonthHref(d, d.Today), Variant: button.VariantOutline, Size: button.SizeSm}) {
-				today
-			}
-			@button.Button(button.Props{Href: txMonthHref(d, d.NextMonth), Variant: button.VariantOutline, Size: button.SizeSm}) {
-				next ›
-			}
-		</div>
+    @monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth))
 		<span class="text-sm font-medium">{ txMonthLabel(d.FilterMonth) }</span>
 		<form method="get" action="/transactions" class="flex items-center gap-2">
 			if d.FilterMonth != "" {

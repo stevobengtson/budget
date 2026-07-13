@@ -1,0 +1,20 @@
+package monthselector
+
+import (
+	"github.com/templui/templui/components/button"
+)
+
+templ MonthSelector(prevMonth string, currentMonth string, nextMonth string) {
+  <div class="flex items-center gap-2">
+    @button.Button(button.Props{Href: prevMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
+      ‹
+    }
+    @button.Button(button.Props{Href: currentMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
+      today
+    }
+    @button.Button(button.Props{Href: nextMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
+      ›
+    }
+  </div>
+}
+
