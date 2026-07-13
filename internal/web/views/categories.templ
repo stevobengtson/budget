@@ -29,12 +29,14 @@ templ CategoriesPage(d CategoriesData) {
 			hx-swap="outerHTML"
 			class="mb-6 flex flex-wrap items-center gap-2"
 		>
-			@input.Input(input.Props{
-				Name:        "name",
-				Placeholder: "New group name",
-				Required:    true,
-				Class:       "w-64",
-			})
+			<div class="w-64">
+				@input.Input(input.Props{
+					Name:        "name",
+					Placeholder: "New group name",
+					Required:    true,
+					Class:       "w-full",
+				})
+			</div>
 			@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
 				+ group
 			}
@@ -68,22 +70,28 @@ templ CategoriesPage(d CategoriesData) {
 				class="mb-6 mt-2 flex flex-wrap items-center gap-2"
 			>
 				<input type="hidden" name="group_id" value={ strconv.FormatInt(g.ID, 10) }/>
-				@input.Input(input.Props{
-					Name:        "name",
-					Placeholder: "new category name",
-					Required:    true,
-					Class:       "w-56",
-				})
-				@input.Input(input.Props{
-					Name:        "goal_cents",
-					Placeholder: "goal $ (optional)",
-					Class:       "w-44 tabular-nums",
-				})
-				@input.Input(input.Props{
-					Type:  input.TypeDate,
-					Name:  "goal_due",
-					Class: "w-44",
-				})
+				<div class="w-56">
+					@input.Input(input.Props{
+						Name:        "name",
+						Placeholder: "new category name",
+						Required:    true,
+						Class:       "w-full",
+					})
+				</div>
+				<div class="w-44">
+					@input.Input(input.Props{
+						Name:        "goal_cents",
+						Placeholder: "goal $ (optional)",
+						Class:       "w-full tabular-nums",
+					})
+				</div>
+				<div class="w-44">
+					@input.Input(input.Props{
+						Type:  input.TypeDate,
+						Name:  "goal_due",
+						Class: "w-full",
+					})
+				</div>
 				@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}) {
 					+ add
 				}

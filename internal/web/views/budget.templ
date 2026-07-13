@@ -11,7 +11,6 @@ import (
 	"github.com/templui/templui/components/badge"
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/card"
-	"github.com/templui/templui/components/input"
 	"github.com/templui/templui/components/table"
 )
 
@@ -217,20 +216,29 @@ templ BudgetRow(month string, r store.CategoryBudget) {
 	@table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("cat-%d", r.CategoryID)}}) {
 		@table.Cell(table.CellProps{Class: "pl-6"}) { { r.CategoryName } }
 		@table.Cell() {
-			<form
-				hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
-				hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
-				hx-swap="outerHTML"
-				class="flex items-center gap-2"
-			>
-				@input.Input(input.Props{
-					Name:  "amount",
-					Value: money.Format(r.AssignedCents),
-					Class: "h-8 w-28 text-right tabular-nums",
-				})
-				@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
-					save
-				}
+			<div class="flex items-center justify-end gap-2">
+				<form
+					hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
+					hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
+					hx-swap="outerHTML"
+					class="js-assign flex items-center"
+				>
+					<button
+						type="button"
+						class="js-assign-display cursor-text rounded-md px-2 py-1 text-right text-sm tabular-nums ring-1 ring-transparent transition-shadow hover:ring-border"
+						title="Click to edit"
+					>
+						{ money.Format(r.AssignedCents) }
+					</button>
+					<input
+						type="text"
+						name="amount"
+						value={ money.Format(r.AssignedCents) }
+						inputmode="decimal"
+						autocomplete="off"
+						class="js-assign-input hidden h-8 w-28 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					/>
+				</form>
 				@button.Button(button.Props{
 					Type:    "button",
 					Variant: button.VariantGhost,
@@ -245,7 +253,7 @@ templ BudgetRow(month string, r store.CategoryBudget) {
 				}) {
 					← prev
 				}
-			</form>
+			</div>
 		}
 		@table.Cell(table.CellProps{Class: "tabular-nums"}) { { money.Format(r.SpentCents) } }
 		@table.Cell(table.CellProps{Class: "tabular-nums"}) {
