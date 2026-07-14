@@ -19,10 +19,8 @@ type BudgetData struct {
 	PrevMonth   string
 	NextMonth   string
 	Estimated   int64
-	Actual      int64
 	Budgeted    int64
 	Remain      int64
-	EstAct      int64
 	CreditRows  []store.CreditActivity
 	Groups      []BudgetGroup
 	IncomeRows  []store.Income
@@ -74,12 +72,10 @@ templ budgetBanner(d BudgetData, oob bool) {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
 	<div { attrs... }>
-		<div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
-			@bannerStat("Estimated", money.Format(d.Estimated), "text-foreground")
-			@bannerStat("Actual", money.Format(d.Actual), "text-foreground")
+		<div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+			@bannerStat("Income", money.Format(d.Estimated), "text-foreground")
 			@bannerStat("Budgeted", money.Format(d.Budgeted), "text-foreground")
 			@bannerStatSigned("Remain", d.Remain)
-			@bannerStatSigned("Est−Act", d.EstAct)
 		</div>
 	</div>
 }
@@ -309,8 +305,8 @@ templ BudgetBody(d BudgetData) {
 // banner + totals via out-of-band swaps (see BudgetAssignResult).
 templ BudgetRegion(d BudgetData) {
 	<div id="budget-region">
-		@BudgetBanner(d)
-		@BudgetIncomeSection(d)
+    @BudgetBanner(d)
+    @BudgetIncomeSection(d)
 		@BudgetCreditSection(d)
 		@BudgetTable(d)
 	</div>
@@ -430,7 +426,7 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 					Type:    "button",
 					Variant: button.VariantGhost,
 					Size:    button.SizeSm,
-					Class:   "text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100",
+					Class:   "text-muted-foreground hover:text-destructive",
 					Attributes: templ.Attributes{
 						"hx-post":    fmt.Sprintf("/budget/category/%d/archive?month=%s", r.CategoryID, month),
 						"hx-target":  "#budget-region",
@@ -590,53 +586,88 @@ func budgetTotals(groups []BudgetGroup) (assigned, spent, available int64) {
 
 templ BudgetIncomeSection(d BudgetData) {
 	<div class="mb-2 mt-6 flex items-center justify-between gap-2">
-		<h2 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Income</h2>
-		<div class="flex items-center gap-2">
-			@button.Button(button.Props{
-				Type:    "button",
-				Variant: button.VariantGhost,
-				Size:    button.SizeSm,
-				Class:   "text-muted-foreground hover:text-foreground",
-				Attributes: templ.Attributes{
-					"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
-					"hx-target":  "#budget-region",
-					"hx-swap":    "outerHTML",
-					"hx-confirm": "Copy all entries from the previous month into this one?",
-					"title":      "Copy every entry from the previous month",
-				},
-			}) {
-				← copy from prev
-			}
-			@button.Button(button.Props{
-				Type:    "button",
-				Variant: button.VariantGhost,
-				Size:    button.SizeSm,
-				Class:   "text-muted-foreground hover:text-foreground",
-				Attributes: templ.Attributes{
-					"hx-get":    "/budget/income/new?month=" + d.Month,
-					"hx-target": "#income-rows",
-					"hx-swap":   "beforeend",
-					"title":     "Add income",
-				},
-			}) {
-				+ income
-			}
-		</div>
+    @card.Card() {
+      @card.Header() {
+        @card.Title() {
+          Income
+        }
+      }
+      @card.Content() {
+        @table.Table() {
+          @table.Header() {
+            @table.Row() {
+              @table.Head() { Source }
+              @table.Head(table.HeadProps{Class: "text-right"}) { Amount }
+              @table.Head(table.HeadProps{Class: "w-10"}) { }
+            }
+          }
+          <tbody id="income-rows">
+            for _, r := range d.IncomeRows {
+              @IncomeRow(d.Month, r)
+            }
+          </tbody>
+          <tfoot>
+            @IncomeTotalsRow(d, false)
+          </tfoot>
+        }
+      }
+      @card.Footer(card.FooterProps{ Class: "flex justify-between" }) {
+        @button.Button(button.Props{
+          Type:    "button",
+          Variant: button.VariantOutline,
+          Size:    button.SizeSm,
+          Class:   "text-muted-foreground hover:text-foreground",
+          Attributes: templ.Attributes{
+            "hx-post":    "/budget/income/copy-prev?month=" + d.Month,
+            "hx-target":  "#budget-region",
+            "hx-swap":    "outerHTML",
+            "hx-confirm": "Copy all entries from the previous month into this one?",
+            "title":      "Copy every entry from the previous month",
+          },
+        }) {
+          ← copy from prev
+        }
+        @button.Button(button.Props{
+          Type:    "button",
+          Size:    button.SizeSm,
+          Attributes: templ.Attributes{
+            "hx-get":    "/budget/income/new?month=" + d.Month,
+            "hx-target": "#income-rows",
+            "hx-swap":   "beforeend",
+            "title":     "Add income",
+          },
+        }) {
+          Add
+        }
+      }
+    }
 	</div>
-	@table.Table() {
-		@table.Header() {
-			@table.Row() {
-				@table.Head() { Source }
-				@table.Head(table.HeadProps{Class: "text-right"}) { Amount }
-				@table.Head(table.HeadProps{Class: "w-10"}) { }
-			}
-		}
-		<tbody id="income-rows">
-			for _, r := range d.IncomeRows {
-				@IncomeRow(d.Month, r)
-			}
-		</tbody>
+}
+
+// IncomeTotalsRow is the income table footer, with a stable #income-totals id so
+// an income mutation can refresh just the total via an out-of-band swap
+// (oob=true) instead of re-rendering the section. When swapped OOB it must be
+// wrapped in a <template> by the caller, because the browser strips a bare <tr>
+// that isn't already inside a table.
+templ IncomeTotalsRow(d BudgetData, oob bool) {
+	{{ attrs := templ.Attributes{"id": "income-totals"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
 	}
+	@table.Row(table.RowProps{Attributes: attrs}) {
+		@table.Cell(table.CellProps{Class: "font-semibold"}) { Total }
+		@table.Cell(table.CellProps{Class: "text-right font-semibold tabular-nums text-emerald-500"}) {
+			{ money.Format(incomeTotal(d.IncomeRows)) }
+		}
+		@table.Cell() { }
+	}
+}
+
+func incomeTotal(rows []store.Income) (total int64) {
+	for _, r := range rows {
+		total += r.AmountCents
+	}
+	return
 }
 
 templ IncomeRow(month string, r store.Income) {
@@ -662,7 +693,7 @@ templ IncomeRow(month string, r store.Income) {
 				Type:    "button",
 				Variant: button.VariantGhost,
 				Size:    button.SizeSm,
-				Class:   "text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100",
+				Class:   "text-muted-foreground hover:text-destructive",
 				Attributes: templ.Attributes{
 					"hx-delete":  fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month),
 					"hx-target":  fmt.Sprintf("#income-%d", r.ID),
@@ -701,15 +732,21 @@ templ IncomeNewRow(month string) {
 	}
 }
 
-// BudgetIncomeRowResult refreshes one income row plus the OOB banner (income
-// changes move Estimated / Remain / Est−Act).
+// BudgetIncomeRowResult refreshes one income row plus the OOB banner and income
+// total (income changes move Estimated / Remain and the footer sum).
 templ BudgetIncomeRowResult(month string, r store.Income, d BudgetData) {
 	@IncomeRow(month, r)
 	@budgetBanner(d, true)
+	<template>
+		@IncomeTotalsRow(d, true)
+	</template>
 }
 
 // BudgetIncomeDeleteResult removes the income row (empty primary target) and
-// refreshes the banner out of band.
+// refreshes the banner + income total out of band.
 templ BudgetIncomeDeleteResult(d BudgetData) {
 	@budgetBanner(d, true)
+	<template>
+		@IncomeTotalsRow(d, true)
+	</template>
 }

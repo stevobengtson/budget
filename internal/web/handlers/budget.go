@@ -57,7 +57,6 @@ func (h *Handlers) budgetData(ctx context.Context, month string) (views.BudgetDa
 	}
 
 	incTotal, _ := h.store.TotalIncome(ctx, month)
-	actual, _ := h.store.ActualIncomeForMonth(ctx, month)
 	credit, _ := h.store.CreditCardActivityForMonth(ctx, month)
 	incomeRows, _ := h.store.ListIncomes(ctx, month)
 
@@ -89,10 +88,8 @@ func (h *Handlers) budgetData(ctx context.Context, month string) (views.BudgetDa
 		PrevMonth:   prev,
 		NextMonth:   next,
 		Estimated:   incTotal,
-		Actual:      actual,
 		Budgeted:    assigned,
 		Remain:      incTotal - assigned,
-		EstAct:      incTotal - actual,
 		CreditRows:  creditFiltered,
 		Groups:      groups,
 		IncomeRows:  incomeRows,
