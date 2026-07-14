@@ -38,54 +38,18 @@ templ TransactionsPage(d TransactionsData) {
 }
 
 templ TransactionsBody(d TransactionsData) {
-	<div class="mb-4 flex items-center justify-between gap-4">
-		<h1 class="text-2xl font-semibold tracking-tight">Transactions <span class="ml-2 text-sm font-normal text-muted-foreground">({ strconv.Itoa(d.Total) })</span></h1>
-		@button.Button(button.Props{
-			Href: "/transactions/new",
-			Size: button.SizeSm,
-			Attributes: templ.Attributes{
-				"hx-get":    "/transactions/new",
-				"hx-target": "#modal",
-				"hx-swap":   "innerHTML",
-			},
-		}) {
-			+ new
-		}
-	</div>
-
 	<div class="flex items-start gap-6">
 		<aside class="sticky top-20 hidden w-72 shrink-0 lg:block">
 			@accountsoverview.AccountsOverview(d.Accounts, d.FilterMonth)
 		</aside>
 		<div class="min-w-0 flex-1">
-	<div class="mb-4 flex flex-wrap items-center gap-3">
+	<div class="flex items-center justify-between gap-4 pb-2">
+		<h1 class="text-2xl font-semibold tracking-tight">{ txMonthLabel(d.FilterMonth) }</h1>
     @monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth))
-		<span class="text-sm font-medium">{ txMonthLabel(d.FilterMonth) }</span>
-		<form method="get" action="/transactions" class="flex items-center gap-2">
-			if d.FilterMonth != "" {
-				<input type="hidden" name="month" value={ d.FilterMonth }/>
-			} else {
-				<input type="hidden" name="all" value="1"/>
-			}
-			@label.Label(label.Props{For: "tx-account-filter", Class: "text-muted-foreground"}) {
-				Account
-			}
-			@SelectField(SelectFieldProps{
-				ID:         "tx-account-filter",
-				Name:       "account",
-				Class:      "w-48",
-				Attributes: templ.Attributes{"onchange": "this.form.submit()"},
-			}, accountFilterOptions(d.Accounts, d.FilterAccount))
-			<noscript>
-				@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}) {
-					filter
-				}
-			</noscript>
-		</form>
 	</div>
 
 	{{ hideAcct := d.FilterAccount != nil }}
-	@table.Table() {
+	@table.Table(table.Props{Class: "mt-4"}) {
 		@table.Header() {
 			@table.Row() {
 				@table.Head() { Date }
@@ -97,7 +61,19 @@ templ TransactionsBody(d TransactionsData) {
 				@table.Head(table.HeadProps{Class: "text-right"}) { Outflow }
 				@table.Head(table.HeadProps{Class: "text-right"}) { Inflow }
 				@table.Head(table.HeadProps{Class: "text-center"}) { ✓ }
-				@table.Head() { }
+				@table.Head(table.HeadProps{Class: "text-right"}) { 
+          @button.Button(button.Props{
+            Href: "/transactions/new",
+            Size: button.SizeSm,
+            Attributes: templ.Attributes{
+              "hx-get":    "/transactions/new",
+              "hx-target": "#modal",
+              "hx-swap":   "innerHTML",
+            },
+          }) {
+            Add
+          }
+        }
 			}
 		}
 		<tbody id="tx-rows" class="[&_tr:last-child]:border-0">
@@ -177,13 +153,15 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 				edit
 			}
 			@button.Button(button.Props{
-				Variant: button.VariantDestructive,
+				Variant: button.VariantGhost,
 				Size:    button.SizeSm,
+        Class:   "text-muted-foreground hover:text-destructive",
 				Attributes: templ.Attributes{
 					"hx-delete":  fmt.Sprintf("/transactions/%d", t.ID),
 					"hx-target":  fmt.Sprintf("#tx-%d", t.ID),
 					"hx-swap":    "outerHTML",
-					"hx-confirm": "Delete?",
+					"hx-confirm": "Delete Transaction?",
+          "title":      "Delete Transaction",
 				},
 			}) {
 				×
@@ -346,19 +324,6 @@ type TxFormData struct {
 	Inflow            string
 	Accounts          []store.AccountWithBalance
 	Categories        []store.Category
-}
-
-func accountFilterOptions(accts []store.AccountWithBalance, selected *int64) []Opt {
-	out := make([]Opt, 0, len(accts)+1)
-	out = append(out, Opt{Value: "", Label: "All accounts", Selected: selected == nil})
-	for _, a := range accts {
-		out = append(out, Opt{
-			Value:    strconv.FormatInt(a.ID, 10),
-			Label:    a.Name,
-			Selected: selected != nil && *selected == a.ID,
-		})
-	}
-	return out
 }
 
 func accountOptions(accts []store.AccountWithBalance, selectedID int64) []Opt {

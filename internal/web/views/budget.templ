@@ -8,6 +8,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/accountsoverview"
+	"github.com/sbengtson/budget/internal/web/components/monthselector"
 	"github.com/templui/templui/components/badge"
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/card"
@@ -44,21 +45,15 @@ templ BudgetPage(d BudgetData) {
 }
 
 templ BudgetMonthSelector(d BudgetData) {
-	<div class="flex items-center justify-between gap-4">
+	<div class="flex items-center justify-between gap-4 pb-2">
 		<h1 class="text-2xl font-semibold tracking-tight">{ formatMonth(d.Month) }</h1>
-		<div class="flex items-center gap-2">
-			@button.Button(button.Props{Href: "/budget?month=" + d.PrevMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
-				‹ prev
-			}
-			@button.Button(button.Props{Href: "/budget?month=" + nowMonth(), Variant: button.VariantOutline, Size: button.SizeSm}) {
-				today
-			}
-			@button.Button(button.Props{Href: "/budget?month=" + d.NextMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
-				next ›
-			}
-		</div>
+    @monthselector.MonthSelector(bgMonthHref(d.PrevMonth), bgMonthHref(nowMonth()), bgMonthHref(d.NextMonth))
 	</div>
 }
+
+func bgMonthHref(month string) string {
+    return "/budget?month=" + month
+  }
 
 // BudgetBanner renders the summary stat cards inside a stable #budget-banner
 // container so a single assignment save can refresh it via an out-of-band swap
@@ -68,7 +63,7 @@ templ BudgetBanner(d BudgetData) {
 }
 
 templ budgetBanner(d BudgetData, oob bool) {
-	{{ attrs := templ.Attributes{"id": "budget-banner", "class": "sticky top-16 z-10 bg-background py-4"} }}
+	{{ attrs := templ.Attributes{"id": "budget-banner", "class": "sticky top-16 z-10 bg-background pb-2"} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
@@ -102,7 +97,7 @@ templ BudgetCreditSection(d BudgetData) {
 		@collapsible.Collapsible(collapsible.Props{Open: true, Class: "mt-6"}) {
 			@card.Card() {
 				@collapsible.Trigger(collapsible.TriggerProps{Class: "cursor-pointer select-none"}) {
-					@card.Header() {
+					@card.Header(card.HeaderProps{Class: "pb-6"}) {
 						<div class="flex items-center justify-between gap-2">
 							@card.Title() {
 								Credit
@@ -112,7 +107,7 @@ templ BudgetCreditSection(d BudgetData) {
 					}
 				}
 				@collapsible.Content(collapsible.ContentProps{Class: "tui-collapsible-open"}) {
-					@card.Content() {
+					@card.Content(card.ContentProps{Class: "pt-0"}) {
 						@table.Table() {
 							@table.Header() {
 								@table.Row() {
@@ -173,7 +168,7 @@ templ BudgetTable(d BudgetData) {
 							"title":     "Add category group",
 						},
 					}) {
-						+ group
+						Add Group
 					}
 				}
 			}
@@ -245,7 +240,7 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 						"title":     "Add category",
 					},
 				}) {
-					+ category
+					Add Category
 				}
 				if len(g.Rows) == 0 {
 					@button.Button(button.Props{
@@ -612,10 +607,10 @@ func budgetTotals(groups []BudgetGroup) (assigned, spent, available int64) {
 }
 
 templ BudgetIncomeSection(d BudgetData) {
-	@collapsible.Collapsible(collapsible.Props{Open: true, Class: "mt-6"}) {
+	@collapsible.Collapsible(collapsible.Props{Open: true, Class: "mt-1"}) {
 		@card.Card() {
 			@collapsible.Trigger(collapsible.TriggerProps{Class: "cursor-pointer select-none"}) {
-				@card.Header() {
+				@card.Header(card.HeaderProps{Class: "pb-6"}) {
 					<div class="flex items-center justify-between gap-2">
 						@card.Title() {
 							Income
@@ -625,7 +620,7 @@ templ BudgetIncomeSection(d BudgetData) {
 				}
 			}
 			@collapsible.Content(collapsible.ContentProps{Class: "tui-collapsible-open"}) {
-				@card.Content() {
+				@card.Content(card.ContentProps{Class: "pt-0"}) {
 					@table.Table() {
 						@table.Header() {
 							@table.Row() {

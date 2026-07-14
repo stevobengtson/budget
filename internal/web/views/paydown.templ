@@ -35,52 +35,51 @@ type PaydownData struct {
 
 templ PaydownPage(d PaydownData) {
 	@Layout("Paydown", "paydown") {
-		<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-			<h1 class="text-xl font-semibold tracking-tight sm:text-2xl">
-				Debt Paydown
-				<span class="ml-2 text-sm font-normal text-muted-foreground">{ strconv.Itoa(d.Horizon) } month horizon</span>
-			</h1>
-			<form method="get" action="/paydown" class="flex flex-wrap items-center gap-2">
-				@label.Label(label.Props{For: "pd-horizon", Class: "text-muted-foreground"}) {
-					Horizon (months)
-				}
-				<div class="w-24">
-					@input.Input(input.Props{
-						ID:         "pd-horizon",
-						Name:       "horizon",
-						Type:       input.TypeNumber,
-						Value:      strconv.Itoa(d.Horizon),
-						Class:      "w-full tabular-nums",
-						Attributes: templ.Attributes{"min": "12", "max": "360", "step": "12"},
-					})
-				</div>
-				@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}) {
-					apply
-				}
-			</form>
-		</div>
-
 		<div class="flex items-start gap-6">
 			<aside class="sticky top-20 hidden w-72 shrink-0 lg:block">
 				@accountsoverview.AccountsOverview(d.AllAccounts, "")
 			</aside>
-			<div class="min-w-0 flex-1">
-		<div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-			@pdStat("Monthly outflow", money.Format(d.TotalMonthly), "text-emerald-500")
-			@pdStat("Total interest", money.Format(d.TotalInterest), "text-red-500")
-		</div>
+      <div class="min-w-0 flex-1">
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">
+            Debt Paydown
+            <span class="ml-2 text-sm font-normal text-muted-foreground">{ strconv.Itoa(d.Horizon) } month horizon</span>
+          </h1>
+          <form method="get" action="/paydown" class="flex flex-wrap items-center gap-2">
+            @label.Label(label.Props{For: "pd-horizon", Class: "text-muted-foreground"}) {
+              Horizon (months)
+            }
+            <div class="w-24">
+              @input.Input(input.Props{
+                ID:         "pd-horizon",
+                Name:       "horizon",
+                Type:       input.TypeNumber,
+                Value:      strconv.Itoa(d.Horizon),
+                Class:      "w-full tabular-nums",
+                Attributes: templ.Attributes{"min": "12", "max": "360", "step": "12"},
+              })
+            </div>
+            @button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}) {
+              apply
+            }
+          </form>
+        </div>
+        <div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          @pdStat("Monthly outflow", money.Format(d.TotalMonthly), "text-emerald-500")
+          @pdStat("Total interest", money.Format(d.TotalInterest), "text-red-500")
+        </div>
 
-		if len(d.Plans) == 0 {
-			<p class="text-sm text-muted-foreground">
-				No accounts in the paydown plan yet. Open
-				<a class="underline underline-offset-4 hover:text-foreground" href="/accounts">Accounts</a>,
-				edit one with APR, and check &#34;include in paydown&#34;.
-			</p>
-		}
+        if len(d.Plans) == 0 {
+          <p class="text-sm text-muted-foreground">
+            No accounts in the paydown plan yet. Open
+            <a class="underline underline-offset-4 hover:text-foreground" href="/accounts">Accounts</a>,
+            edit one with APR, and check &#34;include in paydown&#34;.
+          </p>
+        }
 
-		for i, p := range d.Plans {
-			@PaydownSection(p, d.Accounts[i], d.Horizon, d.PageSize)
-		}
+        for i, p := range d.Plans {
+          @PaydownSection(p, d.Accounts[i], d.Horizon, d.PageSize)
+        }
 			</div>
 		</div>
 	}

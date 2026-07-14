@@ -33,6 +33,14 @@ templ overview(accts []store.AccountWithBalance, month string, oob bool) {
 		<div class="mb-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
 			Accounts Overview
 		</div>
+		<a
+			href={ templ.URL(allTxHref(month)) }
+			class="mb-2 flex items-center justify-between rounded px-1 py-0.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
+			title="View transactions for all accounts"
+		>
+			All Accounts
+			<span class="text-muted-foreground">→</span>
+		</a>
 		<div class="space-y-3">
 			for _, b := range buckets {
 				<div class="border-t border-border pt-3 first:border-t-0 first:pt-0">
@@ -77,6 +85,15 @@ func txHref(accountID int64, month string) string {
 		return "/transactions?month=" + month + "&" + acct
 	}
 	return "/transactions?" + acct
+}
+
+// allTxHref links to the transactions page for all accounts (no account
+// filter), preserving the selected month when set.
+func allTxHref(month string) string {
+	if month != "" {
+		return "/transactions?month=" + month
+	}
+	return "/transactions"
 }
 
 // signedMoney colors an amount green/red/muted by sign. Duplicated locally
