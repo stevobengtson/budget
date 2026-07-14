@@ -12,8 +12,24 @@ import (
 // estimated net-worth footer. Self-contained: pass the raw account slice and it
 // does its own grouping and totaling. Reusable on any page.
 templ AccountsOverview(accts []store.AccountWithBalance) {
+	@overview(accts, false)
+}
+
+// AccountsOverviewOOB renders the overview as an out-of-band swap so a
+// transaction mutation can refresh account balances without re-rendering the
+// page. It targets the stable #accounts-overview container.
+templ AccountsOverviewOOB(accts []store.AccountWithBalance) {
+	@overview(accts, true)
+}
+
+templ overview(accts []store.AccountWithBalance, oob bool) {
 	{{ buckets, net := group(accts) }}
-	@card.Card(card.Props{Class: "p-4"}) {
+	{{ attrs := templ.Attributes{"id": "accounts-overview"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	<div { attrs... }>
+		@card.Card(card.Props{Class: "p-4"}) {
 		<div class="mb-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
 			Accounts Overview
 		</div>
@@ -39,11 +55,12 @@ templ AccountsOverview(accts []store.AccountWithBalance) {
 				</div>
 			}
 		</div>
-		<div class="mt-3 flex items-center justify-between border-t border-border pt-3 font-semibold">
-			<span>Est. Net Worth</span>
-			@signedMoney(net)
-		</div>
-	}
+			<div class="mt-3 flex items-center justify-between border-t border-border pt-3 font-semibold">
+				<span>Est. Net Worth</span>
+				@signedMoney(net)
+			</div>
+		}
+	</div>
 }
 
 // signedMoney colors an amount green/red/muted by sign. Duplicated locally

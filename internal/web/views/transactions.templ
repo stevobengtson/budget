@@ -198,6 +198,7 @@ templ TxUpdateResult(t store.Transaction, pair *store.Transaction, accts []store
 			@TransactionRow(*pair, accts, cats, true)
 		</template>
 	}
+	@accountsoverview.AccountsOverviewOOB(accts)
 	<div id="modal" class="modal-mount" hx-swap-oob="true"></div>
 }
 

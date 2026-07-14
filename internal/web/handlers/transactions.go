@@ -10,6 +10,7 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/accountsoverview"
 	"github.com/sbengtson/budget/internal/web/views"
 )
 
@@ -173,12 +174,16 @@ func (h *Handlers) TransactionsUpdate(c *gin.Context) {
 }
 
 func (h *Handlers) TransactionsDelete(c *gin.Context) {
+	ctx := c.Request.Context()
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err := h.store.DeleteTransaction(c.Request.Context(), id); err != nil {
+	if err := h.store.DeleteTransaction(ctx, id); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.Writer.WriteHeader(http.StatusOK)
+	// The delete button swaps the row out via its empty primary target; the
+	// out-of-band overview refreshes account balances after the row is gone.
+	accts, _ := h.store.ListAccounts(ctx, true)
+	render(c, http.StatusOK, accountsoverview.AccountsOverviewOOB(accts))
 }
 
 func (h *Handlers) TransactionsToggleCleared(c *gin.Context) {
@@ -331,6 +336,8 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 		_ = views.TransactionRow(t, accts, cats, false).Render(ctx, c.Writer)
 	}
 	_, _ = c.Writer.WriteString(`<div id="modal" class="modal-mount" hx-swap-oob="true"></div>`)
+	// Refresh account balances (out of band) after a create.
+	_ = accountsoverview.AccountsOverviewOOB(accts).Render(ctx, c.Writer)
 }
 
 type errInvalid string

@@ -66,3 +66,12 @@ func (s *Store) TotalIncome(ctx context.Context, month string) (int64, error) {
 		`SELECT COALESCE(SUM(amount_cents), 0) FROM incomes WHERE month=?`, month).Scan(&total)
 	return total, err
 }
+
+// MaxIncomeSortOrder returns the largest sort_order among income rows in a
+// month, or 0 if there are none. Callers add 1 to append.
+func (s *Store) MaxIncomeSortOrder(ctx context.Context, month string) (int64, error) {
+	var max int64
+	err := s.queryOne(ctx,
+		`SELECT COALESCE(MAX(sort_order), 0) FROM incomes WHERE month=?`, month).Scan(&max)
+	return max, err
+}

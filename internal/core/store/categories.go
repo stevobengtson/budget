@@ -67,6 +67,24 @@ func (s *Store) ListGroups(ctx context.Context) ([]CategoryGroup, error) {
 	return out, rows.Err()
 }
 
+// MaxGroupSortOrder returns the largest sort_order among category groups, or 0
+// if there are none. Callers add 1 to append a new group at the end.
+func (s *Store) MaxGroupSortOrder(ctx context.Context) (int64, error) {
+	var max int64
+	err := s.queryOne(ctx,
+		`SELECT COALESCE(MAX(sort_order), 0) FROM category_groups`).Scan(&max)
+	return max, err
+}
+
+// MaxCategorySortOrder returns the largest sort_order among categories in a
+// group, or 0 if the group has none. Callers add 1 to append.
+func (s *Store) MaxCategorySortOrder(ctx context.Context, groupID int64) (int64, error) {
+	var max int64
+	err := s.queryOne(ctx,
+		`SELECT COALESCE(MAX(sort_order), 0) FROM categories WHERE group_id=?`, groupID).Scan(&max)
+	return max, err
+}
+
 // --- Categories ---
 
 func (s *Store) CreateCategory(ctx context.Context, c Category) (int64, error) {

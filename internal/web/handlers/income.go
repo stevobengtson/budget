@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
-	"time"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -12,89 +12,16 @@ import (
 	"github.com/sbengtson/budget/internal/web/views"
 )
 
-// BudgetIncomePanel renders /budget/income — the manage-income page.
-func (h *Handlers) BudgetIncomePanel(c *gin.Context) {
-	ctx := c.Request.Context()
-	month := c.Query("month")
-	if month == "" {
-		month = store.MonthKey(time.Now())
-	}
-
-	rows, err := h.store.ListIncomes(ctx, month)
-	if err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
-		return
-	}
-	total, _ := h.store.TotalIncome(ctx, month)
-	actual, _ := h.store.ActualIncomeForMonth(ctx, month)
-
-	// Sum assigned for budgeted figure (excludes Income category).
-	budgetRows, _ := h.store.MonthBudget(ctx, month)
-	var assigned int64
-	for _, r := range budgetRows {
-		if !r.IsIncome {
-			assigned += r.AssignedCents
-		}
-	}
-
-	prev := store.PrevMonth(month)
-	t, _ := time.Parse("2006-01", month)
-	next := t.AddDate(0, 1, 0).Format("2006-01")
-
-	render(c, http.StatusOK, views.IncomePage(views.IncomeData{
-		Month:     month,
-		PrevMonth: prev,
-		NextMonth: next,
-		Today:     store.MonthKey(time.Now()),
-		Rows:      rows,
-		Total:     total,
-		Actual:    actual,
-		Budgeted:  assigned,
-	}))
-}
-
-// BudgetIncomeNew returns the modal form for creating a new income line.
+// BudgetIncomeNew returns the transient add-income row.
 func (h *Handlers) BudgetIncomeNew(c *gin.Context) {
-	month := c.Query("month")
-	if month == "" {
-		month = store.MonthKey(time.Now())
-	}
-	render(c, http.StatusOK, views.IncomeForm(views.IncomeFormData{Month: month}))
+	render(c, http.StatusOK, views.IncomeNewRow(monthOrNow(c)))
 }
 
-// BudgetIncomeEdit returns the modal form pre-filled with the row.
-func (h *Handlers) BudgetIncomeEdit(c *gin.Context) {
-	ctx := c.Request.Context()
-	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	month := c.Query("month")
-	if month == "" {
-		month = store.MonthKey(time.Now())
-	}
-	rows, err := h.store.ListIncomes(ctx, month)
-	if err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
-		return
-	}
-	for _, r := range rows {
-		if r.ID == id {
-			render(c, http.StatusOK, views.IncomeForm(views.IncomeFormData{
-				Editing: true, ID: r.ID, Month: month,
-				Name:   r.Name,
-				Amount: money.Format(r.AmountCents),
-			}))
-			return
-		}
-	}
-	c.String(http.StatusNotFound, "income row not found in month %s", month)
-}
-
+// BudgetIncomeCreate inserts an income entry and returns its row + OOB banner.
 func (h *Handlers) BudgetIncomeCreate(c *gin.Context) {
 	ctx := c.Request.Context()
-	month := c.Query("month")
-	if month == "" {
-		month = store.MonthKey(time.Now())
-	}
-	name := c.PostForm("name")
+	month := monthOrNow(c)
+	name := strings.TrimSpace(c.PostForm("name"))
 	if name == "" {
 		c.String(http.StatusBadRequest, "name required")
 		return
@@ -104,60 +31,103 @@ func (h *Handlers) BudgetIncomeCreate(c *gin.Context) {
 		c.String(http.StatusBadRequest, "amount: %v", err)
 		return
 	}
-	if _, err := h.store.CreateIncome(ctx, store.Income{
-		Month: month, Name: name, AmountCents: cents,
-	}); err != nil {
+	max, err := h.store.MaxIncomeSortOrder(ctx, month)
+	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.Header("HX-Redirect", "/budget/income?month="+month)
-	c.Writer.WriteHeader(http.StatusOK)
+	id, err := h.store.CreateIncome(ctx, store.Income{
+		Month: month, Name: name, AmountCents: cents, SortOrder: max + 1,
+	})
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	data, _, err := h.budgetData(ctx, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	row := store.Income{ID: id, Month: month, Name: name, AmountCents: cents, SortOrder: max + 1}
+	render(c, http.StatusOK, views.BudgetIncomeRowResult(month, row, data))
 }
 
+// BudgetIncomeUpdate field-merges name and/or amount (whichever the inline
+// edit submitted) and returns the refreshed row + OOB banner.
 func (h *Handlers) BudgetIncomeUpdate(c *gin.Context) {
 	ctx := c.Request.Context()
+	month := monthOrNow(c)
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	month := c.Query("month")
-	if month == "" {
-		month = store.MonthKey(time.Now())
-	}
-	name := c.PostForm("name")
-	cents, err := money.Parse(c.PostForm("amount"))
+
+	rows, err := h.store.ListIncomes(ctx, month)
 	if err != nil {
-		c.String(http.StatusBadRequest, "amount: %v", err)
-		return
-	}
-	if err := h.store.UpdateIncome(ctx, store.Income{
-		ID: id, Month: month, Name: name, AmountCents: cents,
-	}); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.Header("HX-Redirect", "/budget/income?month="+month)
-	c.Writer.WriteHeader(http.StatusOK)
+	var cur *store.Income
+	for i := range rows {
+		if rows[i].ID == id {
+			cur = &rows[i]
+			break
+		}
+	}
+	if cur == nil {
+		c.String(http.StatusNotFound, "income row not found in month %s", month)
+		return
+	}
+	if v, ok := c.GetPostForm("name"); ok {
+		name := strings.TrimSpace(v)
+		if name == "" {
+			c.String(http.StatusBadRequest, "name required")
+			return
+		}
+		cur.Name = name
+	}
+	if v, ok := c.GetPostForm("amount"); ok {
+		cents, err := money.Parse(v)
+		if err != nil {
+			c.String(http.StatusBadRequest, "amount: %v", err)
+			return
+		}
+		cur.AmountCents = cents
+	}
+	if err := h.store.UpdateIncome(ctx, *cur); err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	data, _, err := h.budgetData(ctx, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetIncomeRowResult(month, *cur, data))
 }
 
+// BudgetIncomeDelete removes an income entry; the row is dropped and the banner
+// refreshes out of band.
 func (h *Handlers) BudgetIncomeDelete(c *gin.Context) {
+	ctx := c.Request.Context()
+	month := monthOrNow(c)
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err := h.store.DeleteIncome(c.Request.Context(), id); err != nil {
+	if err := h.store.DeleteIncome(ctx, id); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.Writer.WriteHeader(http.StatusOK)
+	data, _, err := h.budgetData(ctx, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetIncomeDeleteResult(data))
 }
 
-// BudgetIncomeCopyPrev copies every income entry from the previous month
-// into the current month. The (month, name) pair is unique, so entries
-// that already exist in the target month are updated to the previous
-// month's amount/sort_order instead of producing a duplicate-key error.
-// New names are inserted. Entries that exist only in the target month
-// are left alone.
+// BudgetIncomeCopyPrev copies the previous month's entries into this month and
+// re-renders the region. The (month, name) pair is unique, so entries already
+// present are updated to the previous month's amount/sort_order instead of
+// erroring.
 func (h *Handlers) BudgetIncomeCopyPrev(c *gin.Context) {
 	ctx := c.Request.Context()
-	month := c.Query("month")
-	if month == "" {
-		month = store.MonthKey(time.Now())
-	}
+	month := monthOrNow(c)
 	prev := store.PrevMonth(month)
 
 	prevRows, err := h.store.ListIncomes(ctx, prev)
@@ -174,7 +144,6 @@ func (h *Handlers) BudgetIncomeCopyPrev(c *gin.Context) {
 	for _, r := range curRows {
 		existing[r.Name] = r
 	}
-
 	for _, r := range prevRows {
 		if cur, ok := existing[r.Name]; ok {
 			cur.AmountCents = r.AmountCents
@@ -186,15 +155,16 @@ func (h *Handlers) BudgetIncomeCopyPrev(c *gin.Context) {
 			continue
 		}
 		if _, err := h.store.CreateIncome(ctx, store.Income{
-			Month:       month,
-			Name:        r.Name,
-			AmountCents: r.AmountCents,
-			SortOrder:   r.SortOrder,
+			Month: month, Name: r.Name, AmountCents: r.AmountCents, SortOrder: r.SortOrder,
 		}); err != nil {
 			c.String(http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
-	c.Header("HX-Redirect", "/budget/income?month="+month)
-	c.Writer.WriteHeader(http.StatusOK)
+	data, _, err := h.budgetData(ctx, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetRegion(data))
 }

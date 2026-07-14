@@ -24,8 +24,18 @@ type BudgetData struct {
 	Remain      int64
 	EstAct      int64
 	CreditRows  []store.CreditActivity
-	GroupedRows [][]store.CategoryBudget // grouped by GroupName order, no Income
+	Groups      []BudgetGroup
+	IncomeRows  []store.Income
 	Accounts    []store.AccountWithBalance
+}
+
+// BudgetGroup is one category group plus its month rows, for rendering a
+// per-group <tbody>. Empty groups (Rows == nil) still render so the user can
+// add the first category to them.
+type BudgetGroup struct {
+	ID   int64
+	Name string
+	Rows []store.CategoryBudget
 }
 
 templ BudgetPage(d BudgetData) {
@@ -71,7 +81,6 @@ templ budgetBanner(d BudgetData, oob bool) {
 			@bannerStatSigned("Remain", d.Remain)
 			@bannerStatSigned("Est−Act", d.EstAct)
 		</div>
-		<p class="mb-4 text-xs text-muted-foreground">Tip: <a class="underline underline-offset-4 hover:text-foreground" href="/budget/income">manage income</a> in this month.</p>
 	</div>
 }
 
@@ -128,27 +137,134 @@ templ BudgetTable(d BudgetData) {
 				@table.Head() { Spent }
 				@table.Head() { Available }
 				@table.Head() { Goal }
-				@table.Head() { }
-			}
-		}
-		@table.Body() {
-			for _, group := range d.GroupedRows {
-				if len(group) > 0 {
-					@table.Row(table.RowProps{Class: "bg-muted/40 hover:bg-muted/40"}) {
-						@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle font-semibold uppercase tracking-wide text-xs text-muted-foreground"}}) {
-							{ group[0].GroupName }
-						}
-					}
-					for _, r := range group {
-						@BudgetRow(d.Month, r)
+				@table.Head(table.HeadProps{Class: "text-right"}) {
+					@button.Button(button.Props{
+						Type:    "button",
+						Variant: button.VariantGhost,
+						Size:    button.SizeSm,
+						Class:   "text-muted-foreground hover:text-foreground",
+						Attributes: templ.Attributes{
+							"hx-get":    "/budget/group/new",
+							"hx-target": "#budget-totals-body",
+							"hx-swap":   "beforebegin",
+							"title":     "Add category group",
+						},
+					}) {
+						+ group
 					}
 				}
 			}
 		}
-		@table.Footer() {
+		for _, g := range d.Groups {
+			@BudgetGroupTbody(d.Month, g)
+		}
+		<tbody id="budget-totals-body">
 			@BudgetTotalsRow(d, false)
+		</tbody>
+	}
+}
+
+templ BudgetGroupTbody(month string, g BudgetGroup) {
+	<tbody id={ fmt.Sprintf("group-%d", g.ID) }>
+		@BudgetGroupHeader(month, g)
+		for _, r := range g.Rows {
+			@BudgetRow(month, r)
+		}
+	</tbody>
+}
+
+templ BudgetGroupHeader(month string, g BudgetGroup) {
+	@budgetGroupHeader(month, g, false)
+}
+
+// budgetGroupHeader renders a group's header row. When oob is true the <tr>
+// carries hx-swap-oob so a response can refresh it out of band (used after
+// adding the first category to a group, to drop the "delete empty group"
+// control). An OOB bare <tr> must be wrapped in a <template> by the caller.
+templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
+	{{ attrs := templ.Attributes{"id": fmt.Sprintf("group-head-%d", g.ID), "class": "bg-muted/40 hover:bg-muted/40"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	@table.Row(table.RowProps{Attributes: attrs}) {
+		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
+			<div class="flex items-center gap-2">
+				<form
+					hx-put={ fmt.Sprintf("/budget/group/%d?month=%s", g.ID, month) }
+					hx-target={ fmt.Sprintf("#group-head-%d", g.ID) }
+					hx-swap="outerHTML"
+					class="flex items-center"
+				>
+					<button
+						type="button"
+						class="js-name-display cursor-text rounded-md px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-transparent hover:ring-border"
+						title="Click to rename"
+					>
+						{ g.Name }
+					</button>
+					<input
+						type="text"
+						name="name"
+						value={ g.Name }
+						autocomplete="off"
+						class="js-name-input hidden h-7 w-56 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					/>
+				</form>
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantGhost,
+					Size:    button.SizeSm,
+					Class:   "text-muted-foreground hover:text-foreground",
+					Attributes: templ.Attributes{
+						"hx-get":    fmt.Sprintf("/budget/group/%d/category/new?month=%s", g.ID, month),
+						"hx-target": fmt.Sprintf("#group-%d", g.ID),
+						"hx-swap":   "beforeend",
+						"title":     "Add category",
+					},
+				}) {
+					+ category
+				}
+				if len(g.Rows) == 0 {
+					@button.Button(button.Props{
+						Type:    "button",
+						Variant: button.VariantGhost,
+						Size:    button.SizeSm,
+						Class:   "text-muted-foreground hover:text-destructive",
+						Attributes: templ.Attributes{
+							"hx-post":    fmt.Sprintf("/budget/group/%d/delete?month=%s", g.ID, month),
+							"hx-target":  "#budget-region",
+							"hx-swap":    "outerHTML",
+							"hx-confirm": "Delete this empty group?",
+							"title":      "Delete empty group",
+						},
+					}) {
+						×
+					}
+				}
+			</div>
 		}
 	}
+}
+
+// BudgetGroupNewRow is the transient editable <tbody> inserted by "+ group".
+// name-edit.js submits it on Enter/blur or removes it if left empty.
+templ BudgetGroupNewRow() {
+	<tbody data-newrow>
+		@table.Row() {
+			@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2"}}) {
+				<form hx-post="/budget/group" hx-target="closest tbody" hx-swap="outerHTML" class="flex items-center">
+					<input
+						type="text"
+						name="name"
+						autocomplete="off"
+						autofocus
+						placeholder="New group name"
+						class="js-name-new h-7 w-56 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					/>
+				</form>
+			}
+		}
+	</tbody>
 }
 
 // BudgetTotalsRow is the footer totals row, factored out with a stable
@@ -157,7 +273,7 @@ templ BudgetTable(d BudgetData) {
 // swapped OOB it must be wrapped in a <template> by the caller, because the
 // browser strips a bare <tr> that isn't already inside a table.
 templ BudgetTotalsRow(d BudgetData, oob bool) {
-	{{ assigned, spent, available := budgetTotals(d.GroupedRows) }}
+	{{ assigned, spent, available := budgetTotals(d.Groups) }}
 	{{ attrs := templ.Attributes{"id": "budget-totals"} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
@@ -194,6 +310,7 @@ templ BudgetBody(d BudgetData) {
 templ BudgetRegion(d BudgetData) {
 	<div id="budget-region">
 		@BudgetBanner(d)
+		@BudgetIncomeSection(d)
 		@BudgetCreditSection(d)
 		@BudgetTable(d)
 	</div>
@@ -213,8 +330,40 @@ templ BudgetAssignResult(month string, edited store.CategoryBudget, d BudgetData
 }
 
 templ BudgetRow(month string, r store.CategoryBudget) {
-	@table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("cat-%d", r.CategoryID)}}) {
-		@table.Cell(table.CellProps{Class: "pl-6"}) { { r.CategoryName } }
+	@budgetRow(month, r, false)
+}
+
+// budgetRow renders one category row. When oob is true the <tr> carries
+// hx-swap-oob so a response can refresh it out of band (used by the goal save).
+templ budgetRow(month string, r store.CategoryBudget, oob bool) {
+	{{ attrs := templ.Attributes{"id": fmt.Sprintf("cat-%d", r.CategoryID), "class": "group"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	@table.Row(table.RowProps{Attributes: attrs}) {
+		@table.Cell(table.CellProps{Class: "pl-6"}) {
+			if r.IsIncome {
+				{ r.CategoryName }
+			} else {
+				<form
+					hx-put={ fmt.Sprintf("/budget/category/%d?month=%s", r.CategoryID, month) }
+					hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
+					hx-swap="outerHTML"
+					class="flex items-center"
+				>
+					<button type="button" class="js-name-display cursor-text rounded-md px-1 py-0.5 text-sm ring-1 ring-transparent hover:ring-border" title="Click to rename">
+						{ r.CategoryName }
+					</button>
+					<input
+						type="text"
+						name="name"
+						value={ r.CategoryName }
+						autocomplete="off"
+						class="js-name-input hidden h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					/>
+				</form>
+			}
+		}
 		@table.Cell() {
 			<div class="flex items-center justify-end gap-2">
 				<form
@@ -260,10 +409,134 @@ templ BudgetRow(month string, r store.CategoryBudget) {
 			@SignedMoney(r.AvailableCents)
 		}
 		@table.Cell() {
-			@GoalCell(r)
+			if r.IsIncome {
+				@GoalCell(r)
+			} else {
+				<button
+					type="button"
+					class="w-full cursor-pointer rounded-md px-1 py-0.5 text-left ring-1 ring-transparent hover:ring-border"
+					hx-get={ fmt.Sprintf("/budget/goal/%d/edit?month=%s", r.CategoryID, month) }
+					hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
+					hx-swap="afterend"
+					title="Click to set a goal"
+				>
+					@GoalCell(r)
+				</button>
+			}
+		}
+		@table.Cell(table.CellProps{Class: "text-right"}) {
+			if !r.IsIncome {
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantGhost,
+					Size:    button.SizeSm,
+					Class:   "text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100",
+					Attributes: templ.Attributes{
+						"hx-post":    fmt.Sprintf("/budget/category/%d/archive?month=%s", r.CategoryID, month),
+						"hx-target":  "#budget-region",
+						"hx-swap":    "outerHTML",
+						"hx-confirm": "Archive this category?",
+						"title":      "Archive category",
+					},
+				}) {
+					×
+				}
+			}
+		}
+	}
+}
+
+// BudgetCategoryNewRow is the transient editable row inserted by "+ category".
+// BudgetCategoryCreateResult swaps the transient new-category row into the real
+// row and refreshes the group header out of band so its "delete empty group"
+// control disappears once the group has a category.
+templ BudgetCategoryCreateResult(month string, r store.CategoryBudget, g BudgetGroup) {
+	@BudgetRow(month, r)
+	<template>
+		@budgetGroupHeader(month, g, true)
+	</template>
+}
+
+templ BudgetCategoryNewRow(month string, gid int64) {
+	@table.Row(table.RowProps{Attributes: templ.Attributes{"data-newrow": ""}}) {
+		@table.Cell(table.CellProps{Class: "pl-6"}) {
+			<form hx-post={ fmt.Sprintf("/budget/group/%d/category?month=%s", gid, month) } hx-target="closest tr" hx-swap="outerHTML" class="flex items-center">
+				<input
+					type="text"
+					name="name"
+					autocomplete="off"
+					autofocus
+					placeholder="new category"
+					class="js-name-new h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				/>
+			</form>
 		}
 		@table.Cell() { }
+		@table.Cell() { }
+		@table.Cell() { }
+		@table.Cell() { }
+		@table.Cell() { }
 	}
+}
+
+// BudgetGoalEditor is the expanding editor row inserted below a category row.
+// It is pre-filled with the current goal so it edits and clears as well as sets.
+templ BudgetGoalEditor(month string, r store.CategoryBudget) {
+	@table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("goal-edit-%d", r.CategoryID)}}) {
+		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "bg-muted/20 p-2"}}) {
+			<form
+				hx-post={ fmt.Sprintf("/budget/goal/%d?month=%s", r.CategoryID, month) }
+				hx-target={ fmt.Sprintf("#goal-edit-%d", r.CategoryID) }
+				hx-swap="outerHTML"
+				class="flex flex-wrap items-end gap-3"
+			>
+				<div class="grid gap-1">
+					<label class="text-xs text-muted-foreground">Goal $</label>
+					<input type="text" name="goal_cents" value={ goalCentsValue(r) } inputmode="decimal" placeholder="(optional)" autocomplete="off" class="h-8 w-32 rounded-md border border-input bg-transparent px-2 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+				</div>
+				<div class="grid gap-1">
+					<label class="text-xs text-muted-foreground">Goal due</label>
+					<input type="date" name="goal_due" value={ goalDueValue(r) } class="h-8 w-40 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+				</div>
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
+					save
+				}
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantGhost,
+					Size:    button.SizeSm,
+					Attributes: templ.Attributes{
+						"hx-on:click": fmt.Sprintf("document.getElementById('goal-edit-%d').remove()", r.CategoryID),
+					},
+				}) {
+					cancel
+				}
+			</form>
+		}
+	}
+}
+
+// BudgetGoalResult removes the editor row (empty primary target) and refreshes
+// the category row out of band. The <template> wrapper lets the OOB <tr>
+// survive the browser's table-parsing rules (same trick as BudgetTotalsRow).
+templ BudgetGoalResult(month string, r store.CategoryBudget) {
+	<template>
+		@budgetRow(month, r, true)
+	</template>
+}
+
+func goalCentsValue(r store.CategoryBudget) string {
+	if r.GoalCents != nil {
+		return money.Format(*r.GoalCents)
+	}
+	return ""
+}
+
+func goalDueValue(r store.CategoryBudget) string {
+	if r.GoalDueDate != nil {
+		return r.GoalDueDate.Format("2006-01-02")
+	}
+	return ""
 }
 
 templ GoalCell(r store.CategoryBudget) {
@@ -304,13 +577,139 @@ func formatMonth(m string) string {
 
 func nowMonth() string { return time.Now().Format("2006-01") }
 
-func budgetTotals(grouped [][]store.CategoryBudget) (assigned, spent, available int64) {
-	for _, group := range grouped {
-		for _, r := range group {
+func budgetTotals(groups []BudgetGroup) (assigned, spent, available int64) {
+	for _, g := range groups {
+		for _, r := range g.Rows {
 			assigned += r.AssignedCents
 			spent += r.SpentCents
 			available += r.AvailableCents
 		}
 	}
 	return
+}
+
+templ BudgetIncomeSection(d BudgetData) {
+	<div class="mb-2 mt-6 flex items-center justify-between gap-2">
+		<h2 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Income</h2>
+		<div class="flex items-center gap-2">
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantGhost,
+				Size:    button.SizeSm,
+				Class:   "text-muted-foreground hover:text-foreground",
+				Attributes: templ.Attributes{
+					"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
+					"hx-target":  "#budget-region",
+					"hx-swap":    "outerHTML",
+					"hx-confirm": "Copy all entries from the previous month into this one?",
+					"title":      "Copy every entry from the previous month",
+				},
+			}) {
+				← copy from prev
+			}
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantGhost,
+				Size:    button.SizeSm,
+				Class:   "text-muted-foreground hover:text-foreground",
+				Attributes: templ.Attributes{
+					"hx-get":    "/budget/income/new?month=" + d.Month,
+					"hx-target": "#income-rows",
+					"hx-swap":   "beforeend",
+					"title":     "Add income",
+				},
+			}) {
+				+ income
+			}
+		</div>
+	</div>
+	@table.Table() {
+		@table.Header() {
+			@table.Row() {
+				@table.Head() { Source }
+				@table.Head(table.HeadProps{Class: "text-right"}) { Amount }
+				@table.Head(table.HeadProps{Class: "w-10"}) { }
+			}
+		}
+		<tbody id="income-rows">
+			for _, r := range d.IncomeRows {
+				@IncomeRow(d.Month, r)
+			}
+		</tbody>
+	}
+}
+
+templ IncomeRow(month string, r store.Income) {
+	@table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("income-%d", r.ID), "class": "group"}}) {
+		@table.Cell(table.CellProps{Class: "font-medium"}) {
+			<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="flex items-center">
+				<button type="button" class="js-name-display cursor-text rounded-md px-1 py-0.5 text-sm ring-1 ring-transparent hover:ring-border" title="Click to rename">
+					{ r.Name }
+				</button>
+				<input type="text" name="name" value={ r.Name } autocomplete="off" class="js-name-input hidden h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+			</form>
+		}
+		@table.Cell(table.CellProps{Class: "text-right"}) {
+			<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="js-assign flex items-center justify-end">
+				<button type="button" class="js-assign-display cursor-text rounded-md px-2 py-1 text-right text-sm tabular-nums text-emerald-500 ring-1 ring-transparent hover:ring-border" title="Click to edit">
+					{ money.Format(r.AmountCents) }
+				</button>
+				<input type="text" name="amount" value={ money.Format(r.AmountCents) } inputmode="decimal" autocomplete="off" class="js-assign-input hidden h-8 w-28 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+			</form>
+		}
+		@table.Cell(table.CellProps{Class: "text-right"}) {
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantGhost,
+				Size:    button.SizeSm,
+				Class:   "text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100",
+				Attributes: templ.Attributes{
+					"hx-delete":  fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month),
+					"hx-target":  fmt.Sprintf("#income-%d", r.ID),
+					"hx-swap":    "outerHTML",
+					"hx-confirm": "Delete this income entry?",
+					"title":      "Delete",
+				},
+			}) {
+				×
+			}
+		}
+	}
+}
+
+// IncomeNewRow is the transient add-income row (multi-field -> explicit Save,
+// like the goal editor, not blur-save).
+templ IncomeNewRow(month string) {
+	@table.Row(table.RowProps{Attributes: templ.Attributes{"data-newrow": ""}}) {
+		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "3", "class": "p-2"}}) {
+			<form hx-post={ "/budget/income?month=" + month } hx-target="closest tr" hx-swap="outerHTML" class="flex flex-wrap items-end gap-3">
+				<input type="text" name="name" autofocus placeholder="Source" autocomplete="off" class="h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+				<input type="text" name="amount" placeholder="0.00" inputmode="decimal" autocomplete="off" class="h-8 w-32 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
+					save
+				}
+				@button.Button(button.Props{
+					Type:       "button",
+					Variant:    button.VariantGhost,
+					Size:       button.SizeSm,
+					Attributes: templ.Attributes{"hx-on:click": "this.closest('tr').remove()"},
+				}) {
+					cancel
+				}
+			</form>
+		}
+	}
+}
+
+// BudgetIncomeRowResult refreshes one income row plus the OOB banner (income
+// changes move Estimated / Remain / Est−Act).
+templ BudgetIncomeRowResult(month string, r store.Income, d BudgetData) {
+	@IncomeRow(month, r)
+	@budgetBanner(d, true)
+}
+
+// BudgetIncomeDeleteResult removes the income row (empty primary target) and
+// refreshes the banner out of band.
+templ BudgetIncomeDeleteResult(d BudgetData) {
+	@budgetBanner(d, true)
 }

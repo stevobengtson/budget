@@ -808,3 +808,60 @@ func mustUpdate(t *testing.T, s *Store, legID int64, in TransferLegEdit) {
 		t.Fatalf("update transfer: %v", err)
 	}
 }
+
+func TestMaxSortOrderHelpers(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	// Groups: the seed migration adds an "Income" group at sort_order -100,
+	// so append helpers must key off MAX, not COUNT.
+	if _, err := s.CreateGroup(ctx, "Bills", 5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateGroup(ctx, "Fun", 9); err != nil {
+		t.Fatal(err)
+	}
+	if g, err := s.MaxGroupSortOrder(ctx); err != nil {
+		t.Fatalf("max group: %v", err)
+	} else if g != 9 {
+		t.Errorf("max group sort = %d, want 9", g)
+	}
+
+	gid, err := s.CreateGroup(ctx, "Home", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Rent", SortOrder: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Power", SortOrder: 7}); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := s.MaxCategorySortOrder(ctx, gid); err != nil {
+		t.Fatal(err)
+	} else if c != 7 {
+		t.Errorf("max cat sort = %d, want 7", c)
+	}
+
+	empty, err := s.CreateGroup(ctx, "Empty", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := s.MaxCategorySortOrder(ctx, empty); c != 0 {
+		t.Errorf("empty group cat sort = %d, want 0", c)
+	}
+
+	month := "2026-07"
+	if v, _ := s.MaxIncomeSortOrder(ctx, month); v != 0 {
+		t.Errorf("empty income sort = %d, want 0", v)
+	}
+	if _, err := s.CreateIncome(ctx, Income{Month: month, Name: "Salary", AmountCents: 1000, SortOrder: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateIncome(ctx, Income{Month: month, Name: "Side", AmountCents: 500, SortOrder: 8}); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := s.MaxIncomeSortOrder(ctx, month); v != 8 {
+		t.Errorf("income sort = %d, want 8", v)
+	}
+}
