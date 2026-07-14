@@ -865,3 +865,76 @@ func TestMaxSortOrderHelpers(t *testing.T) {
 		t.Errorf("income sort = %d, want 8", v)
 	}
 }
+
+func TestDeleteGroup(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	groupExists := func(id int64) bool {
+		groups, err := s.ListGroups(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, g := range groups {
+			if g.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+
+	// (a) A truly empty group deletes.
+	g1, _ := s.CreateGroup(ctx, "Empty", 1)
+	if err := s.DeleteGroup(ctx, g1); err != nil {
+		t.Fatalf("empty group: %v", err)
+	}
+	if groupExists(g1) {
+		t.Error("empty group should be gone")
+	}
+
+	// (b) A group with an active category is rejected.
+	g2, _ := s.CreateGroup(ctx, "HasActive", 2)
+	if _, err := s.CreateCategory(ctx, Category{GroupID: g2, Name: "Active"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteGroup(ctx, g2); err == nil {
+		t.Error("group with active category should be rejected")
+	}
+	if !groupExists(g2) {
+		t.Error("rejected group should remain")
+	}
+
+	// (c) A group whose only categories are archived and unreferenced deletes,
+	// cleaning up the archived rows (this is the reported bug).
+	g3, _ := s.CreateGroup(ctx, "HasArchived", 3)
+	c3, _ := s.CreateCategory(ctx, Category{GroupID: g3, Name: "Old"})
+	if err := s.ArchiveCategory(ctx, c3); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteGroup(ctx, g3); err != nil {
+		t.Fatalf("group with unreferenced archived category: %v", err)
+	}
+	if groupExists(g3) {
+		t.Error("group with only archived-unused categories should be gone")
+	}
+
+	// (d) A group with an archived category that still carries transaction
+	// history is rejected, and left intact.
+	acctID, _ := s.CreateAccount(ctx, Account{Name: "Checking", Type: TypeChecking})
+	g4, _ := s.CreateGroup(ctx, "HasHistory", 4)
+	c4, _ := s.CreateCategory(ctx, Category{GroupID: g4, Name: "Spent"})
+	if _, err := s.CreateTransaction(ctx, Transaction{
+		Date: time.Now(), AccountID: acctID, CategoryID: &c4, OutflowCents: 100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ArchiveCategory(ctx, c4); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteGroup(ctx, g4); err == nil {
+		t.Error("group with referenced archived category should be rejected")
+	}
+	if !groupExists(g4) {
+		t.Error("group with history should remain")
+	}
+}

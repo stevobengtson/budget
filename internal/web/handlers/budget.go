@@ -350,19 +350,10 @@ func (h *Handlers) BudgetGroupDelete(c *gin.Context) {
 	month := monthOrNow(c)
 	gid, _ := strconv.ParseInt(c.Param("gid"), 10, 64)
 
-	cats, err := h.store.ListCategories(ctx, false)
-	if err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
-		return
-	}
-	for _, cat := range cats {
-		if cat.GroupID == gid {
-			c.String(http.StatusBadRequest, "group is not empty")
-			return
-		}
-	}
+	// DeleteGroup enforces emptiness (including cleaning up the group's archived
+	// categories, and rejecting any that still carry transaction history).
 	if err := h.store.DeleteGroup(ctx, gid); err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
 	data, _, err := h.budgetData(ctx, month)

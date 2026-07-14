@@ -43,8 +43,8 @@ templ BudgetPage(d BudgetData) {
 }
 
 templ BudgetMonthSelector(d BudgetData) {
-	<div class="mb-4 flex items-center justify-between gap-4">
-		<h1 class="text-2xl font-semibold tracking-tight">Budget · { formatMonth(d.Month) }</h1>
+	<div class="flex items-center justify-between gap-4">
+		<h1 class="text-2xl font-semibold tracking-tight">{ formatMonth(d.Month) }</h1>
 		<div class="flex items-center gap-2">
 			@button.Button(button.Props{Href: "/budget?month=" + d.PrevMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
 				‹ prev
@@ -67,7 +67,7 @@ templ BudgetBanner(d BudgetData) {
 }
 
 templ budgetBanner(d BudgetData, oob bool) {
-	{{ attrs := templ.Attributes{"id": "budget-banner", "class": "sticky top-20 z-10 bg-background py-4"} }}
+	{{ attrs := templ.Attributes{"id": "budget-banner", "class": "sticky top-16 z-10 bg-background py-4"} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
@@ -295,7 +295,6 @@ templ BudgetTotalsRow(d BudgetData, oob bool) {
 }
 
 templ BudgetBody(d BudgetData) {
-	@BudgetMonthSelector(d)
 	<div class="flex items-start gap-6">
 		<aside class="sticky top-20 hidden w-72 shrink-0 lg:block">
 			@accountsoverview.AccountsOverview(d.Accounts, d.Month)
@@ -313,6 +312,7 @@ templ BudgetBody(d BudgetData) {
 // banner + totals via out-of-band swaps (see BudgetAssignResult).
 templ BudgetRegion(d BudgetData) {
 	<div id="budget-region">
+    @BudgetMonthSelector(d)
     @BudgetBanner(d)
     @BudgetIncomeSection(d)
 		@BudgetCreditSection(d)

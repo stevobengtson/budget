@@ -44,9 +44,37 @@ func (s *Store) UpdateGroup(ctx context.Context, g CategoryGroup) error {
 	return err
 }
 
+// DeleteGroup removes a category group. A group may still own archived
+// categories (soft-deleted from the budget page); those linger with their
+// group_id and would otherwise trip the categories→category_groups foreign key.
+// They are cleaned up in the same transaction. The delete is rejected if the
+// group still has an active category, or an archived category that carries
+// history (referenced by a transaction or an account's payment category) — the
+// foreign key rolls the whole delete back so no history is lost.
 func (s *Store) DeleteGroup(ctx context.Context, id int64) error {
-	_, err := s.run(ctx, `DELETE FROM category_groups WHERE id=?`, id)
-	return err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var active int
+	if err := s.txQueryOne(ctx, tx,
+		`SELECT COUNT(*) FROM categories WHERE group_id=? AND archived_at IS NULL`, id).Scan(&active); err != nil {
+		return err
+	}
+	if active > 0 {
+		return fmt.Errorf("group is not empty")
+	}
+
+	if _, err := s.txExec(ctx, tx,
+		`DELETE FROM categories WHERE group_id=? AND archived_at IS NOT NULL`, id); err != nil {
+		return fmt.Errorf("group has categories with history and cannot be deleted: %w", err)
+	}
+	if _, err := s.txExec(ctx, tx, `DELETE FROM category_groups WHERE id=?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) ListGroups(ctx context.Context) ([]CategoryGroup, error) {
