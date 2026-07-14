@@ -11,18 +11,18 @@ import (
 // AccountsOverview renders a grouped account list (Cash/Credit/Loan) with an
 // estimated net-worth footer. Self-contained: pass the raw account slice and it
 // does its own grouping and totaling. Reusable on any page.
-templ AccountsOverview(accts []store.AccountWithBalance) {
-	@overview(accts, false)
+templ AccountsOverview(accts []store.AccountWithBalance, month string) {
+	@overview(accts, month, false)
 }
 
 // AccountsOverviewOOB renders the overview as an out-of-band swap so a
 // transaction mutation can refresh account balances without re-rendering the
 // page. It targets the stable #accounts-overview container.
-templ AccountsOverviewOOB(accts []store.AccountWithBalance) {
-	@overview(accts, true)
+templ AccountsOverviewOOB(accts []store.AccountWithBalance, month string) {
+	@overview(accts, month, true)
 }
 
-templ overview(accts []store.AccountWithBalance, oob bool) {
+templ overview(accts []store.AccountWithBalance, month string, oob bool) {
 	{{ buckets, net := group(accts) }}
 	{{ attrs := templ.Attributes{"id": "accounts-overview"} }}
 	if oob {
@@ -44,12 +44,16 @@ templ overview(accts []store.AccountWithBalance, oob bool) {
 					</div>
 					<div class="mt-1 space-y-0.5">
 						for _, a := range b.Accounts {
-							<div class="flex items-center justify-between pl-3 text-sm">
+							<a
+								href={ templ.URL(txHref(a.ID, month)) }
+								class="flex items-center justify-between rounded py-0.5 pl-3 pr-1 text-sm transition-colors hover:bg-muted/60"
+								title={ "View transactions for " + a.Name }
+							>
 								<span class="text-foreground">
 									<span class="text-muted-foreground">└ </span>{ a.Name }
 								</span>
 								<span class="tabular-nums text-foreground">{ money.Format(displayCents(a)) }</span>
-							</div>
+							</a>
 						}
 					</div>
 				</div>
@@ -61,6 +65,18 @@ templ overview(accts []store.AccountWithBalance, oob bool) {
 			</div>
 		}
 	</div>
+}
+
+// txHref builds a link to the transactions page filtered to one account. The
+// selected month is preserved when set (e.g. when navigating from a past-month
+// budget view), so the transactions page opens on the same month; when unset it
+// is omitted and the transactions page falls back to the current month.
+func txHref(accountID int64, month string) string {
+	acct := "account=" + strconv.FormatInt(accountID, 10)
+	if month != "" {
+		return "/transactions?month=" + month + "&" + acct
+	}
+	return "/transactions?" + acct
 }
 
 // signedMoney colors an amount green/red/muted by sign. Duplicated locally

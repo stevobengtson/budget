@@ -93,6 +93,16 @@ func (h *Handlers) TransactionsNew(c *gin.Context) {
 	if len(accts) > 0 {
 		d.AccountID = accts[0].ID
 	}
+	// Default to the currently filtered account, when one is selected and still
+	// present in the (non-archived) options.
+	if filtered := txAccountFromRequest(c); filtered != nil {
+		for _, a := range accts {
+			if a.ID == *filtered {
+				d.AccountID = *filtered
+				break
+			}
+		}
+	}
 	render(c, http.StatusOK, views.TransactionForm(d))
 }
 
@@ -170,7 +180,7 @@ func (h *Handlers) TransactionsUpdate(c *gin.Context) {
 	}
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
-	render(c, http.StatusOK, views.TxUpdateResult(*t, pair, accts, cats))
+	render(c, http.StatusOK, views.TxUpdateResult(txMonthFromRequest(c), txAccountFromRequest(c) != nil, *t, pair, accts, cats))
 }
 
 func (h *Handlers) TransactionsDelete(c *gin.Context) {
@@ -183,7 +193,7 @@ func (h *Handlers) TransactionsDelete(c *gin.Context) {
 	// The delete button swaps the row out via its empty primary target; the
 	// out-of-band overview refreshes account balances after the row is gone.
 	accts, _ := h.store.ListAccounts(ctx, true)
-	render(c, http.StatusOK, accountsoverview.AccountsOverviewOOB(accts))
+	render(c, http.StatusOK, accountsoverview.AccountsOverviewOOB(accts, txMonthFromRequest(c)))
 }
 
 func (h *Handlers) TransactionsToggleCleared(c *gin.Context) {
@@ -203,7 +213,7 @@ func (h *Handlers) TransactionsToggleCleared(c *gin.Context) {
 	t.Cleared = !t.Cleared
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
-	render(c, http.StatusOK, views.TransactionRow(*t, accts, cats, false))
+	render(c, http.StatusOK, views.TransactionRow(*t, accts, cats, txAccountFromRequest(c) != nil, false))
 }
 
 // upsertTransaction creates (id==0) or updates a transaction or transfer
@@ -333,11 +343,46 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 	c.Status(http.StatusOK)
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	for _, t := range rows {
-		_ = views.TransactionRow(t, accts, cats, false).Render(ctx, c.Writer)
+		_ = views.TransactionRow(t, accts, cats, acctPtr != nil, false).Render(ctx, c.Writer)
 	}
 	_, _ = c.Writer.WriteString(`<div id="modal" class="modal-mount" hx-swap-oob="true"></div>`)
 	// Refresh account balances (out of band) after a create.
-	_ = accountsoverview.AccountsOverviewOOB(accts).Render(ctx, c.Writer)
+	_ = accountsoverview.AccountsOverviewOOB(accts, month).Render(ctx, c.Writer)
+}
+
+// txAccountFromRequest returns the account filter reflected by the current
+// transactions view (from the HX-Current-URL header), or nil when no account
+// filter is active. Used to hide the redundant Account column and to default a
+// new transaction's account to the filtered one.
+func txAccountFromRequest(c *gin.Context) *int64 {
+	if currentURL := c.GetHeader("HX-Current-URL"); currentURL != "" {
+		if u, err := url.Parse(currentURL); err == nil {
+			if a := u.Query().Get("account"); a != "" {
+				if v, err := strconv.ParseInt(a, 10, 64); err == nil {
+					return &v
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// txMonthFromRequest returns the month filter reflected by the current
+// transactions view (from the HX-Current-URL header): the selected month, ""
+// when viewing all months, or the current month when unspecified. Used to keep
+// the overview's account links on the same month the user is viewing.
+func txMonthFromRequest(c *gin.Context) string {
+	month := store.MonthKey(time.Now())
+	if currentURL := c.GetHeader("HX-Current-URL"); currentURL != "" {
+		if u, err := url.Parse(currentURL); err == nil {
+			if m := u.Query().Get("month"); m != "" {
+				month = m
+			} else if u.Query().Get("all") == "1" {
+				month = ""
+			}
+		}
+	}
+	return month
 }
 
 type errInvalid string

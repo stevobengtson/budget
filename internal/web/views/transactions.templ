@@ -55,7 +55,7 @@ templ TransactionsBody(d TransactionsData) {
 
 	<div class="flex items-start gap-6">
 		<aside class="sticky top-20 hidden w-72 shrink-0 lg:block">
-			@accountsoverview.AccountsOverview(d.Accounts)
+			@accountsoverview.AccountsOverview(d.Accounts, d.FilterMonth)
 		</aside>
 		<div class="min-w-0 flex-1">
 	<div class="mb-4 flex flex-wrap items-center gap-3">
@@ -84,11 +84,14 @@ templ TransactionsBody(d TransactionsData) {
 		</form>
 	</div>
 
+	{{ hideAcct := d.FilterAccount != nil }}
 	@table.Table() {
 		@table.Header() {
 			@table.Row() {
 				@table.Head() { Date }
-				@table.Head() { Account }
+				if !hideAcct {
+					@table.Head() { Account }
+				}
 				@table.Head() { Category / Transfer }
 				@table.Head() { Payee }
 				@table.Head(table.HeadProps{Class: "text-right"}) { Outflow }
@@ -100,9 +103,9 @@ templ TransactionsBody(d TransactionsData) {
 		<tbody id="tx-rows" class="[&_tr:last-child]:border-0">
 			for i, t := range d.Rows {
 				if i > 0 && !sameDay(d.Rows[i-1].Date, t.Date) {
-					<tr><td colspan="8" class="h-2 bg-muted/30 p-0"></td></tr>
+					<tr><td colspan={ txColspan(hideAcct) } class="h-2 bg-muted/30 p-0"></td></tr>
 				}
-				@TransactionRow(t, d.Accounts, d.Categories, false)
+				@TransactionRow(t, d.Accounts, d.Categories, hideAcct, false)
 			}
 		</tbody>
 	}
@@ -126,7 +129,7 @@ templ TransactionsBody(d TransactionsData) {
 	</div>
 }
 
-templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category, oob bool) {
+templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category, hideAccount bool, oob bool) {
 	{{ attrs := templ.Attributes{"id": fmt.Sprintf("tx-%d", t.ID)} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
@@ -135,7 +138,9 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 		@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
 			{ t.Date.Format("Jan 2, 2006") }
 		}
-		@table.Cell() { { accountName(accts, t.AccountID) } }
+		if !hideAccount {
+			@table.Cell() { { accountName(accts, t.AccountID) } }
+		}
 		@table.Cell() {
 			@TxCategoryCell(t, accts, cats)
 		}
@@ -191,14 +196,14 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 // row (primary swap into #tx-<id>) and, for a transfer, refreshes the paired
 // leg via an out-of-band swap — wrapped in a <template> so the bare <tr>
 // survives the browser's table-parsing rules. It also empties the modal.
-templ TxUpdateResult(t store.Transaction, pair *store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
-	@TransactionRow(t, accts, cats, false)
+templ TxUpdateResult(month string, hideAccount bool, t store.Transaction, pair *store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
+	@TransactionRow(t, accts, cats, hideAccount, false)
 	if pair != nil {
 		<template>
-			@TransactionRow(*pair, accts, cats, true)
+			@TransactionRow(*pair, accts, cats, hideAccount, true)
 		</template>
 	}
-	@accountsoverview.AccountsOverviewOOB(accts)
+	@accountsoverview.AccountsOverviewOOB(accts, month)
 	<div id="modal" class="modal-mount" hx-swap-oob="true"></div>
 }
 
@@ -443,6 +448,15 @@ func sameDay(a, b time.Time) bool {
 	ay, am, ad := a.Date()
 	by, bm, bd := b.Date()
 	return ay == by && am == bm && ad == bd
+}
+
+// txColspan is the day-separator row's column span: 8 normally, 7 when the
+// Account column is hidden (an account filter is active).
+func txColspan(hideAccount bool) string {
+	if hideAccount {
+		return "7"
+	}
+	return "8"
 }
 
 func txMonthLabel(month string) string {
