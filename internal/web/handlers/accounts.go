@@ -8,6 +8,7 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/accountsoverview"
 	"github.com/sbengtson/budget/internal/web/views"
 )
 
@@ -36,6 +37,15 @@ func (h *Handlers) AccountsIndex(c *gin.Context) {
 		AvailCredit: avail,
 	}
 	render(c, http.StatusOK, views.AccountsPage(d))
+}
+
+// AccountsOverviewPartial renders just the account overview fragment for the
+// sidebar. It is lazy-loaded on page load and re-fetched whenever a mutation
+// emits the "accountsChanged" HTMX event. Month is empty so per-account links
+// default to the current month on the transactions page.
+func (h *Handlers) AccountsOverviewPartial(c *gin.Context) {
+	accts, _ := h.store.ListAccounts(c.Request.Context(), true)
+	render(c, http.StatusOK, accountsoverview.AccountsOverview(accts, ""))
 }
 
 func (h *Handlers) AccountsNew(c *gin.Context) {

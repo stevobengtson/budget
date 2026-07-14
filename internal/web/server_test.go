@@ -65,6 +65,24 @@ func TestBudgetTabAppearsInLayout(t *testing.T) {
 	}
 }
 
+func TestAccountsOverviewPartialRenders(t *testing.T) {
+	ts := newTestServer(t)
+	resp, err := http.Get(ts.URL + "/accounts/overview")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	body := readAll(t, resp)
+	for _, marker := range []string{`id="accounts-overview"`, "All Accounts", "Est. Net Worth"} {
+		if !strings.Contains(body, marker) {
+			t.Errorf("overview fragment missing %q", marker)
+		}
+	}
+}
+
 func readAll(t *testing.T, resp *http.Response) string {
 	t.Helper()
 	defer func() { _ = resp.Body.Close() }()
