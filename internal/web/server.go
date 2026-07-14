@@ -110,12 +110,11 @@ func (s *Server) routes() {
 	s.engine.PUT("/accounts/:id", hs.AccountsUpdate)
 	s.engine.POST("/accounts/:id/archive", hs.AccountsArchive)
 
-	s.engine.GET("/categories", hs.CategoriesIndex)
-	s.engine.POST("/categories/group", hs.CategoriesCreateGroup)
-	s.engine.POST("/categories", hs.CategoriesCreate)
-	s.engine.GET("/categories/:id/edit", hs.CategoriesEdit)
-	s.engine.PUT("/categories/:id", hs.CategoriesUpdate)
-	s.engine.POST("/categories/:id/archive", hs.CategoriesArchive)
+	// Category management now lives inline on the Budget page; the standalone
+	// Categories page was removed. Redirect any old links there.
+	s.engine.GET("/categories", func(c *gin.Context) {
+		c.Redirect(http.StatusSeeOther, "/budget")
+	})
 
 	s.engine.GET("/paydown", hs.PaydownIndex)
 	s.engine.GET("/paydown/:acctID/rows", hs.PaydownRows)
