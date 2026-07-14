@@ -11,6 +11,7 @@ import (
 	"github.com/templui/templui/components/badge"
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/collapsible"
 	"github.com/templui/templui/components/table"
 )
 
@@ -98,38 +99,56 @@ templ bannerStatSigned(label string, cents int64) {
 
 templ BudgetCreditSection(d BudgetData) {
 	if len(d.CreditRows) > 0 {
-    @card.Card() {
-      @card.Header() {
-        @card.Title() {
-          Credit
-        }
-      }
-      @card.Content() {
-        @table.Table() {
-          @table.Header() {
-            @table.Row() {
-              @table.Head() { Account }
-              @table.Head() { Purchases }
-              @table.Head() { Payments }
-              @table.Head() { Owing }
-            }
-          }
-          @table.Body() {
-            for _, ca := range d.CreditRows {
-              @table.Row() {
-                @table.Cell() { { ca.AccountName } }
-                @table.Cell(table.CellProps{Class: "tabular-nums text-red-500"}) { { money.Format(ca.PurchasesCents) } }
-                @table.Cell(table.CellProps{Class: "tabular-nums text-emerald-500"}) { { money.Format(ca.PaymentsCents) } }
-                @table.Cell(table.CellProps{Class: "tabular-nums"}) {
-                  @SignedMoney(ca.OwingCents)
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+		@collapsible.Collapsible(collapsible.Props{Open: true, Class: "mt-6"}) {
+			@card.Card() {
+				@collapsible.Trigger(collapsible.TriggerProps{Class: "cursor-pointer select-none"}) {
+					@card.Header() {
+						<div class="flex items-center justify-between gap-2">
+							@card.Title() {
+								Credit
+							}
+							@collapsibleChevron()
+						</div>
+					}
+				}
+				@collapsible.Content(collapsible.ContentProps{Class: "tui-collapsible-open"}) {
+					@card.Content() {
+						@table.Table() {
+							@table.Header() {
+								@table.Row() {
+									@table.Head() { Account }
+									@table.Head() { Purchases }
+									@table.Head() { Payments }
+									@table.Head() { Owing }
+								}
+							}
+							@table.Body() {
+								for _, ca := range d.CreditRows {
+									@table.Row() {
+										@table.Cell() { { ca.AccountName } }
+										@table.Cell(table.CellProps{Class: "tabular-nums text-red-500"}) { { money.Format(ca.PurchasesCents) } }
+										@table.Cell(table.CellProps{Class: "tabular-nums text-emerald-500"}) { { money.Format(ca.PaymentsCents) } }
+										@table.Cell(table.CellProps{Class: "tabular-nums"}) {
+											@SignedMoney(ca.OwingCents)
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 	}
+}
+
+// collapsibleChevron is the open/closed indicator for a collapsible card header.
+// It points down when open and rotates to point right when the enclosing
+// collapsible root reports data-tui-collapsible-state="closed".
+templ collapsibleChevron() {
+	<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4 shrink-0 text-muted-foreground transition-transform [[data-tui-collapsible-state=closed]_&]:-rotate-90">
+		<path d="m6 9 6 6 6-6"></path>
+	</svg>
 }
 
 templ BudgetTable(d BudgetData) {
@@ -593,63 +612,70 @@ func budgetTotals(groups []BudgetGroup) (assigned, spent, available int64) {
 }
 
 templ BudgetIncomeSection(d BudgetData) {
-	<div class="mb-2 mt-6 flex items-center justify-between gap-2">
-    @card.Card() {
-      @card.Header() {
-        @card.Title() {
-          Income
-        }
-      }
-      @card.Content() {
-        @table.Table() {
-          @table.Header() {
-            @table.Row() {
-              @table.Head() { Source }
-              @table.Head(table.HeadProps{Class: "text-right"}) { Amount }
-              @table.Head(table.HeadProps{Class: "w-10"}) { }
-            }
-          }
-          <tbody id="income-rows">
-            for _, r := range d.IncomeRows {
-              @IncomeRow(d.Month, r)
-            }
-          </tbody>
-          <tfoot>
-            @IncomeTotalsRow(d, false)
-          </tfoot>
-        }
-      }
-      @card.Footer(card.FooterProps{ Class: "flex justify-between" }) {
-        @button.Button(button.Props{
-          Type:    "button",
-          Variant: button.VariantOutline,
-          Size:    button.SizeSm,
-          Class:   "text-muted-foreground hover:text-foreground",
-          Attributes: templ.Attributes{
-            "hx-post":    "/budget/income/copy-prev?month=" + d.Month,
-            "hx-target":  "#budget-region",
-            "hx-swap":    "outerHTML",
-            "hx-confirm": "Copy all entries from the previous month into this one?",
-            "title":      "Copy every entry from the previous month",
-          },
-        }) {
-          ← copy from prev
-        }
-        @button.Button(button.Props{
-          Type:    "button",
-          Size:    button.SizeSm,
-          Attributes: templ.Attributes{
-            "hx-get":    "/budget/income/new?month=" + d.Month,
-            "hx-target": "#income-rows",
-            "hx-swap":   "beforeend",
-            "title":     "Add income",
-          },
-        }) {
-          Add
-        }
-      }
-    }
-	</div>
+	@collapsible.Collapsible(collapsible.Props{Open: true, Class: "mt-6"}) {
+		@card.Card() {
+			@collapsible.Trigger(collapsible.TriggerProps{Class: "cursor-pointer select-none"}) {
+				@card.Header() {
+					<div class="flex items-center justify-between gap-2">
+						@card.Title() {
+							Income
+						}
+						@collapsibleChevron()
+					</div>
+				}
+			}
+			@collapsible.Content(collapsible.ContentProps{Class: "tui-collapsible-open"}) {
+				@card.Content() {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Source }
+								@table.Head(table.HeadProps{Class: "text-right"}) { Amount }
+								@table.Head(table.HeadProps{Class: "w-10"}) { }
+							}
+						}
+						<tbody id="income-rows">
+							for _, r := range d.IncomeRows {
+								@IncomeRow(d.Month, r)
+							}
+						</tbody>
+						<tfoot>
+							@IncomeTotalsRow(d, false)
+						</tfoot>
+					}
+				}
+				@card.Footer(card.FooterProps{Class: "flex justify-between"}) {
+					@button.Button(button.Props{
+						Type:    "button",
+						Variant: button.VariantOutline,
+						Size:    button.SizeSm,
+						Class:   "text-muted-foreground hover:text-foreground",
+						Attributes: templ.Attributes{
+							"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
+							"hx-target":  "#budget-region",
+							"hx-swap":    "outerHTML",
+							"hx-confirm": "Copy all entries from the previous month into this one?",
+							"title":      "Copy every entry from the previous month",
+						},
+					}) {
+						← copy from prev
+					}
+					@button.Button(button.Props{
+						Type:    "button",
+						Size:    button.SizeSm,
+						Attributes: templ.Attributes{
+							"hx-get":    "/budget/income/new?month=" + d.Month,
+							"hx-target": "#income-rows",
+							"hx-swap":   "beforeend",
+							"title":     "Add income",
+						},
+					}) {
+						Add
+					}
+				}
+			}
+		}
+	}
 }
 
 // IncomeTotalsRow is the income table footer, with a stable #income-totals id so
