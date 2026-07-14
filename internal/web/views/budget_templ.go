@@ -256,7 +256,7 @@ func budgetBanner(d BudgetData, oob bool) templ.Component {
 			templ_7745c5c3_Var9 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		attrs := templ.Attributes{"id": "budget-banner"}
+		attrs := templ.Attributes{"id": "budget-banner", "class": "sticky top-20 z-10 bg-background py-4"}
 		if oob {
 			attrs["hx-swap-oob"] = "true"
 		}
@@ -268,7 +268,7 @@ func budgetBanner(d BudgetData, oob bool) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "><div class=\"mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "><div class=\"grid grid-cols-1 gap-3 sm:grid-cols-3\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

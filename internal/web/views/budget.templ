@@ -67,12 +67,12 @@ templ BudgetBanner(d BudgetData) {
 }
 
 templ budgetBanner(d BudgetData, oob bool) {
-	{{ attrs := templ.Attributes{"id": "budget-banner"} }}
+	{{ attrs := templ.Attributes{"id": "budget-banner", "class": "sticky top-20 z-10 bg-background py-4"} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
 	<div { attrs... }>
-		<div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+		<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 			@bannerStat("Income", money.Format(d.Estimated), "text-foreground")
 			@bannerStat("Budgeted", money.Format(d.Budgeted), "text-foreground")
 			@bannerStatSigned("Remain", d.Remain)
