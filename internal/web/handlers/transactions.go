@@ -10,7 +10,6 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/internal/web/components/accountsoverview"
 	"github.com/sbengtson/budget/internal/web/views"
 )
 
@@ -111,6 +110,7 @@ func (h *Handlers) TransactionsCreate(c *gin.Context) {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
+	c.Header("HX-Trigger", "accountsChanged")
 	// Re-render full row list scoped by current filters.
 	h.renderTxRows(c)
 }
@@ -180,6 +180,7 @@ func (h *Handlers) TransactionsUpdate(c *gin.Context) {
 	}
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
+	c.Header("HX-Trigger", "accountsChanged")
 	render(c, http.StatusOK, views.TxUpdateResult(txMonthFromRequest(c), txAccountFromRequest(c) != nil, *t, pair, accts, cats))
 }
 
@@ -191,9 +192,9 @@ func (h *Handlers) TransactionsDelete(c *gin.Context) {
 		return
 	}
 	// The delete button swaps the row out via its empty primary target; the
-	// out-of-band overview refreshes account balances after the row is gone.
-	accts, _ := h.store.ListAccounts(ctx, true)
-	render(c, http.StatusOK, accountsoverview.AccountsOverviewOOB(accts, txMonthFromRequest(c)))
+	// sidebar overview refreshes via the accountsChanged event.
+	c.Header("HX-Trigger", "accountsChanged")
+	c.Status(http.StatusOK)
 }
 
 func (h *Handlers) TransactionsToggleCleared(c *gin.Context) {
@@ -346,8 +347,6 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 		_ = views.TransactionRow(t, accts, cats, acctPtr != nil, false).Render(ctx, c.Writer)
 	}
 	_, _ = c.Writer.WriteString(`<div id="modal" class="modal-mount" hx-swap-oob="true"></div>`)
-	// Refresh account balances (out of band) after a create.
-	_ = accountsoverview.AccountsOverviewOOB(accts, month).Render(ctx, c.Writer)
 }
 
 // txAccountFromRequest returns the account filter reflected by the current

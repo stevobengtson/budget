@@ -1,8 +1,11 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -80,6 +83,60 @@ func TestAccountsOverviewPartialRenders(t *testing.T) {
 		if !strings.Contains(body, marker) {
 			t.Errorf("overview fragment missing %q", marker)
 		}
+	}
+}
+
+// TestTransactionDeleteEmitsAccountsChanged verifies a successful delete
+// triggers the sidebar's accountsChanged refresh via HX-Trigger. Deleting a
+// nonexistent id (e.g. 0) errors out of DeleteTransaction before the header
+// is set, so this seeds a real account + transaction first and deletes that.
+func TestTransactionDeleteEmitsAccountsChanged(t *testing.T) {
+	conn, _, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	s := store.New(conn)
+	srv := NewServer(s)
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	acctID, err := s.CreateAccount(context.Background(), store.Account{Name: "Checking", Type: store.TypeChecking})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{
+		"account_id": {strconv.FormatInt(acctID, 10)},
+		"date":       {"2026-07-14"},
+		"outflow":    {"10.00"},
+	}
+	createResp, err := http.PostForm(ts.URL+"/transactions", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = createResp.Body.Close()
+	if createResp.StatusCode != http.StatusOK {
+		t.Fatalf("create status = %d, want 200", createResp.StatusCode)
+	}
+
+	rows, err := s.ListTransactions(context.Background(), store.TxFilter{AccountID: &acctID})
+	if err != nil || len(rows) == 0 {
+		t.Fatalf("ListTransactions() = %v, %v; want one row", rows, err)
+	}
+	txID := rows[0].ID
+
+	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/transactions/"+strconv.FormatInt(txID, 10), nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got := resp.Header.Get("HX-Trigger"); got != "accountsChanged" {
+		t.Errorf("HX-Trigger = %q, want accountsChanged", got)
 	}
 }
 
