@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/pressly/goose/v3"
@@ -18,35 +17,7 @@ import (
 // OpenNoMigrate opens a database connection without applying migrations.
 // Use this for inspecting or operating on goose state.
 func OpenNoMigrate(dsn string) (*sql.DB, Dialect, error) {
-	if isPostgresDSN(dsn) {
-		conn, err := sql.Open("pgx", dsn)
-		if err != nil {
-			return nil, DialectPostgres, fmt.Errorf("open postgres: %w", err)
-		}
-		if err := conn.Ping(); err != nil {
-			_ = conn.Close()
-			return nil, DialectPostgres, fmt.Errorf("ping postgres: %w", err)
-		}
-		return conn, DialectPostgres, nil
-	}
-	if dsn != ":memory:" {
-		if err := os.MkdirAll(filepath.Dir(dsn), 0o755); err != nil {
-			return nil, DialectSQLite, fmt.Errorf("mkdir db dir: %w", err)
-		}
-	}
-	sqliteDSN := dsn + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
-	if dsn == ":memory:" {
-		sqliteDSN = dsn + "?_pragma=foreign_keys(1)"
-	}
-	conn, err := sql.Open("sqlite", sqliteDSN)
-	if err != nil {
-		return nil, DialectSQLite, fmt.Errorf("open sqlite: %w", err)
-	}
-	conn.SetMaxOpenConns(1)
-	if err := conn.Ping(); err != nil {
-		return nil, DialectSQLite, fmt.Errorf("ping sqlite: %w", err)
-	}
-	return conn, DialectSQLite, nil
+	return Open(dsn, false)
 }
 
 // configureGoose points goose at the embedded migrations FS and sets the
@@ -144,5 +115,7 @@ func (stdoutLogger) Fatal(v ...any)                 { fmt.Println(v...); os.Exit
 
 // silence linters about unused imports when bools are referenced from
 // other files only — Dialect/url/strings used via shared db.go.
-var _ = url.Parse
-var _ = strings.HasPrefix
+var (
+	_ = url.Parse
+	_ = strings.HasPrefix
+)

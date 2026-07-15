@@ -21,26 +21,26 @@ import (
 var migrationsFS embed.FS
 
 // Open opens a database (SQLite or Postgres) and applies pending
-// migrations. The dsn is interpreted as Postgres if it starts with
+// migrations if shouldMigrate is true. The dsn is interpreted as Postgres if it starts with
 // "postgres://" or "postgresql://"; otherwise it's a SQLite file path.
 // Use ":memory:" for an ephemeral SQLite DB.
 //
 // Returns the connection and the detected dialect. Equivalent to
 // OpenContext(context.Background(), dsn).
-func Open(dsn string) (*sql.DB, Dialect, error) {
-	return OpenContext(context.Background(), dsn)
+func Open(dsn string, shouldMigrate bool) (*sql.DB, Dialect, error) {
+	return OpenContext(context.Background(), dsn, shouldMigrate)
 }
 
 // OpenWithTimeout is a convenience wrapper around OpenContext that builds a
 // context with the supplied connect deadline. Pass 0 to skip the deadline
-// (same as Open).
+// (same as Open, but forces migrations).
 func OpenWithTimeout(dsn string, connectTimeout time.Duration) (*sql.DB, Dialect, error) {
 	if connectTimeout <= 0 {
-		return Open(dsn)
+		return Open(dsn, true)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 	defer cancel()
-	return OpenContext(ctx, dsn)
+	return OpenContext(ctx, dsn, true)
 }
 
 // OpenContext opens a database and applies pending migrations, honouring
@@ -48,12 +48,12 @@ func OpenWithTimeout(dsn string, connectTimeout time.Duration) (*sql.DB, Dialect
 // themselves use the underlying connection and are not subject to the
 // caller's context — they're considered part of "opening" the database
 // and a partially-applied migration is worse than a slow startup.
-func OpenContext(ctx context.Context, dsn string) (*sql.DB, Dialect, error) {
+func OpenContext(ctx context.Context, dsn string, shouldMigrate bool) (*sql.DB, Dialect, error) {
 	if isPostgresDSN(dsn) {
-		return openPostgresqlDB(ctx, dsn)
+		return openPostgresqlDB(ctx, dsn, shouldMigrate)
 	}
 
-	return openSqliteDB(ctx, dsn)
+	return openSqliteDB(ctx, dsn, shouldMigrate)
 }
 
 // isPostgresDSN matches "postgres://" or "postgresql://" URLs.
@@ -65,45 +65,57 @@ func isPostgresDSN(s string) bool {
 	return false
 }
 
-func openPostgresqlDB(ctx context.Context, dsn string) (*sql.DB, Dialect, error) {
+func openPostgresqlDB(ctx context.Context, dsn string, shouldMigrate bool) (*sql.DB, Dialect, error) {
 	conn, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, DialectPostgres, fmt.Errorf("open postgres: %w", err)
 	}
+
 	if err := conn.PingContext(ctx); err != nil {
 		_ = conn.Close()
 		return nil, DialectPostgres, fmt.Errorf("ping postgres: %w", err)
 	}
-	if err := migrate(conn, DialectPostgres); err != nil {
-		_ = conn.Close()
-		return nil, DialectPostgres, err
+
+	if shouldMigrate {
+		if err := migrate(conn, DialectPostgres); err != nil {
+			_ = conn.Close()
+			return nil, DialectPostgres, err
+		}
 	}
+
 	return conn, DialectPostgres, nil
 }
 
-func openSqliteDB(ctx context.Context, dsn string) (*sql.DB, Dialect, error) {
+func openSqliteDB(ctx context.Context, dsn string, shouldMigrate bool) (*sql.DB, Dialect, error) {
 	if dsn != ":memory:" {
 		if err := os.MkdirAll(filepath.Dir(dsn), 0o755); err != nil {
 			return nil, DialectSQLite, fmt.Errorf("mkdir db dir: %w", err)
 		}
 	}
+
 	sqliteDSN := dsn + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 	if dsn == ":memory:" {
 		sqliteDSN = dsn + "?_pragma=foreign_keys(1)"
 	}
+
 	conn, err := sql.Open("sqlite", sqliteDSN)
 	if err != nil {
 		return nil, DialectSQLite, fmt.Errorf("open sqlite: %w", err)
 	}
+
 	conn.SetMaxOpenConns(1)
 	if err := conn.PingContext(ctx); err != nil {
 		_ = conn.Close()
 		return nil, DialectSQLite, fmt.Errorf("ping sqlite: %w", err)
 	}
-	if err := migrate(conn, DialectSQLite); err != nil {
-		_ = conn.Close()
-		return nil, DialectSQLite, err
+
+	if shouldMigrate {
+		if err := migrate(conn, DialectSQLite); err != nil {
+			_ = conn.Close()
+			return nil, DialectSQLite, err
+		}
 	}
+
 	return conn, DialectSQLite, nil
 }
 
