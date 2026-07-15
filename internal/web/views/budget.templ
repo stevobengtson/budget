@@ -12,6 +12,7 @@ import (
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/card"
 	"github.com/templui/templui/components/collapsible"
+	"github.com/templui/templui/components/dropdown"
 	"github.com/templui/templui/components/table"
 )
 
@@ -197,6 +198,16 @@ templ BudgetTable(d BudgetData) {
 				}
 			}
 		}
+		<tbody id="budget-uncategorized-body">
+			@table.Row() {
+				@table.Cell(table.CellProps{Class: "pl-6 text-muted-foreground"}) { Uncategorized }
+				@table.Cell() {}
+				@table.Cell(table.CellProps{Class: "tabular-nums"}) { { money.Format(d.UncategorizedSpent) } }
+				@table.Cell() {}
+				@table.Cell() {}
+				@table.Cell() {}
+			}
+		</tbody>
 		for _, g := range d.Groups {
 			@BudgetGroupTbody(d.Month, g)
 		}
@@ -429,20 +440,6 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 						class="js-assign-input hidden h-8 w-28 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					/>
 				</form>
-				@button.Button(button.Props{
-					Type:    "button",
-					Variant: button.VariantGhost,
-					Size:    button.SizeSm,
-					Class:   "text-muted-foreground hover:text-foreground",
-					Attributes: templ.Attributes{
-						"hx-post":   fmt.Sprintf("/budget/assign/%d/copy-prev?month=%s", r.CategoryID, month),
-						"hx-target": fmt.Sprintf("#cat-%d", r.CategoryID),
-						"hx-swap":   "outerHTML",
-						"title":     "Copy from previous month",
-					},
-				}) {
-					← prev
-				}
 			</div>
 		}
 		@table.Cell(table.CellProps{Class: "tabular-nums"}) {
@@ -469,23 +466,95 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 		}
 		@table.Cell(table.CellProps{Class: "text-right"}) {
 			if !r.IsIncome {
-				@button.Button(button.Props{
-					Type:    "button",
-					Variant: button.VariantGhost,
-					Size:    button.SizeSm,
-					Class:   "text-muted-foreground hover:text-destructive",
-					Attributes: templ.Attributes{
-						"hx-post":    fmt.Sprintf("/budget/category/%d/archive?month=%s", r.CategoryID, month),
-						"hx-target":  "#budget-region",
-						"hx-swap":    "outerHTML",
-						"hx-confirm": "Archive this category?",
-						"title":      "Archive category",
-					},
-				}) {
-					×
-				}
+				@rowMenu(month, r)
 			}
 		}
+	}
+}
+
+// rowMenu renders the per-category three-dot actions menu: rollover toggles,
+// copy-from-previous-month, and delete (archive). The two toggle items post the
+// target rollover mode computed from the row's current mode and keep the menu
+// open (PreventClose) so both can be flipped in one visit.
+templ rowMenu(month string, r store.CategoryBudget) {
+	{{ rolloverOn := r.RolloverMode != store.RolloverNone }}
+	{{ ignoreNeg := r.RolloverMode == store.RolloverCarryPositive }}
+	{{
+		rolloverTarget := store.RolloverCarryPositive // turning ON defaults to ignore-negative
+		if rolloverOn {
+			rolloverTarget = store.RolloverNone
+		}
+		ignoreTarget := store.RolloverCarryPositive
+		if ignoreNeg {
+			ignoreTarget = store.RolloverCarry
+		}
+	}}
+	@dropdown.Dropdown() {
+		@dropdown.Trigger(dropdown.TriggerProps{
+			Class:      "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
+			Attributes: templ.Attributes{"title": "Category actions"},
+		}) {
+			⋮
+		}
+		@dropdown.Content() {
+			@dropdown.Item(dropdown.ItemProps{
+				PreventClose: true,
+				Attributes: templ.Attributes{
+					"hx-post":   fmt.Sprintf("/budget/category/%d/rollover?month=%s", r.CategoryID, month),
+					"hx-vals":   fmt.Sprintf(`{"mode":"%s"}`, rolloverTarget),
+					"hx-target": fmt.Sprintf("#cat-%d", r.CategoryID),
+					"hx-swap":   "outerHTML",
+				},
+			}) {
+				@menuCheck(rolloverOn)
+				Rollover
+			}
+			@dropdown.Item(dropdown.ItemProps{
+				PreventClose: true,
+				Disabled:     !rolloverOn,
+				Attributes: templ.Attributes{
+					"hx-post":   fmt.Sprintf("/budget/category/%d/rollover?month=%s", r.CategoryID, month),
+					"hx-vals":   fmt.Sprintf(`{"mode":"%s"}`, ignoreTarget),
+					"hx-target": fmt.Sprintf("#cat-%d", r.CategoryID),
+					"hx-swap":   "outerHTML",
+				},
+			}) {
+				@menuCheck(ignoreNeg)
+				Ignore Negative
+			}
+			@dropdown.Separator()
+			@dropdown.Item(dropdown.ItemProps{
+				Attributes: templ.Attributes{
+					"hx-post":   fmt.Sprintf("/budget/assign/%d/copy-prev?month=%s", r.CategoryID, month),
+					"hx-target": fmt.Sprintf("#cat-%d", r.CategoryID),
+					"hx-swap":   "outerHTML",
+				},
+			}) {
+				← Previous Month
+			}
+			@dropdown.Separator()
+			@dropdown.Item(dropdown.ItemProps{
+				Class: "text-destructive",
+				Attributes: templ.Attributes{
+					"hx-post":    fmt.Sprintf("/budget/category/%d/archive?month=%s", r.CategoryID, month),
+					"hx-target":  "#budget-region",
+					"hx-swap":    "outerHTML",
+					"hx-confirm": "Delete this category?",
+				},
+			}) {
+				Delete
+			}
+		}
+	}
+}
+
+// menuCheck shows a leading ✓ for an enabled menu toggle, or a blank gutter so
+// labels stay aligned when unchecked.
+templ menuCheck(on bool) {
+	if on {
+		<span class="mr-2 inline-block w-3">✓</span>
+	} else {
+		<span class="mr-2 inline-block w-3"></span>
 	}
 }
 
