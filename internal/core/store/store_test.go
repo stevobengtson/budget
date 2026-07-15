@@ -10,7 +10,7 @@ import (
 
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
-	conn, _, err := db.Open(":memory:")
+	conn, _, err := db.Open(":memory:", true)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -937,4 +937,39 @@ func TestDeleteGroup(t *testing.T) {
 	if !groupExists(g4) {
 		t.Error("group with history should remain")
 	}
+}
+
+func TestCategoryRolloverModeDefaultAndSet(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	gid, _ := s.CreateGroup(ctx, "G", 0)
+	id, err := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Groceries"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cats, _ := s.ListCategories(ctx, false)
+	got := findCat(t, cats, id)
+	if got.RolloverMode != RolloverCarryPositive {
+		t.Errorf("default rollover_mode = %q, want %q", got.RolloverMode, RolloverCarryPositive)
+	}
+
+	if err := s.SetRolloverMode(ctx, id, RolloverNone); err != nil {
+		t.Fatal(err)
+	}
+	cats, _ = s.ListCategories(ctx, false)
+	if got := findCat(t, cats, id); got.RolloverMode != RolloverNone {
+		t.Errorf("after set, rollover_mode = %q, want %q", got.RolloverMode, RolloverNone)
+	}
+}
+
+func findCat(t *testing.T, cats []Category, id int64) Category {
+	t.Helper()
+	for _, c := range cats {
+		if c.ID == id {
+			return c
+		}
+	}
+	t.Fatalf("category id %d not found", id)
+	return Category{}
 }

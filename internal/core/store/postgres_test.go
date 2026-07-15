@@ -21,7 +21,7 @@ func newTestPostgresStore(t *testing.T) *Store {
 	if url == "" {
 		t.Skip("BUDGET_POSTGRES_URL not set; skipping live Postgres test")
 	}
-	conn, dialect, err := db.Open(url)
+	conn, dialect, err := db.Open(url, true)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
 	}

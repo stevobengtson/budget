@@ -47,6 +47,7 @@ type CategoryBudget struct {
 	GroupName      string
 	CategoryName   string
 	IsIncome       bool
+	RolloverMode   string
 	GoalCents      *int64
 	GoalDueDate    *time.Time
 	AssignedCents  int64

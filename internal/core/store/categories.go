@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// Rollover modes controlling how a category's leftover/overspend carries
+// between months. Stored in categories.rollover_mode.
+const (
+	RolloverNone          = "none"           // isolated month: available = assigned − spent
+	RolloverCarry         = "carry"          // carry leftovers and overspend forward
+	RolloverCarryPositive = "carry_positive" // carry leftovers, reset overspend to 0 (default)
+)
+
 type CategoryGroup struct {
 	ID        int64
 	Name      string
@@ -25,6 +33,8 @@ type Category struct {
 	// and delete actions on these rows. Inflows categorized here are
 	// summed in the budget banner as "actual income".
 	IsIncome bool
+	// RolloverMode is one of RolloverNone / RolloverCarry / RolloverCarryPositive.
+	RolloverMode string
 }
 
 // --- Groups ---
@@ -120,10 +130,13 @@ func (s *Store) CreateCategory(ctx context.Context, c Category) (int64, error) {
 	if c.GoalDueDate != nil {
 		due = sql.NullTime{Time: *c.GoalDueDate, Valid: true}
 	}
+	if c.RolloverMode == "" {
+		c.RolloverMode = RolloverCarryPositive
+	}
 	id, err := s.insertReturningID(ctx,
-		`INSERT INTO categories(group_id, name, goal_cents, goal_due_date, sort_order)
-		 VALUES (?, ?, ?, ?, ?)`,
-		c.GroupID, c.Name, nullInt(c.GoalCents), due, c.SortOrder)
+		`INSERT INTO categories(group_id, name, goal_cents, goal_due_date, sort_order, rollover_mode)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		c.GroupID, c.Name, nullInt(c.GoalCents), due, c.SortOrder, c.RolloverMode)
 	if err != nil {
 		return 0, fmt.Errorf("create category: %w", err)
 	}
@@ -137,9 +150,9 @@ func (s *Store) UpdateCategory(ctx context.Context, c Category) error {
 	}
 	_, err := s.run(ctx,
 		`UPDATE categories
-		 SET group_id=?, name=?, goal_cents=?, goal_due_date=?, sort_order=?
+		 SET group_id=?, name=?, goal_cents=?, goal_due_date=?, sort_order=?, rollover_mode=?
 		 WHERE id=?`,
-		c.GroupID, c.Name, nullInt(c.GoalCents), due, c.SortOrder, c.ID)
+		c.GroupID, c.Name, nullInt(c.GoalCents), due, c.SortOrder, c.RolloverMode, c.ID)
 	return err
 }
 
@@ -174,7 +187,7 @@ func (s *Store) checkNotIncome(ctx context.Context, id int64) error {
 
 // ListCategories returns active categories.
 func (s *Store) ListCategories(ctx context.Context, includeArchived bool) ([]Category, error) {
-	q := `SELECT id, group_id, name, goal_cents, goal_due_date, sort_order, archived_at, is_income FROM categories`
+	q := `SELECT id, group_id, name, goal_cents, goal_due_date, sort_order, archived_at, is_income, rollover_mode FROM categories`
 	if !includeArchived {
 		q += ` WHERE archived_at IS NULL`
 	}
@@ -189,7 +202,7 @@ func (s *Store) ListCategories(ctx context.Context, includeArchived bool) ([]Cat
 		var c Category
 		var goal sql.NullInt64
 		var due, archived nullTime
-		if err := rows.Scan(&c.ID, &c.GroupID, &c.Name, &goal, &due, &c.SortOrder, &archived, &c.IsIncome); err != nil {
+		if err := rows.Scan(&c.ID, &c.GroupID, &c.Name, &goal, &due, &c.SortOrder, &archived, &c.IsIncome, &c.RolloverMode); err != nil {
 			return nil, err
 		}
 		c.GoalCents = intPtr(goal)
@@ -198,4 +211,12 @@ func (s *Store) ListCategories(ctx context.Context, includeArchived bool) ([]Cat
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// SetRolloverMode updates a category's rollover mode. mode must be one of the
+// Rollover* constants; the DB CHECK constraint rejects anything else.
+func (s *Store) SetRolloverMode(ctx context.Context, categoryID int64, mode string) error {
+	_, err := s.run(ctx,
+		`UPDATE categories SET rollover_mode=? WHERE id=?`, mode, categoryID)
+	return err
 }
