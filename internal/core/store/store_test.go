@@ -1038,3 +1038,44 @@ func TestRolloverNoneIgnoresCarryIn(t *testing.T) {
 		t.Errorf("none-mode Feb available = %d, want 3000", r.AvailableCents)
 	}
 }
+
+func TestUncategorizedSpent(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
+	sav, _ := s.CreateAccount(ctx, Account{Name: "Sav", Type: TypeSavings})
+	gid, _ := s.CreateGroup(ctx, "G", 0)
+	cat, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Cat"})
+
+	// Uncategorized outflow $40 and inflow $10 in Feb → net 3000.
+	if _, err := s.CreateTransaction(ctx, Transaction{
+		Date: time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC), AccountID: chk, OutflowCents: 4_000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateTransaction(ctx, Transaction{
+		Date: time.Date(2026, 2, 4, 0, 0, 0, 0, time.UTC), AccountID: chk, InflowCents: 1_000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Categorized tx must NOT count.
+	if _, err := s.CreateTransaction(ctx, Transaction{
+		Date: time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC), AccountID: chk, CategoryID: &cat, OutflowCents: 9_999,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A transfer (no category) must NOT count. CreateTransfer returns (fromID, toID, error).
+	if _, _, err := s.CreateTransfer(ctx, TransferInput{
+		Date: time.Date(2026, 2, 6, 0, 0, 0, 0, time.UTC), FromAccountID: chk, ToAccountID: sav, AmountCents: 5_000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.UncategorizedSpent(ctx, "2026-02")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 3_000 {
+		t.Errorf("UncategorizedSpent = %d, want 3000", got)
+	}
+}

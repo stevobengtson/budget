@@ -299,6 +299,23 @@ WHERE c.is_income = ?
 	return v, nil
 }
 
+// UncategorizedSpent sums net outflow (outflow − inflow) for the month across
+// transactions with no category, excluding transfers (inter-account moves
+// aren't spending). Used for the budget page's read-only Uncategorized row.
+func (s *Store) UncategorizedSpent(ctx context.Context, month string) (int64, error) {
+	var v int64
+	q := fmt.Sprintf(`
+SELECT COALESCE(SUM(outflow_cents) - SUM(inflow_cents), 0)
+FROM transactions
+WHERE category_id IS NULL
+  AND transfer_account_id IS NULL
+  AND %s = ?`, s.dialect.MonthExpr("date"))
+	if err := s.queryOne(ctx, q, month).Scan(&v); err != nil {
+		return 0, err
+	}
+	return v, nil
+}
+
 // PaymentSource describes which datum supplied a month's paydown payment.
 type PaymentSource int
 
