@@ -68,7 +68,10 @@ templ Layout(title string, active string) {
 					@sidebar.Footer() {
 						@sidebar.Menu() {
 							@sidebar.MenuItem() {
-								@sidebar.MenuButton(sidebar.MenuButtonProps{Tooltip: "Account"}) {
+								@sidebar.MenuButton(sidebar.MenuButtonProps{
+									Tooltip:    "User",
+									Attributes: templ.Attributes{"disabled": true},
+								}) {
 									<span aria-hidden="true">👤</span>
 									<span>User</span>
 								}
