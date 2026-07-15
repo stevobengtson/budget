@@ -86,6 +86,7 @@ func (s *Server) routes() {
 	s.engine.POST("/budget/group/:gid/category", hs.BudgetCategoryCreate)
 	s.engine.PUT("/budget/category/:catID", hs.BudgetCategoryRename)
 	s.engine.POST("/budget/category/:catID/archive", hs.BudgetCategoryArchive)
+	s.engine.POST("/budget/category/:catID/rollover", hs.BudgetSetRollover)
 	s.engine.GET("/budget/income", func(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/budget")
 	})

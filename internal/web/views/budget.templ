@@ -16,16 +16,17 @@ import (
 )
 
 type BudgetData struct {
-	Month       string // "YYYY-MM"
-	PrevMonth   string
-	NextMonth   string
-	Estimated   int64
-	Budgeted    int64
-	Remain      int64
-	CreditRows  []store.CreditActivity
-	Groups      []BudgetGroup
-	IncomeRows  []store.Income
-	Accounts    []store.AccountWithBalance
+	Month              string // "YYYY-MM"
+	PrevMonth          string
+	NextMonth          string
+	Estimated          int64
+	Budgeted           int64
+	Remain             int64
+	CreditRows         []store.CreditActivity
+	Groups             []BudgetGroup
+	IncomeRows         []store.Income
+	Accounts           []store.AccountWithBalance
+	UncategorizedSpent int64
 }
 
 // BudgetGroup is one category group plus its month rows, for rendering a
@@ -46,13 +47,13 @@ templ BudgetPage(d BudgetData, collapsed bool) {
 templ BudgetMonthSelector(d BudgetData) {
 	<div class="flex items-center justify-between gap-4 pb-2">
 		<h1 class="text-2xl font-semibold tracking-tight">{ formatMonth(d.Month) }</h1>
-    @monthselector.MonthSelector(bgMonthHref(d.PrevMonth), bgMonthHref(nowMonth()), bgMonthHref(d.NextMonth))
+		@monthselector.MonthSelector(bgMonthHref(d.PrevMonth), bgMonthHref(nowMonth()), bgMonthHref(d.NextMonth))
 	</div>
 }
 
 func bgMonthHref(month string) string {
-    return "/budget?month=" + month
-  }
+	return "/budget?month=" + month
+}
 
 // BudgetBanner renders the summary stat cards inside a stable #budget-banner
 // container so a single assignment save can refresh it via an out-of-band swap
@@ -110,18 +111,32 @@ templ BudgetCreditSection(d BudgetData) {
 						@table.Table() {
 							@table.Header() {
 								@table.Row() {
-									@table.Head() { Account }
-									@table.Head() { Purchases }
-									@table.Head() { Payments }
-									@table.Head() { Owing }
+									@table.Head() {
+										Account 
+									}
+									@table.Head() {
+										Purchases 
+									}
+									@table.Head() {
+										Payments 
+									}
+									@table.Head() {
+										Owing 
+									}
 								}
 							}
 							@table.Body() {
 								for _, ca := range d.CreditRows {
 									@table.Row() {
-										@table.Cell() { { ca.AccountName } }
-										@table.Cell(table.CellProps{Class: "tabular-nums text-red-500"}) { { money.Format(ca.PurchasesCents) } }
-										@table.Cell(table.CellProps{Class: "tabular-nums text-emerald-500"}) { { money.Format(ca.PaymentsCents) } }
+										@table.Cell() {
+											{ ca.AccountName }
+										}
+										@table.Cell(table.CellProps{Class: "tabular-nums text-red-500"}) {
+											{ money.Format(ca.PurchasesCents) }
+										}
+										@table.Cell(table.CellProps{Class: "tabular-nums text-emerald-500"}) {
+											{ money.Format(ca.PaymentsCents) }
+										}
 										@table.Cell(table.CellProps{Class: "tabular-nums"}) {
 											@SignedMoney(ca.OwingCents)
 										}
@@ -149,11 +164,21 @@ templ BudgetTable(d BudgetData) {
 	@table.Table(table.Props{Class: "mt-2"}) {
 		@table.Header() {
 			@table.Row() {
-				@table.Head(table.HeadProps{Class: "w-[34%]"}) { Group / Category }
-				@table.Head() { Assigned }
-				@table.Head() { Spent }
-				@table.Head() { Available }
-				@table.Head() { Goal }
+				@table.Head(table.HeadProps{Class: "w-[34%]"}) {
+					Group / Category 
+				}
+				@table.Head() {
+					Assigned 
+				}
+				@table.Head() {
+					Spent 
+				}
+				@table.Head() {
+					Available 
+				}
+				@table.Head() {
+					Goal 
+				}
 				@table.Head(table.HeadProps{Class: "text-right"}) {
 					@button.Button(button.Props{
 						Type:    "button",
@@ -296,14 +321,20 @@ templ BudgetTotalsRow(d BudgetData, oob bool) {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
 	@table.Row(table.RowProps{Attributes: attrs}) {
-		@table.Cell(table.CellProps{Class: "font-semibold"}) { Totals }
-		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) { { money.Format(assigned) } }
-		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) { { money.Format(spent) } }
+		@table.Cell(table.CellProps{Class: "font-semibold"}) {
+			Totals 
+		}
+		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) {
+			{ money.Format(assigned) }
+		}
+		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) {
+			{ money.Format(spent) }
+		}
 		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) {
 			@SignedMoney(available)
 		}
-		@table.Cell() { }
-		@table.Cell() { }
+		@table.Cell()
+		@table.Cell()
 	}
 }
 
@@ -318,9 +349,9 @@ templ BudgetBody(d BudgetData) {
 // banner + totals via out-of-band swaps (see BudgetAssignResult).
 templ BudgetRegion(d BudgetData) {
 	<div id="budget-region">
-    @BudgetMonthSelector(d)
-    @BudgetBanner(d)
-    @BudgetIncomeSection(d)
+		@BudgetMonthSelector(d)
+		@BudgetBanner(d)
+		@BudgetIncomeSection(d)
 		@BudgetCreditSection(d)
 		@BudgetTable(d)
 	</div>
@@ -414,7 +445,9 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 				}
 			</div>
 		}
-		@table.Cell(table.CellProps{Class: "tabular-nums"}) { { money.Format(r.SpentCents) } }
+		@table.Cell(table.CellProps{Class: "tabular-nums"}) {
+			{ money.Format(r.SpentCents) }
+		}
 		@table.Cell(table.CellProps{Class: "tabular-nums"}) {
 			@SignedMoney(r.AvailableCents)
 		}
@@ -481,11 +514,11 @@ templ BudgetCategoryNewRow(month string, gid int64) {
 				/>
 			</form>
 		}
-		@table.Cell() { }
-		@table.Cell() { }
-		@table.Cell() { }
-		@table.Cell() { }
-		@table.Cell() { }
+		@table.Cell()
+		@table.Cell()
+		@table.Cell()
+		@table.Cell()
+		@table.Cell()
 	}
 }
 
@@ -616,9 +649,13 @@ templ BudgetIncomeSection(d BudgetData) {
 					@table.Table() {
 						@table.Header() {
 							@table.Row() {
-								@table.Head() { Source }
-								@table.Head(table.HeadProps{Class: "text-right"}) { Amount }
-								@table.Head(table.HeadProps{Class: "w-10"}) { }
+								@table.Head() {
+									Source 
+								}
+								@table.Head(table.HeadProps{Class: "text-right"}) {
+									Amount 
+								}
+								@table.Head(table.HeadProps{Class: "w-10"})
 							}
 						}
 						<tbody id="income-rows">
@@ -648,8 +685,8 @@ templ BudgetIncomeSection(d BudgetData) {
 						← copy from prev
 					}
 					@button.Button(button.Props{
-						Type:    "button",
-						Size:    button.SizeSm,
+						Type: "button",
+						Size: button.SizeSm,
 						Attributes: templ.Attributes{
 							"hx-get":    "/budget/income/new?month=" + d.Month,
 							"hx-target": "#income-rows",
@@ -676,11 +713,13 @@ templ IncomeTotalsRow(d BudgetData, oob bool) {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
 	@table.Row(table.RowProps{Attributes: attrs}) {
-		@table.Cell(table.CellProps{Class: "font-semibold"}) { Total }
+		@table.Cell(table.CellProps{Class: "font-semibold"}) {
+			Total 
+		}
 		@table.Cell(table.CellProps{Class: "text-right font-semibold tabular-nums text-emerald-500"}) {
 			{ money.Format(incomeTotal(d.IncomeRows)) }
 		}
-		@table.Cell() { }
+		@table.Cell()
 	}
 }
 

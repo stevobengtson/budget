@@ -60,6 +60,7 @@ func (h *Handlers) budgetData(ctx context.Context, month string) (views.BudgetDa
 	}
 
 	incTotal, _ := h.store.TotalIncome(ctx, month)
+	uncat, _ := h.store.UncategorizedSpent(ctx, month)
 	credit, _ := h.store.CreditCardActivityForMonth(ctx, month)
 	incomeRows, _ := h.store.ListIncomes(ctx, month)
 
@@ -87,16 +88,17 @@ func (h *Handlers) budgetData(ctx context.Context, month string) (views.BudgetDa
 	next := t.AddDate(0, 1, 0).Format("2006-01")
 
 	return views.BudgetData{
-		Month:      month,
-		PrevMonth:  prev,
-		NextMonth:  next,
-		Estimated:  incTotal,
-		Budgeted:   assigned,
-		Remain:     incTotal - assigned,
-		CreditRows: creditFiltered,
-		Groups:     groups,
-		IncomeRows: incomeRows,
-		Accounts:   accts,
+		Month:              month,
+		PrevMonth:          prev,
+		NextMonth:          next,
+		Estimated:          incTotal,
+		Budgeted:           assigned,
+		Remain:             incTotal - assigned,
+		CreditRows:         creditFiltered,
+		Groups:             groups,
+		IncomeRows:         incomeRows,
+		Accounts:           accts,
+		UncategorizedSpent: uncat,
 	}, rows, nil
 }
 
@@ -204,6 +206,33 @@ func (h *Handlers) BudgetAssignCopyPrev(c *gin.Context) {
 		return
 	}
 	if err := h.store.SetAssigned(ctx, month, catID, prevCents); err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	data, rows, err := h.budgetData(ctx, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetAssignResult(month, findCatRow(rows, catID), data))
+}
+
+// BudgetSetRollover updates a category's rollover mode and returns the same
+// region fragment as BudgetAssign so Available/totals/banner stay in sync.
+func (h *Handlers) BudgetSetRollover(c *gin.Context) {
+	ctx := c.Request.Context()
+	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
+	month := monthOrNow(c)
+
+	mode := c.PostForm("mode")
+	switch mode {
+	case store.RolloverNone, store.RolloverCarry, store.RolloverCarryPositive:
+	default:
+		c.String(http.StatusBadRequest, "invalid rollover mode: %q", mode)
+		return
+	}
+	if err := h.store.SetRolloverMode(ctx, catID, mode); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}

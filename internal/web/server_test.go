@@ -15,7 +15,7 @@ import (
 
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	conn, _, err := db.Open(":memory:")
+	conn, _, err := db.Open(":memory:", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestAccountsOverviewPartialRenders(t *testing.T) {
 // nonexistent id (e.g. 0) errors out of DeleteTransaction before the header
 // is set, so this seeds a real account + transaction first and deletes that.
 func TestTransactionDeleteEmitsAccountsChanged(t *testing.T) {
-	conn, _, err := db.Open(":memory:")
+	conn, _, err := db.Open(":memory:", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,6 +141,58 @@ func TestTransactionDeleteEmitsAccountsChanged(t *testing.T) {
 	if body := readAll(t, resp); body != "" {
 		t.Errorf("delete body = %q, want empty", body)
 	}
+}
+
+func TestBudgetSetRolloverMode(t *testing.T) {
+	conn, _, err := db.Open(":memory:", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	s := store.New(conn)
+	srv := NewServer(s)
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	ctx := context.Background()
+	gid, _ := s.CreateGroup(ctx, "G", 0)
+	cat, _ := s.CreateCategory(ctx, store.Category{GroupID: gid, Name: "Fun"})
+
+	form := url.Values{"mode": {store.RolloverCarry}}
+	resp, err := http.PostForm(ts.URL+"/budget/category/"+strconv.FormatInt(cat, 10)+"/rollover?month=2026-07", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	cats, _ := s.ListCategories(ctx, false)
+	got := findCatMode(cats, cat)
+	if got != store.RolloverCarry {
+		t.Errorf("rollover_mode = %q, want %q", got, store.RolloverCarry)
+	}
+
+	// Invalid mode is rejected.
+	bad, _ := http.PostForm(ts.URL+"/budget/category/"+strconv.FormatInt(cat, 10)+"/rollover?month=2026-07",
+		url.Values{"mode": {"bogus"}})
+	defer func() { _ = bad.Body.Close() }()
+	if bad.StatusCode != http.StatusBadRequest {
+		t.Errorf("invalid mode status = %d, want 400", bad.StatusCode)
+	}
+}
+
+// findCatMode returns the rollover mode of the category with the given ID, or
+// "" if not found. ListCategories includes the seeded system Income category,
+// so the created category is located by ID rather than slice index.
+func findCatMode(cats []store.Category, id int64) string {
+	for _, c := range cats {
+		if c.ID == id {
+			return c.RolloverMode
+		}
+	}
+	return ""
 }
 
 func readAll(t *testing.T, resp *http.Response) string {
