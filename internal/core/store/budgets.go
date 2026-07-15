@@ -60,7 +60,7 @@ type CategoryBudget struct {
 // Available = (carryover from prior months, ≥0) + assigned − spent.
 func (s *Store) MonthBudget(ctx context.Context, month string) ([]CategoryBudget, error) {
 	q := fmt.Sprintf(`
-SELECT c.id, c.group_id, g.name, c.name, c.is_income, c.goal_cents, c.goal_due_date,
+SELECT c.id, c.group_id, g.name, c.name, c.is_income, c.rollover_mode, c.goal_cents, c.goal_due_date,
        COALESCE(b.assigned_cents, 0)                                              AS assigned,
        COALESCE((SELECT SUM(t.outflow_cents) - SUM(t.inflow_cents) FROM transactions t
                  WHERE t.category_id = c.id AND %s = ?), 0) AS spent
@@ -81,7 +81,7 @@ ORDER BY g.sort_order, g.name, c.sort_order, c.name`, s.dialect.MonthExpr("t.dat
 		var goalCents nullableInt64
 		var due nullTime
 		if err := rows.Scan(&cb.CategoryID, &cb.GroupID, &cb.GroupName, &cb.CategoryName,
-			&cb.IsIncome, &goalCents, &due, &cb.AssignedCents, &cb.SpentCents); err != nil {
+			&cb.IsIncome, &cb.RolloverMode, &goalCents, &due, &cb.AssignedCents, &cb.SpentCents); err != nil {
 			return nil, err
 		}
 		if goalCents.Valid {
@@ -101,7 +101,7 @@ ORDER BY g.sort_order, g.name, c.sort_order, c.name`, s.dialect.MonthExpr("t.dat
 	// − lifetime_spent_through_month, clipped at zero between months for the
 	// previous-month carry rule.
 	for i := range out {
-		avail, err := s.categoryAvailable(ctx, out[i].CategoryID, month)
+		avail, err := s.categoryAvailable(ctx, out[i].CategoryID, out[i].RolloverMode, month)
 		if err != nil {
 			return nil, err
 		}
@@ -113,8 +113,9 @@ ORDER BY g.sort_order, g.name, c.sort_order, c.name`, s.dialect.MonthExpr("t.dat
 	return out, nil
 }
 
-// categoryAvailable walks every prior month and applies the carryover-only-if-positive rule.
-func (s *Store) categoryAvailable(ctx context.Context, categoryID int64, month string) (int64, error) {
+// categoryAvailable walks every prior month and applies the category's rollover
+// mode when carrying a running balance forward.
+func (s *Store) categoryAvailable(ctx context.Context, categoryID int64, mode string, month string) (int64, error) {
 	// Find the earliest month that has either an assignment or a transaction.
 	var earliest string
 	q := fmt.Sprintf(`
@@ -136,14 +137,25 @@ SELECT MIN(m) FROM (
 		if err != nil {
 			return 0, err
 		}
-		avail := carry + delta
+		inbound := carry
+		if mode == RolloverNone {
+			inbound = 0 // isolated month: ignore any carried balance
+		}
+		avail := inbound + delta
 		if cur == month {
 			return avail, nil
 		}
-		if avail < 0 {
+		switch mode {
+		case RolloverNone:
 			carry = 0
-		} else {
+		case RolloverCarry:
 			carry = avail
+		default: // RolloverCarryPositive
+			if avail < 0 {
+				carry = 0
+			} else {
+				carry = avail
+			}
 		}
 		next := nextMonth(cur)
 		if next > month {

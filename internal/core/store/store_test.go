@@ -973,3 +973,68 @@ func findCat(t *testing.T, cats []Category, id int64) Category {
 	t.Fatalf("category id %d not found", id)
 	return Category{}
 }
+
+func TestRolloverModes(t *testing.T) {
+	// Scenario per category: Jan assign $100, spend $150 (overspend $50);
+	// Feb assign $0, spend $0. What is Feb available?
+	//   carry_positive: Jan overspend resets → Feb available = 0
+	//   carry:          Jan −50 carries      → Feb available = -5000
+	//   none:           isolated             → Feb available = 0
+	cases := []struct {
+		mode    string
+		wantFeb int64
+	}{
+		{RolloverCarryPositive, 0},
+		{RolloverCarry, -5000},
+		{RolloverNone, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.mode, func(t *testing.T) {
+			s := newTestStore(t)
+			ctx := context.Background()
+			chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
+			gid, _ := s.CreateGroup(ctx, "G", 0)
+			cat, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Fun", RolloverMode: tc.mode})
+
+			if err := s.SetAssigned(ctx, "2026-01", cat, 10_000); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.CreateTransaction(ctx, Transaction{
+				Date: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), AccountID: chk, CategoryID: &cat, OutflowCents: 15_000,
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			rows, err := s.MonthBudget(ctx, "2026-02")
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := findCategoryRow(t, rows, "Fun")
+			if r.AvailableCents != tc.wantFeb {
+				t.Errorf("mode %s: Feb available = %d, want %d", tc.mode, r.AvailableCents, tc.wantFeb)
+			}
+		})
+	}
+}
+
+func TestRolloverNoneIgnoresCarryIn(t *testing.T) {
+	// none mode with a prior surplus: Jan leftover must NOT flow into Feb.
+	s := newTestStore(t)
+	ctx := context.Background()
+	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
+	gid, _ := s.CreateGroup(ctx, "G", 0)
+	cat, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Iso", RolloverMode: RolloverNone})
+	_ = chk
+
+	if err := s.SetAssigned(ctx, "2026-01", cat, 10_000); err != nil { // $100 surplus, unspent
+		t.Fatal(err)
+	}
+	if err := s.SetAssigned(ctx, "2026-02", cat, 3_000); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := s.MonthBudget(ctx, "2026-02")
+	r := findCategoryRow(t, rows, "Iso")
+	if r.AvailableCents != 3_000 { // Feb assigned only, no carry-in
+		t.Errorf("none-mode Feb available = %d, want 3000", r.AvailableCents)
+	}
+}
