@@ -138,6 +138,9 @@ func TestTransactionDeleteEmitsAccountsChanged(t *testing.T) {
 	if got := resp.Header.Get("HX-Trigger"); got != "accountsChanged" {
 		t.Errorf("HX-Trigger = %q, want accountsChanged", got)
 	}
+	if body := readAll(t, resp); body != "" {
+		t.Errorf("delete body = %q, want empty", body)
+	}
 }
 
 func readAll(t *testing.T, resp *http.Response) string {

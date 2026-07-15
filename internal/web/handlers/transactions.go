@@ -164,6 +164,9 @@ func (h *Handlers) TransactionsUpdate(c *gin.Context) {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
+	// A successful update changed balances; refresh the sidebar overview on any
+	// response path (including the reload-failure fallback below).
+	c.Header("HX-Trigger", "accountsChanged")
 	// Swap only the edited row (plus the paired transfer leg, if any) instead of
 	// re-rendering the whole list. If the row can't be reloaded, fall back to a
 	// full row refresh.
@@ -180,7 +183,6 @@ func (h *Handlers) TransactionsUpdate(c *gin.Context) {
 	}
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
-	c.Header("HX-Trigger", "accountsChanged")
 	render(c, http.StatusOK, views.TxUpdateResult(txMonthFromRequest(c), txAccountFromRequest(c) != nil, *t, pair, accts, cats))
 }
 
