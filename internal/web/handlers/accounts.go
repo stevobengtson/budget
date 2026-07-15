@@ -16,26 +16,7 @@ func (h *Handlers) AccountsIndex(c *gin.Context) {
 	ctx := c.Request.Context()
 	rows, _ := h.store.ListAccounts(ctx, false)
 	cats, _ := h.store.ListCategories(ctx, false)
-	var assets, liab, avail int64
-	for _, a := range rows {
-		if a.Type.IsLiability() {
-			liab += a.BalanceCents
-		} else {
-			assets += a.BalanceCents
-		}
-		if a.CreditLimitCents != nil {
-			v := a.BalanceCents + *a.CreditLimitCents
-			if v > 0 {
-				avail += v
-			}
-		}
-	}
-	d := views.AccountsData{
-		Rows: rows, Categories: cats,
-		Assets: assets, Liabilities: liab,
-		Difference:  assets + liab,
-		AvailCredit: avail,
-	}
+	d := views.AccountsData{Rows: rows, Categories: cats}
 	render(c, http.StatusOK, views.AccountsPage(d))
 }
 

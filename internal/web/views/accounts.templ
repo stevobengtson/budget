@@ -7,7 +7,6 @@ import (
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/templui/templui/components/button"
-	"github.com/templui/templui/components/card"
 	"github.com/templui/templui/components/checkbox"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/input"
@@ -16,12 +15,8 @@ import (
 )
 
 type AccountsData struct {
-	Rows        []store.AccountWithBalance
-	Categories  []store.Category
-	Assets      int64
-	Liabilities int64
-	Difference  int64
-	AvailCredit int64
+	Rows       []store.AccountWithBalance
+	Categories []store.Category
 }
 
 templ AccountsPage(d AccountsData) {
@@ -59,31 +54,6 @@ templ AccountsPage(d AccountsData) {
 				}
 			}
 		}
-
-		<div class="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-			@acctStat("Assets", money.Format(d.Assets), "text-emerald-500")
-			@acctStat("Liabilities", money.Format(d.Liabilities), "text-red-500")
-			@acctStatSigned("Difference", d.Difference)
-			if d.AvailCredit > 0 {
-				@acctStat("Available credit", money.Format(d.AvailCredit), "text-emerald-500")
-			}
-		</div>
-	}
-}
-
-templ acctStat(label, value, valueClass string) {
-	@card.Card(card.Props{Class: "p-4"}) {
-		<div class="text-xs uppercase tracking-wide text-muted-foreground">{ label }</div>
-		<div class={ "mt-1 text-lg font-semibold tabular-nums " + valueClass }>{ value }</div>
-	}
-}
-
-templ acctStatSigned(label string, cents int64) {
-	@card.Card(card.Props{Class: "p-4"}) {
-		<div class="text-xs uppercase tracking-wide text-muted-foreground">{ label }</div>
-		<div class="mt-1 text-lg font-semibold tabular-nums">
-			@SignedMoney(cents)
-		</div>
 	}
 }
 
