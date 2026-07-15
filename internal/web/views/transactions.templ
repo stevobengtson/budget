@@ -39,35 +39,48 @@ templ TransactionsPage(d TransactionsData) {
 templ TransactionsBody(d TransactionsData) {
 	<div class="flex items-center justify-between gap-4 pb-2">
 		<h1 class="text-2xl font-semibold tracking-tight">{ txMonthLabel(d.FilterMonth) }</h1>
-    @monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth))
+		@monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth))
 	</div>
-
 	{{ hideAcct := d.FilterAccount != nil }}
 	@table.Table(table.Props{Class: "mt-4"}) {
 		@table.Header() {
 			@table.Row() {
-				@table.Head() { Date }
-				if !hideAcct {
-					@table.Head() { Account }
+				@table.Head() {
+					Date 
 				}
-				@table.Head() { Category / Transfer }
-				@table.Head() { Payee }
-				@table.Head(table.HeadProps{Class: "text-right"}) { Outflow }
-				@table.Head(table.HeadProps{Class: "text-right"}) { Inflow }
-				@table.Head(table.HeadProps{Class: "text-center"}) { ✓ }
-				@table.Head(table.HeadProps{Class: "text-right"}) { 
-          @button.Button(button.Props{
-            Href: "/transactions/new",
-            Size: button.SizeSm,
-            Attributes: templ.Attributes{
-              "hx-get":    "/transactions/new",
-              "hx-target": "#modal",
-              "hx-swap":   "innerHTML",
-            },
-          }) {
-            Add
-          }
-        }
+				if !hideAcct {
+					@table.Head() {
+						Account 
+					}
+				}
+				@table.Head() {
+					Category / Transfer 
+				}
+				@table.Head() {
+					Payee 
+				}
+				@table.Head(table.HeadProps{Class: "text-right"}) {
+					Outflow 
+				}
+				@table.Head(table.HeadProps{Class: "text-right"}) {
+					Inflow 
+				}
+				@table.Head(table.HeadProps{Class: "text-center"}) {
+					✓ 
+				}
+				@table.Head(table.HeadProps{Class: "text-right"}) {
+					@button.Button(button.Props{
+						Href: "/transactions/new",
+						Size: button.SizeSm,
+						Attributes: templ.Attributes{
+							"hx-get":    "/transactions/new",
+							"hx-target": "#modal",
+							"hx-swap":   "innerHTML",
+						},
+					}) {
+						Add
+					}
+				}
 			}
 		}
 		<tbody id="tx-rows" class="[&_tr:last-child]:border-0">
@@ -79,7 +92,6 @@ templ TransactionsBody(d TransactionsData) {
 			}
 		</tbody>
 	}
-
 	if d.Total > d.PageSize {
 		<div class="mt-4 flex items-center gap-3 text-sm text-muted-foreground">
 			if d.Page > 1 {
@@ -107,7 +119,9 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 			{ t.Date.Format("Jan 2, 2006") }
 		}
 		if !hideAccount {
-			@table.Cell() { { accountName(accts, t.AccountID) } }
+			@table.Cell() {
+				{ accountName(accts, t.AccountID) }
+			}
 		}
 		@table.Cell() {
 			@TxCategoryCell(t, accts, cats)
@@ -147,13 +161,13 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 			@button.Button(button.Props{
 				Variant: button.VariantGhost,
 				Size:    button.SizeSm,
-        Class:   "text-muted-foreground hover:text-destructive",
+				Class:   "text-muted-foreground hover:text-destructive",
 				Attributes: templ.Attributes{
 					"hx-delete":  fmt.Sprintf("/transactions/%d", t.ID),
 					"hx-target":  fmt.Sprintf("#tx-%d", t.ID),
 					"hx-swap":    "outerHTML",
 					"hx-confirm": "Delete Transaction?",
-          "title":      "Delete Transaction",
+					"title":      "Delete Transaction",
 				},
 			}) {
 				×
@@ -166,7 +180,7 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 // row (primary swap into #tx-<id>) and, for a transfer, refreshes the paired
 // leg via an out-of-band swap — wrapped in a <template> so the bare <tr>
 // survives the browser's table-parsing rules. It also empties the modal.
-templ TxUpdateResult(month string, hideAccount bool, t store.Transaction, pair *store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
+templ TxUpdateResult(hideAccount bool, t store.Transaction, pair *store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
 	@TransactionRow(t, accts, cats, hideAccount, false)
 	if pair != nil {
 		<template>
@@ -180,21 +194,21 @@ templ txClearCell(t store.Transaction) {
 	<form hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" class="inline">
 		if t.Cleared {
 			@button.Button(button.Props{
-				Type:    "submit",
-				Variant: button.VariantGhost,
-				Size:    button.SizeSm,
-				Class:   "bg-emerald-600 text-white font-bold ring-1 ring-emerald-500/40 hover:bg-emerald-600/90 hover:text-white",
-				Attributes:   templ.Attributes{"title": "Cleared — click to unclear"},
+				Type:       "submit",
+				Variant:    button.VariantGhost,
+				Size:       button.SizeSm,
+				Class:      "bg-emerald-600 text-white font-bold ring-1 ring-emerald-500/40 hover:bg-emerald-600/90 hover:text-white",
+				Attributes: templ.Attributes{"title": "Cleared — click to unclear"},
 			}) {
 				✓
 			}
 		} else {
 			@button.Button(button.Props{
-				Type:    "submit",
-				Variant: button.VariantOutline,
-				Size:    button.SizeSm,
-				Class:   "text-muted-foreground",
-				Attributes:   templ.Attributes{"title": "Not cleared — click to clear"},
+				Type:       "submit",
+				Variant:    button.VariantOutline,
+				Size:       button.SizeSm,
+				Class:      "text-muted-foreground",
+				Attributes: templ.Attributes{"title": "Not cleared — click to clear"},
 			}) {
 				·
 			}
@@ -213,7 +227,7 @@ templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats
 			{ accountName(accts, *t.TransferAccountID) }
 		</span>
 		if t.CategoryID != nil {
-			<span class="text-muted-foreground"> · </span>
+			<span class="text-muted-foreground">· </span>
 			{ categoryName(cats, *t.CategoryID) }
 		}
 	} else if t.CategoryID != nil {
@@ -277,9 +291,9 @@ templ TransactionForm(d TxFormData) {
 			</div>
 			@dialog.Footer() {
 				@button.Button(button.Props{
-					Variant: button.VariantOutline,
-					Type:    "button",
-					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Variant:    button.VariantOutline,
+					Type:       "button",
+					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
 					cancel
 				}

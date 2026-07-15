@@ -34,46 +34,44 @@ type PaydownData struct {
 
 templ PaydownPage(d PaydownData) {
 	@Layout("Paydown", "paydown") {
-        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">
-            Debt Paydown
-            <span class="ml-2 text-sm font-normal text-muted-foreground">{ strconv.Itoa(d.Horizon) } month horizon</span>
-          </h1>
-          <form method="get" action="/paydown" class="flex flex-wrap items-center gap-2">
-            @label.Label(label.Props{For: "pd-horizon", Class: "text-muted-foreground"}) {
-              Horizon (months)
-            }
-            <div class="w-24">
-              @input.Input(input.Props{
-                ID:         "pd-horizon",
-                Name:       "horizon",
-                Type:       input.TypeNumber,
-                Value:      strconv.Itoa(d.Horizon),
-                Class:      "w-full tabular-nums",
-                Attributes: templ.Attributes{"min": "12", "max": "360", "step": "12"},
-              })
-            </div>
-            @button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}) {
-              apply
-            }
-          </form>
-        </div>
-        <div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          @pdStat("Monthly outflow", money.Format(d.TotalMonthly), "text-emerald-500")
-          @pdStat("Total interest", money.Format(d.TotalInterest), "text-red-500")
-        </div>
-
-        if len(d.Plans) == 0 {
-          <p class="text-sm text-muted-foreground">
-            No accounts in the paydown plan yet. Open
-            <a class="underline underline-offset-4 hover:text-foreground" href="/accounts">Accounts</a>,
-            edit one with APR, and check &#34;include in paydown&#34;.
-          </p>
-        }
-
-        for i, p := range d.Plans {
-          @PaydownSection(p, d.Accounts[i], d.Horizon, d.PageSize)
-        }
+		<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+			<h1 class="text-xl font-semibold tracking-tight sm:text-2xl">
+				Debt Paydown
+				<span class="ml-2 text-sm font-normal text-muted-foreground">{ strconv.Itoa(d.Horizon) } month horizon</span>
+			</h1>
+			<form method="get" action="/paydown" class="flex flex-wrap items-center gap-2">
+				@label.Label(label.Props{For: "pd-horizon", Class: "text-muted-foreground"}) {
+					Horizon (months)
+				}
+				<div class="w-24">
+					@input.Input(input.Props{
+						ID:         "pd-horizon",
+						Name:       "horizon",
+						Type:       input.TypeNumber,
+						Value:      strconv.Itoa(d.Horizon),
+						Class:      "w-full tabular-nums",
+						Attributes: templ.Attributes{"min": "12", "max": "360", "step": "12"},
+					})
+				</div>
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}) {
+					apply
+				}
+			</form>
+		</div>
+		<div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+			@pdStat("Monthly outflow", money.Format(d.TotalMonthly), "text-emerald-500")
+			@pdStat("Total interest", money.Format(d.TotalInterest), "text-red-500")
+		</div>
+		if len(d.Plans) == 0 {
+			<p class="text-sm text-muted-foreground">
+				No accounts in the paydown plan yet. Open
+				<a class="underline underline-offset-4 hover:text-foreground" href="/accounts">Accounts</a>,
+				edit one with APR, and check &#34;include in paydown&#34;.
+			</p>
+		}
+		for i, p := range d.Plans {
+			@PaydownSection(p, d.Accounts[i], d.Horizon, d.PageSize)
+		}
 	}
 }
 
@@ -183,23 +181,41 @@ templ PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) {
 	@table.Table() {
 		@table.Header() {
 			@table.Row() {
-				@table.Head() { Month }
-				@table.Head(table.HeadProps{Class: "text-right"}) { Interest }
-				@table.Head(table.HeadProps{Class: "text-right"}) { Payment }
-				@table.Head(table.HeadProps{Class: "hidden md:table-cell"}) { Source }
-				@table.Head(table.HeadProps{Class: "text-right"}) { Balance }
+				@table.Head() {
+					Month 
+				}
+				@table.Head(table.HeadProps{Class: "text-right"}) {
+					Interest 
+				}
+				@table.Head(table.HeadProps{Class: "text-right"}) {
+					Payment 
+				}
+				@table.Head(table.HeadProps{Class: "hidden md:table-cell"}) {
+					Source 
+				}
+				@table.Head(table.HeadProps{Class: "text-right"}) {
+					Balance 
+				}
 			}
 		}
 		@table.Body() {
 			for _, r := range rows {
 				@table.Row() {
-					@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) { { r.Month.Format("Jan 2006") } }
-					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-red-500"}) { { money.Format(r.InterestCents) } }
-					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-emerald-500"}) { { money.Format(r.PaymentCents) } }
+					@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
+						{ r.Month.Format("Jan 2006") }
+					}
+					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-red-500"}) {
+						{ money.Format(r.InterestCents) }
+					}
+					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-emerald-500"}) {
+						{ money.Format(r.PaymentCents) }
+					}
 					@table.Cell(table.CellProps{Class: "hidden md:table-cell"}) {
 						@PaydownSource(r.PaymentSource)
 					}
-					@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) { { money.Format(r.BalanceCents) } }
+					@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
+						{ money.Format(r.BalanceCents) }
+					}
 				}
 			}
 		}
@@ -306,9 +322,9 @@ templ PaymentModal(acct store.AccountWithBalance) {
 			</p>
 			@dialog.Footer() {
 				@button.Button(button.Props{
-					Variant: button.VariantOutline,
-					Type:    "button",
-					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Variant:    button.VariantOutline,
+					Type:       "button",
+					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
 					cancel
 				}
@@ -361,9 +377,9 @@ templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups
 			</p>
 			@dialog.Footer() {
 				@button.Button(button.Props{
-					Variant: button.VariantOutline,
-					Type:    "button",
-					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					Variant:    button.VariantOutline,
+					Type:       "button",
+					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
 					cancel
 				}

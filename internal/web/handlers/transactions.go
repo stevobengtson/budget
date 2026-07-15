@@ -183,7 +183,7 @@ func (h *Handlers) TransactionsUpdate(c *gin.Context) {
 	}
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
-	render(c, http.StatusOK, views.TxUpdateResult(txMonthFromRequest(c), txAccountFromRequest(c) != nil, *t, pair, accts, cats))
+	render(c, http.StatusOK, views.TxUpdateResult(txAccountFromRequest(c) != nil, *t, pair, accts, cats))
 }
 
 func (h *Handlers) TransactionsDelete(c *gin.Context) {
