@@ -368,24 +368,6 @@ func txAccountFromRequest(c *gin.Context) *int64 {
 	return nil
 }
 
-// txMonthFromRequest returns the month filter reflected by the current
-// transactions view (from the HX-Current-URL header): the selected month, ""
-// when viewing all months, or the current month when unspecified. Used to keep
-// the overview's account links on the same month the user is viewing.
-func txMonthFromRequest(c *gin.Context) string {
-	month := store.MonthKey(time.Now())
-	if currentURL := c.GetHeader("HX-Current-URL"); currentURL != "" {
-		if u, err := url.Parse(currentURL); err == nil {
-			if m := u.Query().Get("month"); m != "" {
-				month = m
-			} else if u.Query().Get("all") == "1" {
-				month = ""
-			}
-		}
-	}
-	return month
-}
-
 type errInvalid string
 
 func (e errInvalid) Error() string { return string(e) }
