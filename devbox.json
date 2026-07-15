@@ -20,12 +20,12 @@
       "echo \"devbox ready — go $(go env GOVERSION) · templ $(templ --version) · tailwind v4.3.0 · $(goose --version 2>&1)\""
     ],
     "scripts": {
-      "web":     "task web",
-      "tui":     "task run",
-      "dev":     "task dev",
-      "test":    "task test",
+      "web": "task run",
+      "run": "task run",
+      "dev": "task dev",
+      "test": "task test",
       "migrate": "task db:migrate",
-      "seed":    "task db:seed"
+      "seed": "task db:seed"
     }
   }
 }

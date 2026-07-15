@@ -55,7 +55,6 @@ jobs:
         run: |
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
-          go build -trimpath -ldflags="-s -w" -o "budget-tui${EXT}" ./cmd/tui
           go build -trimpath -ldflags="-s -w" -o "budget-web${EXT}" ./cmd/web
 
       - name: Package (tar)
@@ -67,7 +66,7 @@ jobs:
         run: |
           NAME="budget-${TAG}-${GOOS}-${GOARCH}"
           mkdir "$NAME"
-          mv budget-tui budget-web "$NAME/"
+          mv budget-web "$NAME/"
           cp README.md LICENSE "$NAME/" 2>/dev/null || true
           tar czf "${NAME}.tar.gz" "$NAME"
           echo "ASSET=${NAME}.tar.gz" >> "$GITHUB_ENV"
@@ -81,7 +80,7 @@ jobs:
         run: |
           NAME="budget-${TAG}-${GOOS}-${GOARCH}"
           mkdir "$NAME"
-          mv budget-tui.exe budget-web.exe "$NAME/"
+          mv budget-web.exe "$NAME/"
           cp README.md LICENSE "$NAME/" 2>/dev/null || true
           zip -r "${NAME}.zip" "$NAME"
           echo "ASSET=${NAME}.zip" >> "$GITHUB_ENV"

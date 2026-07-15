@@ -34,5 +34,4 @@ jobs:
 
       - name: Build
         run: |
-          go build -o /dev/null ./cmd/tui
           go build -o /dev/null ./cmd/web

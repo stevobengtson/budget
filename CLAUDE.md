@@ -5,13 +5,11 @@ Guidance for Claude Code (claude.ai/code) working in this repository.
 ## Project Overview
 
 Local-first personal finance app with envelope budgeting. **Single Go module**
-(`github.com/sbengtson/budget`) that builds **two binaries sharing one core**:
+(`github.com/sbengtson/budget`):
 
-- **TUI** (`cmd/tui`) — keyboard-driven terminal UI (Bubble Tea + Lipgloss).
 - **Web** (`cmd/web`) — server-rendered web UI (Gin + HTMX + Templ).
 
-Both link the same `internal/core/*` packages and the same database. SQLite is
-the primary/local store; the store layer also supports Postgres via a dialect
+SQLite is the primary/local store; the store layer also supports Postgres via a dialect
 abstraction. No separate JS frontend — the web UI is Go templates + HTMX.
 
 ## Build & Run
@@ -33,7 +31,7 @@ When adding a tool (later: postgres, mailpit), `devbox add <pkg>` and pin it her
 ```bash
 task setup          # go mod download + install goose; installs templ + tailwind CLIs
 task build          # build both binaries -> bin/tui/budget, bin/web/budget
-task run            # build + launch TUI (alias: task tui)
+task run            # build + launch web (alias: task web)
 task web            # build + launch web server (regenerates css + templ first)
 task dev            # hot-reload via air
 task test           # templ generate + go test ./...
@@ -61,7 +59,6 @@ Web listen address comes from `--addr`, else config `web.addr` (default `:8080`)
 ## Architecture
 
 ```
-cmd/tui/main.go            TUI binary entrypoint (Bubble Tea)
 cmd/web/main.go            Web binary entrypoint (opens db, builds store, serves Gin)
 
 internal/cli/              Shared Cobra/Viper CLI: root flags, config, db/migrate/seed
@@ -76,9 +73,6 @@ internal/core/config/      Viper config (budget.yaml / BUDGET_* env / CLI flags)
 internal/core/money/       Integer cents <-> human string parsing/formatting.
 internal/core/format/      Presentation helpers shared by TUI + web (goal/date wording).
 internal/core/paydown/     Debt amortization projection (pure Go, no DB).
-
-internal/tui/              Bubble Tea screens/components (accounts, budget, categories,
-                           transactions, paydown, forms, styles, bootstrap).
 
 internal/web/              Web app.
   server.go                Gin router + embedded static FS. Serves templUI
@@ -107,8 +101,6 @@ dialog, label, selectbox, ...), styled via Tailwind v4.
 - **Web is server-rendered**: Templ generates Go; HTMX drives partial updates.
   After editing a `.templ` file, run `task templ` (or `task test`, which does it)
   before building — the `*_templ.go` files are checked in.
-- **Shared core, thin UIs**: `internal/cli` and `internal/core` carry no UI deps;
-  TUI and web are the only UI packages.
 
 ## Key Rules
 

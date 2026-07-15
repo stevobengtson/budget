@@ -4,9 +4,7 @@
 version: "3"
 
 vars:
-  BIN_TUI: ./bin/tui/budget
   BIN_WEB: ./bin/web/budget
-  CMD_TUI: ./cmd/tui
   CMD_WEB: ./cmd/web
   MIGRATIONS: ./internal/core/db/migrations/sqlite
   DB_PATH: '{{.DB_PATH | default "./data/budget.db"}}'
@@ -22,8 +20,8 @@ vars:
   TAILWIND_VERSION: v4.3.0
   TAILWIND_OS: '{{if eq OS "darwin"}}macos{{else}}linux{{end}}'
   TAILWIND_ARCH: '{{if eq ARCH "arm64"}}arm64{{else}}x64{{end}}'
-  TAILWIND_ASSET: 'tailwindcss-{{.TAILWIND_OS}}-{{.TAILWIND_ARCH}}'
-  TAILWIND_URL: 'https://github.com/tailwindlabs/tailwindcss/releases/download/{{.TAILWIND_VERSION}}/{{.TAILWIND_ASSET}}'
+  TAILWIND_ASSET: "tailwindcss-{{.TAILWIND_OS}}-{{.TAILWIND_ARCH}}"
+  TAILWIND_URL: "https://github.com/tailwindlabs/tailwindcss/releases/download/{{.TAILWIND_VERSION}}/{{.TAILWIND_ASSET}}"
 
 tasks:
   default:
@@ -40,7 +38,7 @@ tasks:
         silent: true
       - go mod download
       - go install github.com/pressly/goose/v3/cmd/goose@latest
-      - cmd: "echo \"Setup complete. Run 'task run' for the TUI or 'task web' to serve HTTP.\""
+      - cmd: 'echo "Setup complete. Run ''task run'' for the TUI or ''task web'' to serve HTTP."'
         silent: true
 
   tools:
@@ -73,7 +71,7 @@ tasks:
     desc: Compile Tailwind CSS
     deps: [tailwind-cli]
     cmds:
-      - '{{.TAILWIND}} -i {{.CSS_SRC}} -o {{.CSS_OUT}} --minify'
+      - "{{.TAILWIND}} -i {{.CSS_SRC}} -o {{.CSS_OUT}} --minify"
 
   tailwind:
     desc: Alias for css
@@ -83,38 +81,23 @@ tasks:
     desc: Watch + recompile Tailwind CSS
     deps: [tailwind-cli]
     cmds:
-      - '{{.TAILWIND}} -i {{.CSS_SRC}} -o {{.CSS_OUT}} --watch'
+      - "{{.TAILWIND}} -i {{.CSS_SRC}} -o {{.CSS_OUT}} --watch"
 
-  build:tui:
-    desc: Build the TUI binary
-    cmds:
-      - go build -o {{.BIN_TUI}} {{.CMD_TUI}}
-
-  build:web:
+  build:
     desc: Build the web binary (regenerates css + templ first)
     deps: [css, templ]
     cmds:
       - go build -o {{.BIN_WEB}} {{.CMD_WEB}}
 
-  build:
-    desc: Build both binaries
-    deps: [build:tui, build:web]
-
   run:
-    desc: Build + launch the TUI
-    deps: [build:tui]
-    cmds:
-      - "{{.BIN_TUI}}"
-
-  tui:
-    desc: Alias for run
-    deps: [run]
-
-  web:
     desc: Build + launch the web server
     deps: [build:web]
     cmds:
       - "{{.BIN_WEB}}"
+
+  web:
+    desc: Alias for run
+    deps: [run]
 
   dev:
     desc: Hot-reload web server via air

@@ -1,31 +1,8 @@
-<div align="center">
-
 # budget
 
 **A local-first personal finance app — use it in your terminal or your browser.**
 
 Track accounts, assign money to categories each month, project debt paydown, and see where your money goes — all backed by a local SQLite file (or Postgres) with no accounts, no sync, and no subscription.
-
-![Budget tab](./screenshots/01-budget.png)
-
-</div>
-
----
-
-## Two interfaces, one database
-
-`budget` ships with two fully-featured interfaces that read and write the same database:
-
-| | TUI | Web |
-|---|---|---|
-| **Launch** | `./bin/tui/budget` | `./bin/web/budget` |
-| **Access** | Terminal | Browser at `http://localhost:8080` |
-| **Best for** | Local daily use, keyboard power users | Remote access, Docker/Synology, mouse-friendly use |
-| **Navigation** | Keyboard shortcuts | Click tabs, real URLs (browser back button works) |
-| **Updates** | Full screen redraws | HTMX partial swaps — only changed rows update |
-| **Theme** | Catppuccin Mocha (terminal colors) | Catppuccin Mocha (CSS) |
-
-Both interfaces cover all tabs: Budget · Transactions · Accounts · Categories · Paydown.
 
 ---
 
@@ -37,65 +14,10 @@ Both interfaces cover all tabs: Budget · Transactions · Accounts · Categories
 - **Debt paydown projector** — real APR daily-compound amortization; links to your budget so actual payments replace forecasts automatically
 - **Sinking-fund goals** — set a target amount + due date; the app tells you the monthly contribution needed
 - **Income tracking** — estimate income for each month; see estimated vs. actual side-by-side on the Budget tab
-- **Fully local** — one SQLite file, no network access, no accounts, no telemetry
 
 ---
 
-## Screenshots — TUI
-
-**Budget** — assign money to categories each month, track against income, see sinking-fund goals
-
-![Budget](./screenshots/01-budget.png)
-
-**Income panel** — estimate income per source; see estimated vs. actual side-by-side
-
-| Income panel | Edit income | Assign amount |
-|---|---|---|
-| ![Income panel](./screenshots/02-budget-income-panel.png) | ![Edit income](./screenshots/03-budget-income-edit.png) | ![Assign](./screenshots/04-budget-assign.png) |
-
----
-
-**Transactions** — every account in one list; filter by account or month
-
-| All accounts | Filtered to Chase Sapphire |
-|---|---|
-| ![Transactions](./screenshots/05-transactions.png) | ![Filtered](./screenshots/12-transactions-filtered.png) |
-
-Transaction form with calendar date picker and account/category pickers:
-
-| Edit transaction | New transaction | Date picker |
-|---|---|---|
-| ![Edit](./screenshots/06-transaction-edit.png) | ![New](./screenshots/07-transaction-new.png) | ![Date picker](./screenshots/08-datepicker.png) |
-
-| Account picker | Category picker | Account filter |
-|---|---|---|
-| ![Account picker](./screenshots/09-account-picker.png) | ![Category picker](./screenshots/10-category-picker.png) | ![Account filter](./screenshots/11-account-filter.png) |
-
----
-
-**Accounts** — net worth at a glance; credit and loan balances with APR
-
-| Account list | Edit account |
-|---|---|
-| ![Accounts](./screenshots/13-accounts.png) | ![Edit account](./screenshots/14-account-edit.png) |
-
----
-
-**Categories** — grouped categories with optional sinking-fund goals
-
-| Category list | Edit category (goal) | Edit category (sinking fund) |
-|---|---|---|
-| ![Categories](./screenshots/15-categories.png) | ![Goal](./screenshots/17-category-edit-goal.png) | ![Sinking fund](./screenshots/18-category-edit-sinking-fund.png) |
-
----
-
-**Paydown** — daily-compound debt amortization linked to your budget categories
-
-![Paydown](./screenshots/19-paydown.png)
-
----
-
-## Screenshots — Web
+## Screenshots
 
 The web interface mirrors every TUI tab with the same Catppuccin Mocha theme. Each page has a real URL so the browser back button and bookmarks work.
 
@@ -138,7 +60,7 @@ git clone https://github.com/sbengtson/budget
 cd budget
 task setup    # download deps + install goose
 task db:seed  # load 3 months of realistic demo data
-task run      # launch the TUI
+task run      # launch the application
 ```
 
 Run `task` with no args for the full task list.
@@ -153,13 +75,13 @@ versions.
 ```bash
 devbox shell   # enter the shell; tools land on PATH, versions print on entry
 task db:seed   # same tasks work inside
-task run       # TUI  (or: task web)
+task run       # launch the application
 ```
 
 Or run a target without entering the shell:
 
 ```bash
-devbox run web     # scripts: web · tui · dev · test · migrate · seed
+devbox run web     # scripts: web · dev · test · migrate · seed
 ```
 
 Inside the shell, Task uses the Devbox-provided binaries (via `TAILWIND`/`TEMPL`
@@ -176,7 +98,7 @@ To start fresh with your own data:
 
 ```bash
 task db:reset  # wipe the database
-task run       # TUI — auto-migrates on first open
+task run       # web — auto-migrates on first open
 # or
 ./bin/web/budget  # web — auto-migrates on first request
 ```
@@ -185,32 +107,24 @@ task run       # TUI — auto-migrates on first open
 
 ## Usage
 
-There are two binaries, both named `budget`, built to `./bin/tui/budget` and
-`./bin/web/budget`. With no subcommand each launches its own interface; both
+With no subcommand each launches its own interface; both
 share the same Cobra admin subcommands (`config`, `db`, `migrate`), so you can
-run schema and data tasks from whichever binary is handy. Examples below use
-`./bin/tui/budget`.
+run schema and data tasks from whichever binary is handy.
 
 ```bash
-./bin/tui/budget                     # TUI (default for the tui binary)
 ./bin/web/budget                     # HTTP server on :8080 (default for the web binary)
 ./bin/web/budget web                 # explicit web launch (same as bare web binary)
-./bin/tui/budget migrate --from <a> --to <b>   # copy data SQLite ↔ Postgres
-./bin/tui/budget config show         # print resolved config
+./bin/web/budget config show         # print resolved config
 
 # Schema + seed (under `db` group; available from either binary):
-./bin/tui/budget db up               # apply all pending up migrations
-./bin/tui/budget db up-one           # apply just the next pending migration
-./bin/tui/budget db down             # roll back the most recent migration
-./bin/tui/budget db reset            # roll back to zero + re-apply (DESTRUCTIVE)
-./bin/tui/budget db status           # one line per migration (applied / pending)
-./bin/tui/budget db version          # current migration version
-./bin/tui/budget db seed             # populate demo data
+./bin/web/budget db up               # apply all pending up migrations
+./bin/web/budget db up-one           # apply just the next pending migration
+./bin/web/budget db down             # roll back the most recent migration
+./bin/web/budget db reset            # roll back to zero + re-apply (DESTRUCTIVE)
+./bin/web/budget db status           # one line per migration (applied / pending)
+./bin/web/budget db version          # current migration version
+./bin/web/budget db seed             # populate demo data
 ```
-
-> Note the two different "migrate" verbs:
-> - `budget db ...` runs **schema** migrations (the goose up/down/status workflow).
-> - `budget migrate --from --to` copies **data** between two databases.
 
 Persistent flags on the root command:
 
@@ -275,16 +189,6 @@ A starter `docker-compose.example.yml` is also included with both the `budget` s
 
 Migrations apply automatically on first connect, so a fresh Postgres database becomes a fully-set-up budget DB on first request. Use `container run ... budget db status` (or any other `db ...` subcommand) to inspect or roll back schema changes.
 
-### Migrating between SQLite and Postgres
-
-```bash
-budget migrate \
-  --from ./data/budget.db \
-  --to   postgres://postgres:postgres@127.0.0.1:5432/budget?sslmode=disable
-```
-
-The destination is wiped (TRUNCATE on Postgres / DELETE on SQLite) and primary keys are preserved. Postgres sequences advance past the imported max id so future inserts continue from there.
-
 ---
 
 ## Development
@@ -309,78 +213,6 @@ task db:delete  # delete the database file (and WAL/SHM)
 
 ---
 
-## Keymap
-
-**Global**
-
-| Key | Action |
-|---|---|
-| `1`–`5` / click | switch tabs |
-| `shift+h` / `shift+l` | prev / next tab |
-| `q` / `ctrl+c` | quit |
-| `?` | show / hide help |
-| `esc` | cancel form or modal |
-
-**List views** (Accounts, Categories, Transactions)
-
-| Key | Action |
-|---|---|
-| `↑` `↓` / `j` `k` | move cursor |
-| `n` | new |
-| `enter` | edit selected |
-| `d` | archive / delete (with confirm) |
-
-**Transactions**
-
-| Key | Action |
-|---|---|
-| `c` | toggle cleared on selected |
-| `f` / `F` | filter by account / clear filter |
-| `<` / `>` | prev / next month filter |
-| `t` / `M` | jump to current month / clear month filter |
-| `pgup` / `pgdn` | page through long lists |
-
-**Budget tab**
-
-| Key | Action |
-|---|---|
-| `↑` `↓` | move cursor |
-| `enter` | edit assigned amount for selected category |
-| `g` | set goal + due date |
-| `i` | open income panel for the month |
-| `<` / `>` | prev / next month |
-| `t` | jump to current month |
-
-Income panel: `n` new · `enter` edit · `d` delete · `esc` back.
-Multiple income lines per month (e.g. Salary, Freelance). The Budget banner shows `Estimated · Actual · Budgeted · Remain · Est−Act`.
-
-**Paydown tab**
-
-| Key | Action |
-|---|---|
-| `↑` `↓` | select account |
-| `a` | add account to plan (must have APR set) |
-| `e` | edit monthly payment for selected account |
-| `c` | link a budget category to selected account |
-| `r` / `d` | remove selected account from plan |
-| `+` / `-` | extend / shrink projection by 12 months |
-| `,` / `.` | page through projection rows |
-
-Each included account projects monthly amortization at `APR / 365` daily compounding. If a payment is below the first month's interest the row flags `payment ≤ interest, debt grows`.
-
-**Variable payments:** for every projected month the engine picks the payment in this order:
-1. **spent** — actual outflow against the linked category that month
-2. **assigned** — the budgeted amount for that month
-3. **default** — the account's fixed monthly payment fallback
-
-The `Source` column labels each row (`✓ spent`, `→ assigned`, `· default`).
-
-**Forms**
-
-`tab` / `↑↓` moves between fields; `enter` advances or saves on the last field; `space` opens a picker on Type / Account / Category fields. On the **Date** field in the transaction form, `space` opens a calendar picker — `hjkl` / arrows navigate days, `tab` cycles month → year → day focus, `enter` commits, `esc` cancels.
-
----
-
 ## Concepts
 
 **Accounts** — `checking`, `savings`, `cash`, `credit`, `loan`. Credit and loan accounts carry a negative running balance when in debt; purchases are outflows and payments are inflows (via transfer). Net worth = assets + liabilities.
@@ -402,7 +234,6 @@ The `Source` column labels each row (`✓ spent`, `→ assigned`, `· default`).
 ## Layout
 
 ```
-cmd/tui/main.go             tui binary entrypoint (builds to ./bin/tui/budget)
 cmd/web/main.go             web binary entrypoint (builds to ./bin/web/budget)
 internal/cli/               shared Cobra commands (root flags, config/db/migrate/seed)
 internal/core/config/       runtime configuration loading
@@ -411,7 +242,6 @@ internal/core/money/        cents ↔ human string parsing and formatting
 internal/core/store/        persistence layer (one file per aggregate)
 internal/core/paydown/      debt amortization projection (pure Go, no DB)
 internal/core/format/       presentation helpers shared by both UIs (goal summaries)
-internal/tui/               Bubble Tea screens and components
 internal/web/               Gin + Templ + HTMX web server, handlers, and views
                             (UI components from github.com/templui/templui)
 ```
