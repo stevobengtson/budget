@@ -7,6 +7,9 @@ import (
 	"github.com/templui/templui/components/input"
 	"github.com/templui/templui/components/label"
 	"github.com/templui/templui/components/selectbox"
+	"github.com/templui/templui/components/sheet"
+	"github.com/templui/templui/components/sidebar"
+	"github.com/templui/templui/components/tooltip"
 )
 
 // Layout is the outer HTML shell. Pages embed their content via children.
@@ -28,20 +31,77 @@ templ Layout(title string, active string) {
 			@selectbox.Script()
 			@label.Script()
 			@collapsible.Script()
+			@sidebar.Script()
+			@sheet.Script()
+			@tooltip.Script()
 		</head>
 		<body class="min-h-screen bg-background text-foreground">
-			<header class="sticky top-0 z-20 border-b bg-card/95 supports-[backdrop-filter]:bg-card/75 supports-[backdrop-filter]:backdrop-blur">
-				<div class="mx-auto flex max-w-screen-2xl items-center gap-2 px-3 py-2 sm:gap-6 sm:px-4">
-					@TabBar(active)
-				</div>
-			</header>
-			<main id="main" class="mx-auto max-w-screen-2xl px-3 py-4 sm:px-4 sm:py-6">
-				{ children... }
-			</main>
-			<div id="modal" class="modal-mount"></div>
-			<div id="flash" hx-swap-oob="true"></div>
+			@sidebar.Layout() {
+				@sidebar.Sidebar(sidebar.Props{Collapsible: sidebar.CollapsibleIcon}) {
+					@sidebar.Header() {
+						<div class="flex items-center gap-2 px-1">
+							@sidebar.Trigger()
+							<span class="text-lg font-semibold group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">budget</span>
+						</div>
+					}
+					@sidebar.Content() {
+						@sidebar.Group() {
+							@sidebar.Menu() {
+								@navItem("budget", "Budget", "💰", active)
+								@navItem("transactions", "Transactions", "📒", active)
+								@navItem("paydown", "Paydown", "📉", active)
+								@navItem("accounts", "Accounts", "🏦", active)
+							}
+						}
+						@sidebar.Separator(sidebar.SeparatorProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
+						@sidebar.Group(sidebar.GroupProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"}) {
+							<div
+								id="sidebar-overview"
+								hx-get="/accounts/overview"
+								hx-trigger="load, accountsChanged from:body"
+								hx-swap="innerHTML"
+							>
+								<div class="p-4 text-center text-xs text-muted-foreground">Loading…</div>
+							</div>
+						}
+					}
+					@sidebar.Footer() {
+						@sidebar.Menu() {
+							@sidebar.MenuItem() {
+								@sidebar.MenuButton(sidebar.MenuButtonProps{Tooltip: "Account"}) {
+									<span aria-hidden="true">👤</span>
+									<span>User</span>
+								}
+							}
+						}
+					}
+				}
+				@sidebar.Inset() {
+					<main id="main" class="mx-auto w-full max-w-screen-2xl px-3 py-4 sm:px-4 sm:py-6">
+						{ children... }
+					</main>
+					<div id="modal" class="modal-mount"></div>
+					<div id="flash" hx-swap-oob="true"></div>
+				}
+			}
 		</body>
 	</html>
+}
+
+// navItem renders one primary-nav entry as a sidebar menu button. The icon stays
+// visible in the collapsed icon rail; the label truncates away and reappears as a
+// tooltip.
+templ navItem(slug string, label string, icon string, active string) {
+	@sidebar.MenuItem() {
+		@sidebar.MenuButton(sidebar.MenuButtonProps{
+			Href:     "/" + slug,
+			IsActive: slug == active,
+			Tooltip:  label,
+		}) {
+			<span aria-hidden="true">{ icon }</span>
+			<span>{ label }</span>
+		}
+	}
 }
 
 // dialogPanel renders the inner modal card that htmx swaps into #modal.
@@ -59,31 +119,6 @@ templ dialogPanel(class string) {
 	>
 		{ children... }
 	</div>
-}
-
-templ TabBar(active string) {
-	<nav class="-mx-3 flex flex-1 items-center gap-1 overflow-x-auto px-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:gap-2 sm:px-0">
-		@tab("budget", "Budget", "💰", active)
-		@tab("transactions", "Transactions", "📒", active)
-		@tab("paydown", "Paydown", "📉", active)
-		@tab("accounts", "Accounts", "🏦", active)
-	</nav>
-}
-
-templ tab(slug string, label string, icon string, active string) {
-	if slug == active {
-		<a class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-primary/40 bg-accent px-2.5 py-1.5 text-sm font-medium text-accent-foreground sm:px-3" href={ templ.URL("/" + slug) } aria-current="page">
-			<span aria-hidden="true">{ icon }</span>
-			<span class="hidden sm:inline">{ label }</span>
-			<span class="sr-only sm:hidden">{ label }</span>
-		</a>
-	} else {
-		<a class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground sm:px-3" href={ templ.URL("/" + slug) }>
-			<span aria-hidden="true">{ icon }</span>
-			<span class="hidden sm:inline">{ label }</span>
-			<span class="sr-only sm:hidden">{ label }</span>
-		</a>
-	}
 }
 
 templ FlashOK(msg string) {

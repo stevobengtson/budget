@@ -61,7 +61,7 @@ func TestBudgetTabAppearsInLayout(t *testing.T) {
 	ts := newTestServer(t)
 	resp, _ := http.Get(ts.URL + "/budget")
 	body := readAll(t, resp)
-	for _, marker := range []string{"Budget", "Transactions", "Accounts", "Paydown", `aria-current="page"`} {
+	for _, marker := range []string{"Budget", "Transactions", "Accounts", "Paydown", `data-tui-sidebar-active="true"`} {
 		if !strings.Contains(body, marker) {
 			t.Errorf("missing %q in layout", marker)
 		}
