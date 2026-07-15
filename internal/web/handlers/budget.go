@@ -33,13 +33,16 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 		month = store.MonthKey(time.Now())
 	}
 
+	cookie, err := c.Cookie("sidebar_state")
+	collapsed := err != nil && cookie == "false"
+
 	data, rows, err := h.budgetData(ctx, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "month budget: %v", err)
 		return
 	}
 	_ = rows
-	render(c, http.StatusOK, views.BudgetPage(data))
+	render(c, http.StatusOK, views.BudgetPage(data, collapsed))
 }
 
 // budgetData loads everything needed to render the budget page for the
@@ -84,16 +87,16 @@ func (h *Handlers) budgetData(ctx context.Context, month string) (views.BudgetDa
 	next := t.AddDate(0, 1, 0).Format("2006-01")
 
 	return views.BudgetData{
-		Month:       month,
-		PrevMonth:   prev,
-		NextMonth:   next,
-		Estimated:   incTotal,
-		Budgeted:    assigned,
-		Remain:      incTotal - assigned,
-		CreditRows:  creditFiltered,
-		Groups:      groups,
-		IncomeRows:  incomeRows,
-		Accounts:    accts,
+		Month:      month,
+		PrevMonth:  prev,
+		NextMonth:  next,
+		Estimated:  incTotal,
+		Budgeted:   assigned,
+		Remain:     incTotal - assigned,
+		CreditRows: creditFiltered,
+		Groups:     groups,
+		IncomeRows: incomeRows,
+		Accounts:   accts,
 	}, rows, nil
 }
 

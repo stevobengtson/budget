@@ -16,6 +16,9 @@ import (
 
 func (h *Handlers) PaydownIndex(c *gin.Context) {
 	ctx := c.Request.Context()
+	cookie, err := c.Cookie("sidebar_state")
+	collapsed := err != nil && cookie == "false"
+
 	horizon, _ := strconv.Atoi(c.Query("horizon"))
 	if horizon < 12 || horizon > 360 {
 		horizon = 60
@@ -51,7 +54,7 @@ func (h *Handlers) PaydownIndex(c *gin.Context) {
 		TotalMonthly:  totalMonthly,
 		TotalInterest: totalInterest,
 		PageSize:      views.PaydownPageSize,
-	}))
+	}, collapsed))
 }
 
 // PaydownRows returns the paginated schedule fragment for a single

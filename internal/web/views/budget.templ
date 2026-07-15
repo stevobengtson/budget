@@ -37,8 +37,8 @@ type BudgetGroup struct {
 	Rows []store.CategoryBudget
 }
 
-templ BudgetPage(d BudgetData) {
-	@Layout("Budget", "budget") {
+templ BudgetPage(d BudgetData, collapsed bool) {
+	@Layout("Budget", "budget", collapsed) {
 		@BudgetBody(d)
 	}
 }

@@ -30,8 +30,8 @@ type TransactionsData struct {
 	Total         int
 }
 
-templ TransactionsPage(d TransactionsData) {
-	@Layout("Transactions", "transactions") {
+templ TransactionsPage(d TransactionsData, collapsed bool) {
+	@Layout("Transactions", "transactions", collapsed) {
 		@TransactionsBody(d)
 	}
 }

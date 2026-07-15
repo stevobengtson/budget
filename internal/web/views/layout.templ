@@ -8,18 +8,19 @@ import (
 	"github.com/templui/templui/components/label"
 	"github.com/templui/templui/components/selectbox"
 	"github.com/templui/templui/components/sheet"
+  "github.com/templui/templui/components/skeleton"
 	"github.com/templui/templui/components/sidebar"
 	"github.com/templui/templui/components/tooltip"
 )
 
 // Layout is the outer HTML shell. Pages embed their content via children.
-templ Layout(title string, active string) {
+templ Layout(title string, active string, collapsed bool) {
 	<!DOCTYPE html>
 	<html lang="en" class="dark">
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>{ title } · budget</title>
+			<title>{ title } · Pigglet</title>
 			<link rel="stylesheet" href="/static/app.css"/>
 			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
 			<script src="/static/htmx.min.js"></script>
@@ -36,60 +37,77 @@ templ Layout(title string, active string) {
 			@tooltip.Script()
 		</head>
 		<body class="min-h-screen bg-background text-foreground">
-			@sidebar.Layout() {
-				@sidebar.Sidebar(sidebar.Props{Collapsible: sidebar.CollapsibleIcon}) {
-					@sidebar.Header() {
-						<div class="flex items-center gap-2 px-1">
-							@sidebar.Trigger()
-							<span class="text-lg font-semibold group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">budget</span>
-						</div>
-					}
-					@sidebar.Content() {
-						@sidebar.Group() {
-							@sidebar.Menu() {
-								@navItem("budget", "Budget", "💰", active)
-								@navItem("transactions", "Transactions", "📒", active)
-								@navItem("paydown", "Paydown", "📉", active)
-								@navItem("accounts", "Accounts", "🏦", active)
-							}
-						}
-						@sidebar.Separator(sidebar.SeparatorProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
-						@sidebar.Group(sidebar.GroupProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"}) {
-							<div
-								id="sidebar-overview"
-								hx-get="/accounts/overview"
-								hx-trigger="load, accountsChanged from:body"
-								hx-swap="innerHTML"
-							>
-								<div class="p-4 text-center text-xs text-muted-foreground">Loading…</div>
-							</div>
-						}
-					}
-					@sidebar.Footer() {
-						@sidebar.Menu() {
-							@sidebar.MenuItem() {
-								@sidebar.MenuButton(sidebar.MenuButtonProps{
-									Tooltip:    "User",
-									Attributes: templ.Attributes{"disabled": true},
-								}) {
-									<span aria-hidden="true">👤</span>
-									<span>User</span>
-								}
-							}
-						}
-					}
-				}
-				@sidebar.Inset() {
-					<main id="main" class="mx-auto w-full max-w-screen-2xl px-3 py-4 sm:px-4 sm:py-6">
-						{ children... }
-					</main>
-					<div id="modal" class="modal-mount"></div>
-					<div id="flash" hx-swap-oob="true"></div>
-				}
-			}
+      @appSidebar(collapsed, active) { { children... } }
 		</body>
 	</html>
 }
+
+templ appSidebar(collapsed bool, active string) {
+  @sidebar.Layout() {
+    @sidebar.Sidebar(sidebar.Props{
+      Collapsible: sidebar.CollapsibleIcon,
+      Collapsed: collapsed,
+      Attributes: templ.Attributes{
+        "style": "--sidebar-width:20rem", // Any CSS unit works: px, %, vw, etc.
+      },
+    }) {
+      @sidebar.Header() {
+        <div class="flex items-center gap-2 px-1">
+          @sidebar.Trigger()
+          <span class="text-lg font-semibold group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">Pigglet</span>
+        </div>
+      }
+      @sidebar.Content() {
+        @sidebar.Group() {
+          @sidebar.Menu() {
+            @navItem("budget", "Budget", "💰", active)
+            @navItem("paydown", "Paydown", "📉", active)
+            @navItem("accounts", "Accounts", "🏦", active)
+          }
+        }
+        @sidebar.Separator(sidebar.SeparatorProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
+        @sidebar.Group(sidebar.GroupProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"}) {
+          <div
+            id="sidebar-overview"
+            hx-get="/accounts/overview"
+            hx-trigger="load, accountsChanged from:body"
+            hx-swap="innerHTML"
+          >
+            <div class="space-y-2 w-full max-w-sm">
+              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-full"})
+              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-2/3"})
+              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-1/3"})
+              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-2/3"})
+              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-1/3"})
+              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-1/3"})
+            </div>
+          </div>
+        }
+      }
+      @sidebar.Footer() {
+        @sidebar.Menu() {
+          @sidebar.MenuItem() {
+            @sidebar.MenuButton(sidebar.MenuButtonProps{
+              Tooltip:    "User",
+              Attributes: templ.Attributes{"disabled": true},
+            }) {
+              <span aria-hidden="true">👤</span>
+              <span>User</span>
+            }
+          }
+        }
+      }
+    }
+    @sidebar.Inset() {
+      <main id="main" class="mx-auto w-full max-w-screen-2xl px-3 py-4 sm:px-4 sm:py-6">
+        { children... }
+      </main>
+      <div id="modal" class="modal-mount"></div>
+      <div id="flash" hx-swap-oob="true"></div>
+    }
+  }
+}
+
 
 // navItem renders one primary-nav entry as a sidebar menu button. The icon stays
 // visible in the collapsed icon rail; the label truncates away and reappears as a

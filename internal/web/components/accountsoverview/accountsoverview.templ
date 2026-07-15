@@ -5,7 +5,6 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/templui/templui/components/card"
 )
 
 // AccountsOverview renders a grouped account list (Cash/Credit/Loan) with an
@@ -29,10 +28,6 @@ templ overview(accts []store.AccountWithBalance, month string, oob bool) {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
 	<div { attrs... }>
-		@card.Card(card.Props{Class: "p-4"}) {
-		<div class="mb-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-			Accounts Overview
-		</div>
 		<a
 			href={ templ.URL(allTxHref(month)) }
 			class="mb-2 flex items-center justify-between rounded px-1 py-0.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
@@ -71,7 +66,6 @@ templ overview(accts []store.AccountWithBalance, month string, oob bool) {
 				<span>Est. Net Worth</span>
 				@signedMoney(net)
 			</div>
-		}
 	</div>
 }
 

@@ -19,8 +19,8 @@ type AccountsData struct {
 	Categories []store.Category
 }
 
-templ AccountsPage(d AccountsData) {
-	@Layout("Accounts", "accounts") {
+templ AccountsPage(d AccountsData, collapsed bool) {
+	@Layout("Accounts", "accounts", collapsed) {
 		<div class="mb-4 flex items-center justify-between gap-4">
 			<h1 class="text-2xl font-semibold tracking-tight">Accounts</h1>
 			@button.Button(button.Props{

@@ -18,6 +18,9 @@ const txPageSize = 50
 func (h *Handlers) TransactionsIndex(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	cookie, err := c.Cookie("sidebar_state")
+	collapsed := err != nil && cookie == "false"
+
 	var acctPtr *int64
 	if a := c.Query("account"); a != "" {
 		if v, err := strconv.ParseInt(a, 10, 64); err == nil {
@@ -78,7 +81,7 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 		PageSize:      txPageSize,
 		Total:         total,
 	}
-	render(c, http.StatusOK, views.TransactionsPage(data))
+	render(c, http.StatusOK, views.TransactionsPage(data, collapsed))
 }
 
 func (h *Handlers) TransactionsNew(c *gin.Context) {

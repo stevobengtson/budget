@@ -32,8 +32,8 @@ type PaydownData struct {
 	PageSize      int
 }
 
-templ PaydownPage(d PaydownData) {
-	@Layout("Paydown", "paydown") {
+templ PaydownPage(d PaydownData, collapsed bool) {
+	@Layout("Paydown", "paydown", collapsed) {
 		<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 			<h1 class="text-xl font-semibold tracking-tight sm:text-2xl">
 				Debt Paydown

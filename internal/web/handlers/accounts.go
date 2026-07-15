@@ -14,10 +14,13 @@ import (
 
 func (h *Handlers) AccountsIndex(c *gin.Context) {
 	ctx := c.Request.Context()
+	cookie, err := c.Cookie("sidebar_state")
+	collapsed := err != nil && cookie == "false"
+
 	rows, _ := h.store.ListAccounts(ctx, false)
 	cats, _ := h.store.ListCategories(ctx, false)
 	d := views.AccountsData{Rows: rows, Categories: cats}
-	render(c, http.StatusOK, views.AccountsPage(d))
+	render(c, http.StatusOK, views.AccountsPage(d, collapsed))
 }
 
 // AccountsOverviewPartial renders just the account overview fragment for the

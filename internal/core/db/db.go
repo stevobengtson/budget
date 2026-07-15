@@ -50,22 +50,38 @@ func OpenWithTimeout(dsn string, connectTimeout time.Duration) (*sql.DB, Dialect
 // and a partially-applied migration is worse than a slow startup.
 func OpenContext(ctx context.Context, dsn string) (*sql.DB, Dialect, error) {
 	if isPostgresDSN(dsn) {
-		conn, err := sql.Open("pgx", dsn)
-		if err != nil {
-			return nil, DialectPostgres, fmt.Errorf("open postgres: %w", err)
-		}
-		if err := conn.PingContext(ctx); err != nil {
-			_ = conn.Close()
-			return nil, DialectPostgres, fmt.Errorf("ping postgres: %w", err)
-		}
-		if err := migrate(conn, DialectPostgres); err != nil {
-			_ = conn.Close()
-			return nil, DialectPostgres, err
-		}
-		return conn, DialectPostgres, nil
+		return openPostgresqlDB(ctx, dsn)
 	}
 
-	// SQLite path.
+	return openSqliteDB(ctx, dsn)
+}
+
+// isPostgresDSN matches "postgres://" or "postgresql://" URLs.
+func isPostgresDSN(s string) bool {
+	if strings.HasPrefix(s, "postgres://") || strings.HasPrefix(s, "postgresql://") {
+		_, err := url.Parse(s)
+		return err == nil
+	}
+	return false
+}
+
+func openPostgresqlDB(ctx context.Context, dsn string) (*sql.DB, Dialect, error) {
+	conn, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, DialectPostgres, fmt.Errorf("open postgres: %w", err)
+	}
+	if err := conn.PingContext(ctx); err != nil {
+		_ = conn.Close()
+		return nil, DialectPostgres, fmt.Errorf("ping postgres: %w", err)
+	}
+	if err := migrate(conn, DialectPostgres); err != nil {
+		_ = conn.Close()
+		return nil, DialectPostgres, err
+	}
+	return conn, DialectPostgres, nil
+}
+
+func openSqliteDB(ctx context.Context, dsn string) (*sql.DB, Dialect, error) {
 	if dsn != ":memory:" {
 		if err := os.MkdirAll(filepath.Dir(dsn), 0o755); err != nil {
 			return nil, DialectSQLite, fmt.Errorf("mkdir db dir: %w", err)
@@ -89,15 +105,6 @@ func OpenContext(ctx context.Context, dsn string) (*sql.DB, Dialect, error) {
 		return nil, DialectSQLite, err
 	}
 	return conn, DialectSQLite, nil
-}
-
-// isPostgresDSN matches "postgres://" or "postgresql://" URLs.
-func isPostgresDSN(s string) bool {
-	if strings.HasPrefix(s, "postgres://") || strings.HasPrefix(s, "postgresql://") {
-		_, err := url.Parse(s)
-		return err == nil
-	}
-	return false
 }
 
 func migrate(conn *sql.DB, d Dialect) error {
