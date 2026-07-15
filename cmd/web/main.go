@@ -31,7 +31,7 @@ The db/migrate/seed/config admin commands are available as subcommands.`)
 		if a == "" {
 			a = cfg.Web.Addr
 		}
-		conn, dialect, err := db.Open(cfg.DB.DSN)
+		conn, dialect, err := db.Open(cfg.DB.DSN, true)
 		if err != nil {
 			return fmt.Errorf("open db: %w", err)
 		}
@@ -59,6 +59,5 @@ The db/migrate/seed/config admin commands are available as subcommands.`)
 	root.RunE = func(c *cobra.Command, args []string) error { return launch() }
 	root.Flags().StringVar(&addr, "addr", "", "listen address (default: from config web.addr or :8080)")
 
-	root.AddCommand(webCmd, app.ConfigCmd(), app.DBCmd(), app.MigrateCmd())
 	cobra.CheckErr(root.Execute())
 }

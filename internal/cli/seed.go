@@ -21,7 +21,7 @@ func (a *App) seedCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			conn, dialect, err := db.Open(cfg.DB.DSN)
+			conn, dialect, err := db.Open(cfg.DB.DSN, true)
 			if err != nil {
 				return fmt.Errorf("open db: %w", err)
 			}
@@ -271,41 +271,62 @@ func seed(ctx context.Context, s *store.Store) error {
 		var xfers []xferDef
 
 		// Paycheck deposit.
-		txs = append(txs, txDef{d: 1, acct: checkingID, cat: incomeCatID,
-			payee: "Acme Corp", notes: "Paycheck", in: 5400})
+		txs = append(txs, txDef{
+			d: 1, acct: checkingID, cat: incomeCatID,
+			payee: "Acme Corp", notes: "Paycheck", in: 5400,
+		})
 		if fl := freelance[mi]; fl > 0 {
-			txs = append(txs, txDef{d: 16, acct: checkingID, cat: incomeCatID,
-				payee: "Upwork", in: fl})
+			txs = append(txs, txDef{
+				d: 16, acct: checkingID, cat: incomeCatID,
+				payee: "Upwork", in: fl,
+			})
 		}
 
 		// Fixed monthly (checking).
-		txs = append(txs,
-			txDef{d: 1, acct: checkingID, cat: catID["Housing/Rent"],
-				payee: "Westside Properties", out: 1850},
-			txDef{d: 1, acct: checkingID, cat: catID["Transportation/Car Insurance"],
-				payee: "Progressive", out: 142},
-			txDef{d: 5, acct: checkingID, cat: catID["Housing/Internet"],
-				payee: "Comcast", out: 55},
-			txDef{d: 12, acct: checkingID, cat: catID["Housing/Renter's Insurance"],
-				payee: "State Farm", out: 18},
-			txDef{d: 15, acct: checkingID, cat: catID["Debt/Car Loan Payment"],
-				payee: "Honda Financial Services", out: 285},
-			txDef{d: 20, acct: checkingID, cat: catID["Health & Fitness/Gym"],
-				payee: "Planet Fitness", out: 40},
+		txs = append(
+			txs,
+			txDef{
+				d: 1, acct: checkingID, cat: catID["Housing/Rent"],
+				payee: "Westside Properties", out: 1850,
+			},
+			txDef{
+				d: 1, acct: checkingID, cat: catID["Transportation/Car Insurance"],
+				payee: "Progressive", out: 142,
+			},
+			txDef{
+				d: 5, acct: checkingID, cat: catID["Housing/Internet"],
+				payee: "Comcast", out: 55,
+			},
+			txDef{
+				d: 12, acct: checkingID, cat: catID["Housing/Renter's Insurance"],
+				payee: "State Farm", out: 18,
+			},
+			txDef{
+				d: 15, acct: checkingID, cat: catID["Debt/Car Loan Payment"],
+				payee: "Honda Financial Services", out: 285,
+			},
+			txDef{
+				d: 20, acct: checkingID, cat: catID["Health & Fitness/Gym"],
+				payee: "Planet Fitness", out: 40,
+			},
 		)
 
 		// Electricity.
-		txs = append(txs, txDef{d: 10, acct: checkingID,
+		txs = append(txs, txDef{
+			d: 10, acct: checkingID,
 			cat: catID["Housing/Electricity"], payee: "City Electric Co",
-			out: electricity[mi]})
+			out: electricity[mi],
+		})
 
 		// Groceries (up to 3 trips).
 		groceryPayees := []string{"Kroger", "Whole Foods", "Trader Joe's"}
 		groceryDays := []int{3, 17, 25}
 		for j, amt := range grocery[mi] {
 			if amt > 0 {
-				txs = append(txs, txDef{d: groceryDays[j], acct: checkingID,
-					cat: catID["Food/Groceries"], payee: groceryPayees[j], out: amt})
+				txs = append(txs, txDef{
+					d: groceryDays[j], acct: checkingID,
+					cat: catID["Food/Groceries"], payee: groceryPayees[j], out: amt,
+				})
 			}
 		}
 
@@ -313,32 +334,48 @@ func seed(ctx context.Context, s *store.Store) error {
 		gasDays := []int{9, 23}
 		gasPayees := []string{"Shell", "Chevron"}
 		for j, amt := range gas[mi] {
-			txs = append(txs, txDef{d: gasDays[j], acct: checkingID,
-				cat: catID["Transportation/Gas"], payee: gasPayees[j], out: amt})
+			txs = append(txs, txDef{
+				d: gasDays[j], acct: checkingID,
+				cat: catID["Transportation/Gas"], payee: gasPayees[j], out: amt,
+			})
 		}
 
 		// Restaurants (Chase).
 		for _, r := range restaurants[mi] {
-			txs = append(txs, txDef{d: r.d, acct: chaseID,
-				cat: catID["Food/Restaurants"], payee: r.payee, out: r.amt})
+			txs = append(txs, txDef{
+				d: r.d, acct: chaseID,
+				cat: catID["Food/Restaurants"], payee: r.payee, out: r.amt,
+			})
 		}
 
 		// Coffee (Chase).
-		txs = append(txs,
-			txDef{d: 6, acct: chaseID, cat: catID["Food/Coffee & Drinks"],
-				payee: "Starbucks", out: 14.20},
-			txDef{d: 20, acct: chaseID, cat: catID["Food/Coffee & Drinks"],
-				payee: "Dutch Bros", out: 11.80},
+		txs = append(
+			txs,
+			txDef{
+				d: 6, acct: chaseID, cat: catID["Food/Coffee & Drinks"],
+				payee: "Starbucks", out: 14.20,
+			},
+			txDef{
+				d: 20, acct: chaseID, cat: catID["Food/Coffee & Drinks"],
+				payee: "Dutch Bros", out: 11.80,
+			},
 		)
 
 		// Streaming (Chase).
-		txs = append(txs,
-			txDef{d: 15, acct: chaseID, cat: catID["Entertainment/Streaming"],
-				payee: "Netflix", out: 15},
-			txDef{d: 15, acct: chaseID, cat: catID["Entertainment/Streaming"],
-				payee: "Spotify", out: 10.99},
-			txDef{d: 15, acct: chaseID, cat: catID["Entertainment/Streaming"],
-				payee: "Hulu", out: 17.99},
+		txs = append(
+			txs,
+			txDef{
+				d: 15, acct: chaseID, cat: catID["Entertainment/Streaming"],
+				payee: "Netflix", out: 15,
+			},
+			txDef{
+				d: 15, acct: chaseID, cat: catID["Entertainment/Streaming"],
+				payee: "Spotify", out: 10.99,
+			},
+			txDef{
+				d: 15, acct: chaseID, cat: catID["Entertainment/Streaming"],
+				payee: "Hulu", out: 17.99,
+			},
 		)
 
 		// Credit card payment (transfer: Checking → Chase, tagged with CC Payment).
