@@ -7,7 +7,6 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/internal/web/components/accountsoverview"
 	"github.com/sbengtson/budget/internal/web/components/monthselector"
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/dialog"
@@ -38,11 +37,6 @@ templ TransactionsPage(d TransactionsData) {
 }
 
 templ TransactionsBody(d TransactionsData) {
-	<div class="flex items-start gap-6">
-		<aside class="sticky top-20 hidden w-72 shrink-0 lg:block">
-			@accountsoverview.AccountsOverview(d.Accounts, d.FilterMonth)
-		</aside>
-		<div class="min-w-0 flex-1">
 	<div class="flex items-center justify-between gap-4 pb-2">
 		<h1 class="text-2xl font-semibold tracking-tight">{ txMonthLabel(d.FilterMonth) }</h1>
     @monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth))
@@ -101,8 +95,6 @@ templ TransactionsBody(d TransactionsData) {
 			}
 		</div>
 	}
-		</div>
-	</div>
 }
 
 templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category, hideAccount bool, oob bool) {
@@ -181,7 +173,6 @@ templ TxUpdateResult(month string, hideAccount bool, t store.Transaction, pair *
 			@TransactionRow(*pair, accts, cats, hideAccount, true)
 		</template>
 	}
-	@accountsoverview.AccountsOverviewOOB(accts, month)
 	<div id="modal" class="modal-mount" hx-swap-oob="true"></div>
 }
 
