@@ -43,6 +43,17 @@ The db/migrate/seed/config admin commands are available as subcommands.`)
 		}
 		s := store.NewWithDialect(conn, sd)
 
+		// Log the schema version the server actually booted against. db.Open ran
+		// migrations (shouldMigrate=true); printing the resolved dialect + version
+		// makes a mismatched/unmigrated database obvious from the logs instead of
+		// surfacing later as a missing-column query error.
+		ver, verErr := db.MigrateVersion(conn, dialect)
+		if verErr != nil {
+			fmt.Printf("budget web — WARNING: could not read migration version: %v\n", verErr)
+		} else {
+			fmt.Printf("budget web — schema dialect=%s version=%d\n", dialect, ver)
+		}
+
 		srv := web.NewServer(s)
 		fmt.Printf("budget web — listening on http://localhost%s (db=%s)\n", a, cfg.DB.DSN)
 		return http.ListenAndServe(a, srv.Handler())
