@@ -55,9 +55,12 @@ The db/migrate/seed/config admin commands are available as subcommands.`)
 	}
 	webCmd.Flags().StringVar(&addr, "addr", "", "listen address (default: from config web.addr or :8080)")
 
-	// Bare `budget` (web binary) launches the server.
+	// Bare `budget` (web binary) launches the server; the admin subcommands
+	// (db migrate/status/seed, config) operate on the resolved config DSN so they
+	// target the same database the server would.
 	root.RunE = func(c *cobra.Command, args []string) error { return launch() }
 	root.Flags().StringVar(&addr, "addr", "", "listen address (default: from config web.addr or :8080)")
+	root.AddCommand(webCmd, app.DBCmd(), app.ConfigCmd())
 
 	cobra.CheckErr(root.Execute())
 }
