@@ -75,4 +75,18 @@
     z-index: 100;
     padding: 16px;
   }
+
+  /* Right-side sheet panels (sheetPanel) position themselves fixed and slide in
+     from the right edge; they escape the .modal-mount flex centering used by
+     the centered dialogPanel, so both can share the same #modal backdrop. */
+  .animate-sheet-in { animation: sheet-in 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-sheet-in { animation: none; }
+  }
+}
+
+@keyframes sheet-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
 }

@@ -16,8 +16,7 @@ import (
 
 func (h *Handlers) PaydownIndex(c *gin.Context) {
 	ctx := c.Request.Context()
-	cookie, err := c.Cookie("sidebar_state")
-	collapsed := err != nil && cookie == "false"
+	collapsed := sidebarCollapsed(c)
 
 	horizon, _ := strconv.Atoi(c.Query("horizon"))
 	if horizon < 12 || horizon > 360 {

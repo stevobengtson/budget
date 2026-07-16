@@ -56,6 +56,14 @@ The Tailwind entry point and theme tokens live in
 
 Web listen address comes from `--addr`, else config `web.addr` (default `:8080`).
 
+**DB path for the web/tui binaries:** the DSN comes from the `--db` flag, else
+`BUDGET_DB_DSN`, else `budget.yaml`'s `db.dsn` (checked-in value: `./data/budget.db`),
+else the XDG default. **There is no `DB_PATH` env var for the binaries** — that name
+only appears in the Taskfile's goose targets. Because `budget.yaml` sets
+`./data/budget.db`, running `go run ./cmd/web` from the repo root hits the **real dev
+database**. For any throwaway/smoke run, always pass `--db /tmp/<name>.db` so tests
+never mutate real data.
+
 ## Architecture
 
 ```

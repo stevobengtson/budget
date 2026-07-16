@@ -37,6 +37,7 @@ templ Layout(title string, active string, collapsed bool) {
 			@sidebar.Script()
 			@sheet.Script()
 			@tooltip.Script()
+			<script src="/static/collapsible-persist.js"></script>
 		</head>
 		<body class="min-h-screen bg-background text-foreground">
       @appSidebar(collapsed, active) { { children... } }
@@ -64,7 +65,6 @@ templ appSidebar(collapsed bool, active string) {
           @sidebar.Menu() {
             @navItem("budget", "Budget", "💰", active)
             @navItem("paydown", "Paydown", "📉", active)
-            @navItem("accounts", "Accounts", "🏦", active)
           }
         }
         @sidebar.Separator(sidebar.SeparatorProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
@@ -139,6 +139,21 @@ templ dialogPanel(class string) {
 		role="dialog"
 		aria-modal="true"
 		class={ "relative grid w-full max-w-lg gap-4 rounded-lg border bg-background p-6 shadow-lg sm:rounded-lg", class }
+	>
+		{ children... }
+	</div>
+}
+
+// sheetPanel is the sheet counterpart to dialogPanel: a right-anchored,
+// full-height panel that slides in from the right. It positions itself fixed so
+// it escapes the .modal-mount flex centering, letting sheet and centered-dialog
+// modals share the same #modal backdrop. Same htmx flow: htmx swaps the rendered
+// fragment into #modal; closing empties #modal.
+templ sheetPanel(class string) {
+	<div
+		role="dialog"
+		aria-modal="true"
+		class={ "animate-sheet-in fixed inset-y-0 right-0 flex h-full w-full max-w-md flex-col gap-4 overflow-y-auto border-l bg-background p-6 shadow-lg", class }
 	>
 		{ children... }
 	</div>

@@ -44,7 +44,7 @@ func TestRedirectRoot(t *testing.T) {
 
 func TestPagesRender200(t *testing.T) {
 	ts := newTestServer(t)
-	for _, path := range []string{"/budget", "/transactions", "/accounts", "/paydown"} {
+	for _, path := range []string{"/budget", "/transactions", "/paydown"} {
 		resp, err := http.Get(ts.URL + path)
 		if err != nil {
 			t.Errorf("%s: %v", path, err)
@@ -61,7 +61,7 @@ func TestBudgetTabAppearsInLayout(t *testing.T) {
 	ts := newTestServer(t)
 	resp, _ := http.Get(ts.URL + "/budget")
 	body := readAll(t, resp)
-	for _, marker := range []string{"Budget", "Transactions", "Accounts", "Paydown", `data-tui-sidebar-active="true"`} {
+	for _, marker := range []string{"Budget", "Paydown", `data-tui-sidebar-active="true"`} {
 		if !strings.Contains(body, marker) {
 			t.Errorf("missing %q in layout", marker)
 		}

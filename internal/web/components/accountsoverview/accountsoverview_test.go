@@ -81,7 +81,7 @@ func TestAccountsOverviewRenders(t *testing.T) {
 	out := buf.String()
 	// Note: templ HTML-escapes & to &amp; in the href attribute; assert the
 	// stable prefix rather than the full query string.
-	for _, want := range []string{"Accounts Overview", "All Accounts", "Spending", "$1,178.55", "Visa", "$42,560.04", "Est. Net Worth", "/transactions?month=2026-07"} {
+	for _, want := range []string{"All Accounts", "Spending", "$1,178.55", "Visa", "$42,560.04", "Est. Net Worth", "Add Account", "/transactions?month=2026-07"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rendered output missing %q", want)
 		}

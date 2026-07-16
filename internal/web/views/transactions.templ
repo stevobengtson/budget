@@ -12,6 +12,7 @@ import (
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/input"
 	"github.com/templui/templui/components/label"
+	switchcomp "github.com/templui/templui/components/switch"
 	"github.com/templui/templui/components/table"
 )
 
@@ -149,14 +150,15 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 				Href:    fmt.Sprintf("/transactions/%d/edit", t.ID),
 				Variant: button.VariantOutline,
 				Size:    button.SizeSm,
-				Class:   "mr-1",
+				Class:   "mr-1 h-8 w-8 px-0",
 				Attributes: templ.Attributes{
 					"hx-get":    fmt.Sprintf("/transactions/%d/edit", t.ID),
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
+					"title":     "Edit transaction",
 				},
 			}) {
-				edit
+				✎
 			}
 			@button.Button(button.Props{
 				Variant: button.VariantGhost,
@@ -191,29 +193,21 @@ templ TxUpdateResult(hideAccount bool, t store.Transaction, pair *store.Transact
 }
 
 templ txClearCell(t store.Transaction) {
-	<form hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) } hx-target={ fmt.Sprintf("#tx-%d", t.ID) } hx-swap="outerHTML" class="inline">
-		if t.Cleared {
-			@button.Button(button.Props{
-				Type:       "submit",
-				Variant:    button.VariantGhost,
-				Size:       button.SizeSm,
-				Class:      "bg-emerald-600 text-white font-bold ring-1 ring-emerald-500/40 hover:bg-emerald-600/90 hover:text-white",
-				Attributes: templ.Attributes{"title": "Cleared — click to unclear"},
-			}) {
-				✓
-			}
-		} else {
-			@button.Button(button.Props{
-				Type:       "submit",
-				Variant:    button.VariantOutline,
-				Size:       button.SizeSm,
-				Class:      "text-muted-foreground",
-				Attributes: templ.Attributes{"title": "Not cleared — click to clear"},
-			}) {
-				·
-			}
-		}
-	</form>
+	{{ title := "Not cleared — click to clear" }}
+	if t.Cleared {
+		{{ title = "Cleared — click to unclear" }}
+	}
+	<span title={ title } class="inline-flex">
+		@switchcomp.Switch(switchcomp.Props{
+			Checked: t.Cleared,
+			Attributes: templ.Attributes{
+				"hx-post":    fmt.Sprintf("/transactions/%d/cleared", t.ID),
+				"hx-target":  fmt.Sprintf("#tx-%d", t.ID),
+				"hx-swap":    "outerHTML",
+				"hx-trigger": "change",
+			},
+		})
+	</span>
 }
 
 templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
@@ -238,7 +232,7 @@ templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats
 }
 
 templ TransactionForm(d TxFormData) {
-	@dialogPanel("max-w-xl") {
+	@sheetPanel("") {
 		<form
 			id="tx-form-inner"
 			if d.Editing {

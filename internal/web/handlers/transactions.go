@@ -18,8 +18,7 @@ const txPageSize = 50
 func (h *Handlers) TransactionsIndex(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	cookie, err := c.Cookie("sidebar_state")
-	collapsed := err != nil && cookie == "false"
+	collapsed := sidebarCollapsed(c)
 
 	var acctPtr *int64
 	if a := c.Query("account"); a != "" {

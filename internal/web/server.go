@@ -104,7 +104,6 @@ func (s *Server) routes() {
 	s.engine.DELETE("/transactions/:id", hs.TransactionsDelete)
 	s.engine.POST("/transactions/:id/cleared", hs.TransactionsToggleCleared)
 
-	s.engine.GET("/accounts", hs.AccountsIndex)
 	s.engine.GET("/accounts/overview", hs.AccountsOverviewPartial)
 	s.engine.GET("/accounts/new", hs.AccountsNew)
 	s.engine.POST("/accounts", hs.AccountsCreate)

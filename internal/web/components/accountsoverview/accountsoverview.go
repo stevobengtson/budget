@@ -24,12 +24,17 @@ func displayCents(a store.AccountWithBalance) int64 {
 // group bins accounts into Cash (checking/savings/cash), Credit, and Loan
 // buckets in that fixed order, dropping any empty bucket. netWorthCents is the
 // sum of raw stored balances (assets minus liabilities, naturally signed).
+// Archived accounts are excluded so the summary reflects only active accounts,
+// regardless of whether the caller passed them in.
 func group(accts []store.AccountWithBalance) (buckets []bucket, netWorthCents int64) {
 	cash := bucket{Name: "Cash"}
 	credit := bucket{Name: "Credit"}
 	loan := bucket{Name: "Loan"}
 
 	for _, a := range accts {
+		if a.ArchivedAt != nil {
+			continue
+		}
 		netWorthCents += a.BalanceCents
 		switch a.Type {
 		case store.TypeCredit:

@@ -4,7 +4,11 @@
 // Templ-rendered page or a partial fragment for HTMX swap.
 package handlers
 
-import "github.com/sbengtson/budget/internal/core/store"
+import (
+	"github.com/gin-gonic/gin"
+
+	"github.com/sbengtson/budget/internal/core/store"
+)
 
 // Handlers is a struct of all HTTP handlers; constructed once per process.
 type Handlers struct {
@@ -14,4 +18,12 @@ type Handlers struct {
 // New constructs a Handlers wired to the supplied store.
 func New(s *store.Store) *Handlers {
 	return &Handlers{store: s}
+}
+
+// sidebarCollapsed reports whether the sidebar should render collapsed, from the
+// templUI-written sidebar_state cookie ("true" = expanded, "false" = collapsed).
+// Absent cookie defaults to expanded.
+func sidebarCollapsed(c *gin.Context) bool {
+	v, err := c.Cookie("sidebar_state")
+	return err == nil && v == "false"
 }

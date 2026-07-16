@@ -28,6 +28,11 @@ type BudgetData struct {
 	IncomeRows         []store.Income
 	Accounts           []store.AccountWithBalance
 	UncategorizedSpent int64
+	// IncomeOpen / CreditOpen carry the persisted open state of the Income and
+	// Credit collapsibles (from the budget_<name>_open cookies). They default to
+	// open; a small client script writes the cookie on toggle.
+	IncomeOpen bool
+	CreditOpen bool
 }
 
 // BudgetGroup is one category group plus its month rows, for rendering a
@@ -64,7 +69,7 @@ templ BudgetBanner(d BudgetData) {
 }
 
 templ budgetBanner(d BudgetData, oob bool) {
-	{{ attrs := templ.Attributes{"id": "budget-banner", "class": "sticky top-16 z-10 bg-background pb-2"} }}
+	{{ attrs := templ.Attributes{"id": "budget-banner", "class": "sticky top-16 z-10"} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
@@ -95,7 +100,7 @@ templ bannerStatSigned(label string, cents int64) {
 
 templ BudgetCreditSection(d BudgetData) {
 	if len(d.CreditRows) > 0 {
-		@collapsible.Collapsible(collapsible.Props{Open: true, Class: "mt-6"}) {
+		@collapsible.Collapsible(collapsible.Props{Open: d.CreditOpen, ID: "credit-collapsible", Attributes: templ.Attributes{"data-persist-collapsible": "credit"}}) {
 			@card.Card() {
 				@collapsible.Trigger(collapsible.TriggerProps{Class: "cursor-pointer select-none"}) {
 					@card.Header(card.HeaderProps{Class: "pb-6"}) {
@@ -107,7 +112,7 @@ templ BudgetCreditSection(d BudgetData) {
 						</div>
 					}
 				}
-				@collapsible.Content(collapsible.ContentProps{Class: "tui-collapsible-open"}) {
+				@collapsible.Content(collapsible.ContentProps{Class: collapsibleOpenClass(d.CreditOpen)}) {
 					@card.Content(card.ContentProps{Class: "pt-0"}) {
 						@table.Table() {
 							@table.Header() {
@@ -161,8 +166,19 @@ templ collapsibleChevron() {
 	</svg>
 }
 
+// collapsibleOpenClass returns the templUI content class that renders a
+// collapsible expanded, or "" when it should render collapsed. Matching the
+// server-rendered content class to the root's Open state avoids a flash of the
+// section expanding then collapsing before the collapsible script initializes.
+func collapsibleOpenClass(open bool) string {
+	if open {
+		return "tui-collapsible-open"
+	}
+	return ""
+}
+
 templ BudgetTable(d BudgetData) {
-	@table.Table(table.Props{Class: "mt-2"}) {
+	@table.Table() {
 		@table.Header() {
 			@table.Row() {
 				@table.Head(table.HeadProps{Class: "w-[34%]"}) {
@@ -267,7 +283,7 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 					Type:    "button",
 					Variant: button.VariantGhost,
 					Size:    button.SizeSm,
-					Class:   "text-muted-foreground hover:text-foreground",
+					Class:   "ml-auto text-muted-foreground hover:text-foreground",
 					Attributes: templ.Attributes{
 						"hx-get":    fmt.Sprintf("/budget/group/%d/category/new?month=%s", g.ID, month),
 						"hx-target": fmt.Sprintf("#group-%d", g.ID),
@@ -359,7 +375,7 @@ templ BudgetBody(d BudgetData) {
 // swap this whole region — they replace just the edited row and refresh the
 // banner + totals via out-of-band swaps (see BudgetAssignResult).
 templ BudgetRegion(d BudgetData) {
-	<div id="budget-region">
+	<div id="budget-region" class="flex flex-col gap-2">
 		@BudgetMonthSelector(d)
 		@BudgetBanner(d)
 		@BudgetIncomeSection(d)
@@ -666,7 +682,11 @@ templ GoalCell(r store.CategoryBudget) {
 				}
 			}
 		</div>
-	}
+	} else {
+    <div class="flex flex-wrap items-center gap-1">
+      <span class="text-xs text-muted-foreground">Create a goal...</span>
+    </div>
+  }
 }
 
 templ SignedMoney(cents int64) {
@@ -701,7 +721,7 @@ func budgetTotals(groups []BudgetGroup) (assigned, spent, available int64) {
 }
 
 templ BudgetIncomeSection(d BudgetData) {
-	@collapsible.Collapsible(collapsible.Props{Open: true, Class: "mt-1"}) {
+	@collapsible.Collapsible(collapsible.Props{Open: d.IncomeOpen, ID: "income-collapsible", Attributes: templ.Attributes{"data-persist-collapsible": "income"}}) {
 		@card.Card() {
 			@collapsible.Trigger(collapsible.TriggerProps{Class: "cursor-pointer select-none"}) {
 				@card.Header(card.HeaderProps{Class: "pb-6"}) {
@@ -713,7 +733,7 @@ templ BudgetIncomeSection(d BudgetData) {
 					</div>
 				}
 			}
-			@collapsible.Content(collapsible.ContentProps{Class: "tui-collapsible-open"}) {
+			@collapsible.Content(collapsible.ContentProps{Class: collapsibleOpenClass(d.IncomeOpen)}) {
 				@card.Content(card.ContentProps{Class: "pt-0"}) {
 					@table.Table() {
 						@table.Header() {

@@ -12,17 +12,6 @@ import (
 	"github.com/sbengtson/budget/internal/web/views"
 )
 
-func (h *Handlers) AccountsIndex(c *gin.Context) {
-	ctx := c.Request.Context()
-	cookie, err := c.Cookie("sidebar_state")
-	collapsed := err != nil && cookie == "false"
-
-	rows, _ := h.store.ListAccounts(ctx, false)
-	cats, _ := h.store.ListCategories(ctx, false)
-	d := views.AccountsData{Rows: rows, Categories: cats}
-	render(c, http.StatusOK, views.AccountsPage(d, collapsed))
-}
-
 // AccountsOverviewPartial renders just the account overview fragment for the
 // sidebar. It is lazy-loaded on page load and re-fetched whenever a mutation
 // emits the "accountsChanged" HTMX event. Month is empty so per-account links
@@ -80,6 +69,8 @@ func (h *Handlers) AccountsArchive(c *gin.Context) {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Sidebar overview + accounts table refresh via the accountsChanged event.
+	c.Header("HX-Trigger", "accountsChanged")
 	c.Writer.WriteHeader(http.StatusOK)
 }
 
@@ -134,6 +125,9 @@ func (h *Handlers) upsertAccount(c *gin.Context, id int64) {
 			return
 		}
 	}
-	c.Header("HX-Redirect", "/accounts")
+	// Close the modal (empty #modal) and let the sidebar overview + accounts
+	// table refresh via the accountsChanged event, keeping the user on the
+	// current page instead of redirecting to /accounts.
+	c.Header("HX-Trigger", "accountsChanged")
 	c.Writer.WriteHeader(http.StatusOK)
 }
