@@ -11,6 +11,7 @@ import (
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/card"
 	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/dropdown"
 	"github.com/templui/templui/components/input"
 	"github.com/templui/templui/components/label"
 	"github.com/templui/templui/components/table"
@@ -108,39 +109,8 @@ templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, pag
 						}
 					}
 				</div>
-				<div class="flex flex-wrap items-center gap-2 lg:ml-auto">
-					@button.Button(button.Props{
-						Variant: button.VariantOutline,
-						Size:    button.SizeSm,
-						Attributes: templ.Attributes{
-							"hx-get":    fmt.Sprintf("/paydown/%d/payment-form", acct.ID),
-							"hx-target": "#modal",
-							"hx-swap":   "innerHTML",
-						},
-					}) {
-						edit payment
-					}
-					@button.Button(button.Props{
-						Variant: button.VariantOutline,
-						Size:    button.SizeSm,
-						Attributes: templ.Attributes{
-							"hx-get":    fmt.Sprintf("/paydown/%d/category-form", acct.ID),
-							"hx-target": "#modal",
-							"hx-swap":   "innerHTML",
-						},
-					}) {
-						link category
-					}
-					@button.Button(button.Props{
-						Variant: button.VariantDestructive,
-						Size:    button.SizeSm,
-						Attributes: templ.Attributes{
-							"hx-post":    fmt.Sprintf("/paydown/%d/exclude", acct.ID),
-							"hx-confirm": "Remove from paydown?",
-						},
-					}) {
-						remove
-					}
+				<div class="flex items-center lg:ml-auto">
+					@pdSectionMenu(acct)
 				</div>
 			</div>
 		}
@@ -148,6 +118,50 @@ templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, pag
 			@PaydownScheduleBody(p, horizon, 1, pageSize)
 		</div>
 	</section>
+}
+
+// pdSectionMenu renders the per-account three-dot actions menu (Edit Payment /
+// Link Category / Remove), matching the transactions and budget rows' menu
+// system.
+templ pdSectionMenu(acct store.AccountWithBalance) {
+	@dropdown.Dropdown() {
+		@dropdown.Trigger(dropdown.TriggerProps{
+			Class:      "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
+			Attributes: templ.Attributes{"title": "Account actions"},
+		}) {
+			⋮
+		}
+		@dropdown.Content() {
+			@dropdown.Item(dropdown.ItemProps{
+				Attributes: templ.Attributes{
+					"hx-get":    fmt.Sprintf("/paydown/%d/payment-form", acct.ID),
+					"hx-target": "#modal",
+					"hx-swap":   "innerHTML",
+				},
+			}) {
+				Edit Payment
+			}
+			@dropdown.Item(dropdown.ItemProps{
+				Attributes: templ.Attributes{
+					"hx-get":    fmt.Sprintf("/paydown/%d/category-form", acct.ID),
+					"hx-target": "#modal",
+					"hx-swap":   "innerHTML",
+				},
+			}) {
+				Link Category
+			}
+			@dropdown.Separator()
+			@dropdown.Item(dropdown.ItemProps{
+				Class: "text-destructive",
+				Attributes: templ.Attributes{
+					"hx-post":    fmt.Sprintf("/paydown/%d/exclude", acct.ID),
+					"hx-confirm": "Remove from paydown?",
+				},
+			}) {
+				Remove
+			}
+		}
+	}
 }
 
 // PaydownScheduleBody is one slice of a plan's monthly projection plus its
