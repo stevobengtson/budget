@@ -167,32 +167,16 @@ func (h *Handlers) TransactionsEdit(c *gin.Context) {
 }
 
 func (h *Handlers) TransactionsUpdate(c *gin.Context) {
-	ctx := c.Request.Context()
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err := h.upsertTransaction(c, id); err != nil {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	// A successful update changed balances; refresh the sidebar overview on any
-	// response path (including the reload-failure fallback below).
+	// A successful update changed balances; refresh the sidebar overview.
 	c.Header("HX-Trigger", "accountsChanged")
-	// Swap only the edited row (plus the paired transfer leg, if any) instead of
-	// re-rendering the whole list. If the row can't be reloaded, fall back to a
-	// full row refresh.
-	t, err := h.store.GetTransaction(ctx, id)
-	if err != nil {
-		h.renderTxRows(c)
-		return
-	}
-	var pair *store.Transaction
-	if t.TransferPairID != nil {
-		if p, err := h.store.GetTransaction(ctx, *t.TransferPairID); err == nil {
-			pair = p
-		}
-	}
-	accts, _ := h.store.ListAccounts(ctx, true)
-	cats, _ := h.store.ListCategories(ctx, true)
-	render(c, http.StatusOK, views.TxUpdateResult(*t, pair, accts, cats))
+	// Re-render the full row list (sorted) so a changed date re-orders the row
+	// instead of leaving it stranded in its old position.
+	h.renderTxRows(c)
 }
 
 func (h *Handlers) TransactionsDelete(c *gin.Context) {
@@ -354,9 +338,7 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 	cats, _ := h.store.ListCategories(ctx, true)
 	c.Status(http.StatusOK)
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-	for _, t := range rows {
-		_ = views.TransactionRow(t, accts, cats, false).Render(ctx, c.Writer)
-	}
+	_ = views.TxRows(rows, accts, cats).Render(ctx, c.Writer)
 	_, _ = c.Writer.WriteString(`<div id="modal" class="modal-mount" hx-swap-oob="true"></div>`)
 }
 

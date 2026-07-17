@@ -3,6 +3,7 @@ package views
 import (
 	"github.com/templui/templui/components/checkbox"
 	"github.com/templui/templui/components/collapsible"
+	"github.com/templui/templui/components/datepicker"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/dropdown"
 	"github.com/templui/templui/components/input"
@@ -30,6 +31,7 @@ templ Layout(title string, active string, collapsed bool) {
 			@input.Script()
 			@checkbox.Script()
 			@dialog.Script()
+			@datepicker.Script()
 			@dropdown.Script()
 			@selectbox.Script()
 			@label.Script()

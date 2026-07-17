@@ -9,6 +9,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/monthselector"
 	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/datepicker"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/dropdown"
 	"github.com/templui/templui/components/input"
@@ -86,12 +87,7 @@ templ TransactionsBody(d TransactionsData) {
 			}
 		}
 		<tbody id="tx-rows" class="[&_tr:last-child]:border-0">
-			for i, t := range d.Rows {
-				if i > 0 && !sameDay(d.Rows[i-1].Date, t.Date) {
-					<tr><td colspan="7" class="h-2 bg-muted/30 p-0"></td></tr>
-				}
-				@TransactionRow(t, d.Accounts, d.Categories, false)
-			}
+			@TxRows(d.Rows, d.Accounts, d.Categories)
 		</tbody>
 	}
 	if d.Total > d.PageSize {
@@ -108,6 +104,18 @@ templ TransactionsBody(d TransactionsData) {
 				}
 			}
 		</div>
+	}
+}
+
+// TxRows renders the sorted transaction rows with day-change separators. Shared
+// by the initial page render and the htmx refresh after a create/update so both
+// produce identical, correctly ordered markup.
+templ TxRows(rows []store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
+	for i, t := range rows {
+		if i > 0 && !sameDay(rows[i-1].Date, t.Date) {
+			<tr><td colspan="7" class="h-2 bg-muted/30 p-0"></td></tr>
+		}
+		@TransactionRow(t, accts, cats, false)
 	}
 }
 
@@ -183,20 +191,6 @@ templ txRowMenu(t store.Transaction) {
 	}
 }
 
-// TxUpdateResult is the response to an inline edit save. It replaces the edited
-// row (primary swap into #tx-<id>) and, for a transfer, refreshes the paired
-// leg via an out-of-band swap — wrapped in a <template> so the bare <tr>
-// survives the browser's table-parsing rules. It also empties the modal.
-templ TxUpdateResult(t store.Transaction, pair *store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
-	@TransactionRow(t, accts, cats, false)
-	if pair != nil {
-		<template>
-			@TransactionRow(*pair, accts, cats, true)
-		</template>
-	}
-	<div id="modal" class="modal-mount" hx-swap-oob="true"></div>
-}
-
 templ txClearCell(t store.Transaction) {
 	{{ title := "Not cleared — click to clear" }}
 	if t.Cleared {
@@ -242,13 +236,11 @@ templ TransactionForm(d TxFormData) {
 			id="tx-form-inner"
 			if d.Editing {
 				hx-put={ fmt.Sprintf("/transactions/%d", d.ID) }
-				hx-target={ fmt.Sprintf("#tx-%d", d.ID) }
-				hx-swap="outerHTML"
 			} else {
 				hx-post="/transactions"
-				hx-target="#tx-rows"
-				hx-swap="innerHTML"
 			}
+			hx-target="#tx-rows"
+			hx-swap="innerHTML"
 			class="grid gap-4"
 		>
 			@dialog.Header() {
@@ -262,7 +254,12 @@ templ TransactionForm(d TxFormData) {
 			}
 			<div class="grid gap-3">
 				@formRow("tx-date", "Date") {
-					@input.Input(input.Props{ID: "tx-date", Type: input.TypeDate, Name: "date", Value: d.Date, Required: true})
+					@datepicker.DatePicker(datepicker.Props{
+						ID:          "tx-date",
+						Name:        "date",
+						Value:       txDate(d.Date),
+						Placeholder: "Select a date",
+					})
 				}
 				@formRow("tx-account", "Account") {
 					@SelectField(SelectFieldProps{ID: "tx-account", Name: "account_id", Required: true}, accountOptions(d.Accounts, d.AccountID))
@@ -411,6 +408,13 @@ func txMonthHref(d TransactionsData, month string) string {
 		q += fmt.Sprintf("&account=%d", *d.FilterAccount)
 	}
 	return q
+}
+
+// txDate parses a "YYYY-MM-DD" form value into a time.Time for the date picker.
+// Returns the zero time (picker shows its placeholder) when empty or malformed.
+func txDate(s string) time.Time {
+	t, _ := time.Parse("2006-01-02", s)
+	return t
 }
 
 func sameDay(a, b time.Time) bool {
