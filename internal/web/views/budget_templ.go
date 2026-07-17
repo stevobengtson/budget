@@ -1151,7 +1151,7 @@ func BudgetTable(d BudgetData) templ.Component {
 						})
 						templ_7745c5c3_Err = button.Button(button.Props{
 							Type:    "button",
-							Variant: button.VariantGhost,
+							Variant: button.VariantOutline,
 							Size:    button.SizeSm,
 							Class:   "text-muted-foreground hover:text-foreground",
 							Attributes: templ.Attributes{
@@ -1535,7 +1535,7 @@ func budgetGroupHeader(month string, g BudgetGroup, oob bool) templ.Component {
 				})
 				templ_7745c5c3_Err = button.Button(button.Props{
 					Type:    "button",
-					Variant: button.VariantGhost,
+					Variant: button.VariantOutline,
 					Size:    button.SizeSm,
 					Class:   "ml-auto text-muted-foreground hover:text-foreground",
 					Attributes: templ.Attributes{
@@ -3648,15 +3648,16 @@ func BudgetIncomeSection(d BudgetData) templ.Component {
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 154, "Add")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 154, "Add Income")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							return nil
 						})
 						templ_7745c5c3_Err = button.Button(button.Props{
-							Type: "button",
-							Size: button.SizeSm,
+							Type:    "button",
+							Variant: button.VariantOutline,
+							Size:    button.SizeSm,
 							Attributes: templ.Attributes{
 								"hx-get":    "/budget/income/new?month=" + d.Month,
 								"hx-target": "#income-rows",
@@ -3778,7 +3779,7 @@ func IncomeTotalsRow(d BudgetData, oob bool) templ.Component {
 				var templ_7745c5c3_Var157 string
 				templ_7745c5c3_Var157, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(incomeTotal(d.IncomeRows)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 809, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 810, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var157))
 				if templ_7745c5c3_Err != nil {
@@ -3867,7 +3868,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				var templ_7745c5c3_Var161 string
 				templ_7745c5c3_Var161, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 825, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 826, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var161))
 				if templ_7745c5c3_Err != nil {
@@ -3880,7 +3881,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				var templ_7745c5c3_Var162 string
 				templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("#income-%d", r.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 825, Col: 118}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 826, Col: 118}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var162))
 				if templ_7745c5c3_Err != nil {
@@ -3893,7 +3894,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				var templ_7745c5c3_Var163 string
 				templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.JoinStringErrs(r.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 827, Col: 13}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 828, Col: 13}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var163))
 				if templ_7745c5c3_Err != nil {
@@ -3906,7 +3907,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				var templ_7745c5c3_Var164 string
 				templ_7745c5c3_Var164, templ_7745c5c3_Err = templ.JoinStringErrs(r.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 829, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 830, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var164))
 				if templ_7745c5c3_Err != nil {
@@ -3945,7 +3946,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				var templ_7745c5c3_Var166 string
 				templ_7745c5c3_Var166, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 833, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 834, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var166))
 				if templ_7745c5c3_Err != nil {
@@ -3958,7 +3959,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				var templ_7745c5c3_Var167 string
 				templ_7745c5c3_Var167, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("#income-%d", r.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 833, Col: 118}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 834, Col: 118}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var167))
 				if templ_7745c5c3_Err != nil {
@@ -3971,7 +3972,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				var templ_7745c5c3_Var168 string
 				templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(r.AmountCents))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 835, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 836, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var168))
 				if templ_7745c5c3_Err != nil {
@@ -3984,7 +3985,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				var templ_7745c5c3_Var169 string
 				templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(r.AmountCents))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 837, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 838, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var169))
 				if templ_7745c5c3_Err != nil {
@@ -4120,7 +4121,7 @@ func IncomeNewRow(month string) templ.Component {
 				var templ_7745c5c3_Var175 string
 				templ_7745c5c3_Var175, templ_7745c5c3_Err = templ.JoinStringErrs("/budget/income?month=" + month)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 865, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget.templ`, Line: 866, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var175))
 				if templ_7745c5c3_Err != nil {

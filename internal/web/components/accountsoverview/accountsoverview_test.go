@@ -81,7 +81,7 @@ func TestAccountsOverviewRenders(t *testing.T) {
 	out := buf.String()
 	// Note: templ HTML-escapes & to &amp; in the href attribute; assert the
 	// stable prefix rather than the full query string.
-	for _, want := range []string{"All Accounts", "Spending", "$1,178.55", "Visa", "$42,560.04", "Est. Net Worth", "Add Account", "/transactions?month=2026-07"} {
+	for _, want := range []string{"Spending", "$1,178.55", "Visa", "$42,560.04", "Est. Net Worth", "Add Account"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rendered output missing %q", want)
 		}
@@ -93,15 +93,6 @@ func TestTxHref(t *testing.T) {
 		t.Errorf("with month = %q", got)
 	}
 	if got := txHref(3, ""); got != "/transactions?account=3" {
-		t.Errorf("without month = %q", got)
-	}
-}
-
-func TestAllTxHref(t *testing.T) {
-	if got := allTxHref("2026-07"); got != "/transactions?month=2026-07" {
-		t.Errorf("with month = %q", got)
-	}
-	if got := allTxHref(""); got != "/transactions" {
 		t.Errorf("without month = %q", got)
 	}
 }

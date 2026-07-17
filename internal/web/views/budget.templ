@@ -199,7 +199,7 @@ templ BudgetTable(d BudgetData) {
 				@table.Head(table.HeadProps{Class: "text-right"}) {
 					@button.Button(button.Props{
 						Type:    "button",
-						Variant: button.VariantGhost,
+						Variant: button.VariantOutline,
 						Size:    button.SizeSm,
 						Class:   "text-muted-foreground hover:text-foreground",
 						Attributes: templ.Attributes{
@@ -281,7 +281,7 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 				</form>
 				@button.Button(button.Props{
 					Type:    "button",
-					Variant: button.VariantGhost,
+					Variant: button.VariantOutline,
 					Size:    button.SizeSm,
 					Class:   "ml-auto text-muted-foreground hover:text-foreground",
 					Attributes: templ.Attributes{
@@ -775,6 +775,7 @@ templ BudgetIncomeSection(d BudgetData) {
 					}
 					@button.Button(button.Props{
 						Type: "button",
+            Variant: button.VariantOutline,
 						Size: button.SizeSm,
 						Attributes: templ.Attributes{
 							"hx-get":    "/budget/income/new?month=" + d.Month,
@@ -783,7 +784,7 @@ templ BudgetIncomeSection(d BudgetData) {
 							"title":     "Add income",
 						},
 					}) {
-						Add
+						Add Income
 					}
 				}
 			}

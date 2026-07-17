@@ -44,7 +44,7 @@ func TestRedirectRoot(t *testing.T) {
 
 func TestPagesRender200(t *testing.T) {
 	ts := newTestServer(t)
-	for _, path := range []string{"/budget", "/transactions", "/paydown"} {
+	for _, path := range []string{"/budget", "/transactions?account=1", "/paydown"} {
 		resp, err := http.Get(ts.URL + path)
 		if err != nil {
 			t.Errorf("%s: %v", path, err)
@@ -79,7 +79,7 @@ func TestAccountsOverviewPartialRenders(t *testing.T) {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 	body := readAll(t, resp)
-	for _, marker := range []string{`id="accounts-overview"`, "All Accounts", "Est. Net Worth"} {
+	for _, marker := range []string{`id="accounts-overview"`, "Est. Net Worth"} {
 		if !strings.Contains(body, marker) {
 			t.Errorf("overview fragment missing %q", marker)
 		}

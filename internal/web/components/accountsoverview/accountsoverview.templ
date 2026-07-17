@@ -6,6 +6,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/dropdown"
 )
 
 // AccountsOverview renders a grouped account list (Cash/Credit/Loan) with an
@@ -29,14 +30,6 @@ templ overview(accts []store.AccountWithBalance, month string, oob bool) {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
 	<div { attrs... }>
-		<a
-			href={ templ.URL(allTxHref(month)) }
-			class="mb-2 flex items-center justify-between rounded px-1 py-0.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/60"
-			title="View transactions for all accounts"
-		>
-			All Accounts
-			<span class="text-muted-foreground">→</span>
-		</a>
 		<div class="space-y-3">
 			for _, b := range buckets {
 				<div class="border-t border-border pt-3 first:border-t-0 first:pt-0">
@@ -59,34 +52,7 @@ templ overview(accts []store.AccountWithBalance, month string, oob bool) {
 									</span>
 									<span class="tabular-nums text-foreground">{ money.Format(displayCents(a)) }</span>
 								</a>
-								@button.Button(button.Props{
-									Type:    "button",
-									Variant: button.VariantGhost,
-									Size:    button.SizeSm,
-									Class:   "h-6 w-6 shrink-0 px-0 text-muted-foreground hover:text-foreground",
-									Attributes: templ.Attributes{
-										"hx-get":    "/accounts/" + strconv.FormatInt(a.ID, 10) + "/edit",
-										"hx-target": "#modal",
-										"hx-swap":   "innerHTML",
-										"title":     "Edit " + a.Name,
-									},
-								}) {
-									✎
-								}
-								@button.Button(button.Props{
-									Type:    "button",
-									Variant: button.VariantGhost,
-									Size:    button.SizeSm,
-									Class:   "h-6 w-6 shrink-0 px-0 text-muted-foreground hover:text-destructive",
-									Attributes: templ.Attributes{
-										"hx-post":    "/accounts/" + strconv.FormatInt(a.ID, 10) + "/archive",
-										"hx-swap":    "none",
-										"hx-confirm": "Archive " + a.Name + "?",
-										"title":      "Archive " + a.Name,
-									},
-								}) {
-									×
-								}
+								@acctMenu(a)
 							</div>
 						}
 					</div>
@@ -113,6 +79,42 @@ templ overview(accts []store.AccountWithBalance, month string, oob bool) {
 	</div>
 }
 
+// acctMenu renders the per-account three-dot actions menu (Edit / Archive),
+// matching the transactions and budget rows' menu system.
+templ acctMenu(a store.AccountWithBalance) {
+	{{ id := strconv.FormatInt(a.ID, 10) }}
+	@dropdown.Dropdown() {
+		@dropdown.Trigger(dropdown.TriggerProps{
+			Class:      "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
+			Attributes: templ.Attributes{"title": "Account actions"},
+		}) {
+			⋮
+		}
+		@dropdown.Content() {
+			@dropdown.Item(dropdown.ItemProps{
+				Attributes: templ.Attributes{
+					"hx-get":    "/accounts/" + id + "/edit",
+					"hx-target": "#modal",
+					"hx-swap":   "innerHTML",
+				},
+			}) {
+				Edit Account
+			}
+			@dropdown.Separator()
+			@dropdown.Item(dropdown.ItemProps{
+				Class: "text-destructive",
+				Attributes: templ.Attributes{
+					"hx-post":    "/accounts/" + id + "/archive",
+					"hx-swap":    "none",
+					"hx-confirm": "Archive " + a.Name + "?",
+				},
+			}) {
+				Archive Account
+			}
+		}
+	}
+}
+
 // txHref builds a link to the transactions page filtered to one account. The
 // selected month is preserved when set (e.g. when navigating from a past-month
 // budget view), so the transactions page opens on the same month; when unset it
@@ -123,15 +125,6 @@ func txHref(accountID int64, month string) string {
 		return "/transactions?month=" + month + "&" + acct
 	}
 	return "/transactions?" + acct
-}
-
-// allTxHref links to the transactions page for all accounts (no account
-// filter), preserving the selected month when set.
-func allTxHref(month string) string {
-	if month != "" {
-		return "/transactions?month=" + month
-	}
-	return "/transactions"
 }
 
 // signedMoney colors an amount green/red/muted by sign. Duplicated locally

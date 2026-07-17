@@ -26,6 +26,13 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 			acctPtr = &v
 		}
 	}
+	// The transactions view is always scoped to a single account; viewing every
+	// account's transactions at once was confusing. Without an account filter
+	// there's nothing meaningful to show, so send the user back to the budget.
+	if acctPtr == nil {
+		c.Redirect(http.StatusSeeOther, "/budget")
+		return
+	}
 	// Default to current month unless ?all=1 is set. This matches the
 	// Budget tab's behavior where the user lands on the current month
 	// and navigates with prev/next links.
@@ -185,7 +192,7 @@ func (h *Handlers) TransactionsUpdate(c *gin.Context) {
 	}
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
-	render(c, http.StatusOK, views.TxUpdateResult(txAccountFromRequest(c) != nil, *t, pair, accts, cats))
+	render(c, http.StatusOK, views.TxUpdateResult(*t, pair, accts, cats))
 }
 
 func (h *Handlers) TransactionsDelete(c *gin.Context) {
@@ -218,7 +225,7 @@ func (h *Handlers) TransactionsToggleCleared(c *gin.Context) {
 	t.Cleared = !t.Cleared
 	accts, _ := h.store.ListAccounts(ctx, true)
 	cats, _ := h.store.ListCategories(ctx, true)
-	render(c, http.StatusOK, views.TransactionRow(*t, accts, cats, txAccountFromRequest(c) != nil, false))
+	render(c, http.StatusOK, views.TransactionRow(*t, accts, cats, false))
 }
 
 // upsertTransaction creates (id==0) or updates a transaction or transfer
@@ -348,15 +355,15 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 	c.Status(http.StatusOK)
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	for _, t := range rows {
-		_ = views.TransactionRow(t, accts, cats, acctPtr != nil, false).Render(ctx, c.Writer)
+		_ = views.TransactionRow(t, accts, cats, false).Render(ctx, c.Writer)
 	}
 	_, _ = c.Writer.WriteString(`<div id="modal" class="modal-mount" hx-swap-oob="true"></div>`)
 }
 
 // txAccountFromRequest returns the account filter reflected by the current
 // transactions view (from the HX-Current-URL header), or nil when no account
-// filter is active. Used to hide the redundant Account column and to default a
-// new transaction's account to the filtered one.
+// filter is active. Used to default a new transaction's account to the
+// filtered one.
 func txAccountFromRequest(c *gin.Context) *int64 {
 	if currentURL := c.GetHeader("HX-Current-URL"); currentURL != "" {
 		if u, err := url.Parse(currentURL); err == nil {

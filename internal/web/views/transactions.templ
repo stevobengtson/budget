@@ -10,6 +10,7 @@ import (
 	"github.com/sbengtson/budget/internal/web/components/monthselector"
 	"github.com/templui/templui/components/button"
 	"github.com/templui/templui/components/dialog"
+	"github.com/templui/templui/components/dropdown"
 	"github.com/templui/templui/components/input"
 	"github.com/templui/templui/components/label"
 	switchcomp "github.com/templui/templui/components/switch"
@@ -38,21 +39,33 @@ templ TransactionsPage(d TransactionsData, collapsed bool) {
 }
 
 templ TransactionsBody(d TransactionsData) {
-	<div class="flex items-center justify-between gap-4 pb-2">
+	<div class="grid grid-cols-3 items-center gap-4 pb-2">
 		<h1 class="text-2xl font-semibold tracking-tight">{ txMonthLabel(d.FilterMonth) }</h1>
-		@monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth))
+		<div class="flex justify-center">
+			@monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth))
+		</div>
+		<div class="flex justify-end">
+			@button.Button(button.Props{
+				Href: "/transactions/new",
+        Type: "button",
+        Variant: button.VariantOutline,
+				Size: button.SizeSm,
+				Attributes: templ.Attributes{
+					"hx-get":    "/transactions/new",
+					"hx-target": "#modal",
+					"hx-swap":   "innerHTML",
+          "title": "Add transaction",
+				},
+			}) {
+				Add transaction
+			}
+		</div>
 	</div>
-	{{ hideAcct := d.FilterAccount != nil }}
 	@table.Table(table.Props{Class: "mt-4"}) {
 		@table.Header() {
 			@table.Row() {
 				@table.Head() {
-					Date 
-				}
-				if !hideAcct {
-					@table.Head() {
-						Account 
-					}
+					Date
 				}
 				@table.Head() {
 					Category / Transfer 
@@ -67,29 +80,17 @@ templ TransactionsBody(d TransactionsData) {
 					Inflow 
 				}
 				@table.Head(table.HeadProps{Class: "text-center"}) {
-					✓ 
+					✓
 				}
-				@table.Head(table.HeadProps{Class: "text-right"}) {
-					@button.Button(button.Props{
-						Href: "/transactions/new",
-						Size: button.SizeSm,
-						Attributes: templ.Attributes{
-							"hx-get":    "/transactions/new",
-							"hx-target": "#modal",
-							"hx-swap":   "innerHTML",
-						},
-					}) {
-						Add
-					}
-				}
+				@table.Head()
 			}
 		}
 		<tbody id="tx-rows" class="[&_tr:last-child]:border-0">
 			for i, t := range d.Rows {
 				if i > 0 && !sameDay(d.Rows[i-1].Date, t.Date) {
-					<tr><td colspan={ txColspan(hideAcct) } class="h-2 bg-muted/30 p-0"></td></tr>
+					<tr><td colspan="7" class="h-2 bg-muted/30 p-0"></td></tr>
 				}
-				@TransactionRow(t, d.Accounts, d.Categories, hideAcct, false)
+				@TransactionRow(t, d.Accounts, d.Categories, false)
 			}
 		</tbody>
 	}
@@ -110,7 +111,7 @@ templ TransactionsBody(d TransactionsData) {
 	}
 }
 
-templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category, hideAccount bool, oob bool) {
+templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category, oob bool) {
 	{{ attrs := templ.Attributes{"id": fmt.Sprintf("tx-%d", t.ID)} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
@@ -118,11 +119,6 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 	@table.Row(table.RowProps{Attributes: attrs}) {
 		@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
 			{ t.Date.Format("Jan 2, 2006") }
-		}
-		if !hideAccount {
-			@table.Cell() {
-				{ accountName(accts, t.AccountID) }
-			}
 		}
 		@table.Cell() {
 			@TxCategoryCell(t, accts, cats)
@@ -145,34 +141,43 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 		@table.Cell(table.CellProps{Class: "text-center"}) {
 			@txClearCell(t)
 		}
-		@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
-			@button.Button(button.Props{
-				Href:    fmt.Sprintf("/transactions/%d/edit", t.ID),
-				Variant: button.VariantOutline,
-				Size:    button.SizeSm,
-				Class:   "mr-1 h-8 w-8 px-0",
+		@table.Cell(table.CellProps{Class: "text-right"}) {
+			@txRowMenu(t)
+		}
+	}
+}
+
+// txRowMenu renders the per-row three-dot actions menu (Edit / Delete),
+// matching the budget page's rowMenu pattern.
+templ txRowMenu(t store.Transaction) {
+	@dropdown.Dropdown() {
+		@dropdown.Trigger(dropdown.TriggerProps{
+			Class:      "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
+			Attributes: templ.Attributes{"title": "Transaction actions"},
+		}) {
+			⋮
+		}
+		@dropdown.Content() {
+			@dropdown.Item(dropdown.ItemProps{
 				Attributes: templ.Attributes{
 					"hx-get":    fmt.Sprintf("/transactions/%d/edit", t.ID),
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
-					"title":     "Edit transaction",
 				},
 			}) {
-				✎
+				Edit Transaction
 			}
-			@button.Button(button.Props{
-				Variant: button.VariantGhost,
-				Size:    button.SizeSm,
-				Class:   "text-muted-foreground hover:text-destructive",
+			@dropdown.Separator()
+			@dropdown.Item(dropdown.ItemProps{
+				Class: "text-destructive",
 				Attributes: templ.Attributes{
 					"hx-delete":  fmt.Sprintf("/transactions/%d", t.ID),
 					"hx-target":  fmt.Sprintf("#tx-%d", t.ID),
 					"hx-swap":    "outerHTML",
 					"hx-confirm": "Delete Transaction?",
-					"title":      "Delete Transaction",
 				},
 			}) {
-				×
+				Delete Transaction
 			}
 		}
 	}
@@ -182,11 +187,11 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 // row (primary swap into #tx-<id>) and, for a transfer, refreshes the paired
 // leg via an out-of-band swap — wrapped in a <template> so the bare <tr>
 // survives the browser's table-parsing rules. It also empties the modal.
-templ TxUpdateResult(hideAccount bool, t store.Transaction, pair *store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
-	@TransactionRow(t, accts, cats, hideAccount, false)
+templ TxUpdateResult(t store.Transaction, pair *store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
+	@TransactionRow(t, accts, cats, false)
 	if pair != nil {
 		<template>
-			@TransactionRow(*pair, accts, cats, hideAccount, true)
+			@TransactionRow(*pair, accts, cats, true)
 		</template>
 	}
 	<div id="modal" class="modal-mount" hx-swap-oob="true"></div>
@@ -412,15 +417,6 @@ func sameDay(a, b time.Time) bool {
 	ay, am, ad := a.Date()
 	by, bm, bd := b.Date()
 	return ay == by && am == bm && ad == bd
-}
-
-// txColspan is the day-separator row's column span: 8 normally, 7 when the
-// Account column is hidden (an account filter is active).
-func txColspan(hideAccount bool) string {
-	if hideAccount {
-		return "7"
-	}
-	return "8"
 }
 
 func txMonthLabel(month string) string {
