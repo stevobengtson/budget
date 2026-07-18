@@ -1,0 +1,82 @@
+package views
+
+import (
+	"time"
+
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/monthselector"
+)
+
+type BudgetData struct {
+	Month              string // "YYYY-MM"
+	PrevMonth          string
+	NextMonth          string
+	Estimated          int64
+	Budgeted           int64
+	Remain             int64
+	CreditRows         []store.CreditActivity
+	Groups             []BudgetGroup
+	IncomeRows         []store.Income
+	Accounts           []store.AccountWithBalance
+	UncategorizedSpent int64
+	// IncomeOpen / CreditOpen carry the persisted open state of the Income and
+	// Credit collapsibles (from the budget_<name>_open cookies). They default to
+	// open; a small client script writes the cookie on toggle.
+	IncomeOpen bool
+	CreditOpen bool
+}
+
+// BudgetGroup is one category group plus its month rows, for rendering a
+// per-group <tbody>. Empty groups (Rows == nil) still render so the user can
+// add the first category to them.
+type BudgetGroup struct {
+	ID   int64
+	Name string
+	Rows []store.CategoryBudget
+}
+
+templ BudgetPage(d BudgetData, collapsed bool) {
+	@Layout("Budget", "budget", collapsed) {
+		@BudgetBody(d)
+	}
+}
+
+templ BudgetMonthSelector(d BudgetData) {
+	<div class="flex items-center justify-between gap-4 pb-2">
+		<h1 class="text-2xl font-semibold tracking-tight">{ formatMonth(d.Month) }</h1>
+		@monthselector.MonthSelector(bgMonthHref(d.PrevMonth), bgMonthHref(nowMonth()), bgMonthHref(d.NextMonth))
+	</div>
+}
+
+func bgMonthHref(month string) string {
+	return "/budget?month=" + month
+}
+
+templ BudgetBody(d BudgetData) {
+	@BudgetRegion(d)
+}
+
+// BudgetRegion is the initial-render container for the assignment-dependent
+// sections: banner stats, the credit table, and the main budget table. On the
+// full page load it renders everything; incremental assignment saves no longer
+// swap this whole region — they replace just the edited row and refresh the
+// banner + totals via out-of-band swaps (see BudgetAssignResult).
+templ BudgetRegion(d BudgetData) {
+	<div id="budget-region" class="flex flex-col gap-2">
+		@BudgetMonthSelector(d)
+		@BudgetBanner(d)
+		@BudgetIncomeSection(d)
+		@BudgetCreditSection(d)
+		@BudgetTable(d)
+	</div>
+}
+
+func formatMonth(m string) string {
+	t, err := time.Parse("2006-01", m)
+	if err != nil {
+		return m
+	}
+	return t.Format("Jan 2006")
+}
+
+func nowMonth() string { return time.Now().Format("2006-01") }

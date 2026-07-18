@@ -1,0 +1,54 @@
+package views
+
+import (
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/web/components/collapsiblecard"
+	"github.com/sbengtson/budget/internal/web/components/signedmoney"
+	"github.com/templui/templui/components/card"
+	"github.com/templui/templui/components/table"
+)
+
+templ BudgetCreditSection(d BudgetData) {
+	if len(d.CreditRows) > 0 {
+		@collapsiblecard.Card(collapsiblecard.Props{Title: "Credit", ID: "credit-collapsible", PersistKey: "credit", Open: d.CreditOpen}) {
+			@card.Content(card.ContentProps{Class: "pt-0"}) {
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head() {
+								Account
+							}
+							@table.Head() {
+								Purchases
+							}
+							@table.Head() {
+								Payments
+							}
+							@table.Head() {
+								Owing
+							}
+						}
+					}
+					@table.Body() {
+						for _, ca := range d.CreditRows {
+							@table.Row() {
+								@table.Cell() {
+									{ ca.AccountName }
+								}
+								@table.Cell(table.CellProps{Class: "tabular-nums text-red-500"}) {
+									{ money.Format(ca.PurchasesCents) }
+								}
+								@table.Cell(table.CellProps{Class: "tabular-nums text-emerald-500"}) {
+									{ money.Format(ca.PaymentsCents) }
+								}
+								@table.Cell(table.CellProps{Class: "tabular-nums"}) {
+									@signedmoney.Money(ca.OwingCents)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

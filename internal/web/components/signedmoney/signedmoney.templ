@@ -1,0 +1,16 @@
+package signedmoney
+
+import "github.com/sbengtson/budget/internal/core/money"
+
+// Money colors an amount by sign: positive emerald, negative red, zero muted.
+// Replaces the former views.SignedMoney; a promoted, views-free primitive so
+// any page (and the future API views) can share it.
+templ Money(cents int64) {
+	if cents > 0 {
+		<span class="text-emerald-500 tabular-nums">{ money.Format(cents) }</span>
+	} else if cents < 0 {
+		<span class="text-red-500 tabular-nums">{ money.Format(cents) }</span>
+	} else {
+		<span class="text-muted-foreground tabular-nums">{ money.Format(cents) }</span>
+	}
+}

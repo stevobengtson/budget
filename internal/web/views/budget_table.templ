@@ -1,0 +1,209 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/web/components/signedmoney"
+	"github.com/templui/templui/components/button"
+	"github.com/templui/templui/components/table"
+)
+
+templ BudgetTable(d BudgetData) {
+	@table.Table() {
+		@table.Header() {
+			@table.Row() {
+				@table.Head(table.HeadProps{Class: "w-[34%]"}) {
+					Group / Category
+				}
+				@table.Head() {
+					Assigned
+				}
+				@table.Head() {
+					Spent
+				}
+				@table.Head() {
+					Available
+				}
+				@table.Head() {
+					Goal
+				}
+				@table.Head(table.HeadProps{Class: "text-right"}) {
+					@button.Button(button.Props{
+						Type:    "button",
+						Variant: button.VariantOutline,
+						Size:    button.SizeSm,
+						Class:   "text-muted-foreground hover:text-foreground",
+						Attributes: templ.Attributes{
+							"hx-get":    "/budget/group/new",
+							"hx-target": "#budget-totals-body",
+							"hx-swap":   "beforebegin",
+							"title":     "Add category group",
+						},
+					}) {
+						Add Group
+					}
+				}
+			}
+		}
+		<tbody id="budget-uncategorized-body">
+			@table.Row() {
+				@table.Cell(table.CellProps{Class: "pl-6 text-muted-foreground"}) { Uncategorized }
+				@table.Cell() {}
+				@table.Cell(table.CellProps{Class: "tabular-nums"}) { { money.Format(d.UncategorizedSpent) } }
+				@table.Cell() {}
+				@table.Cell() {}
+				@table.Cell() {}
+			}
+		</tbody>
+		for _, g := range d.Groups {
+			@BudgetGroupTbody(d.Month, g)
+		}
+		<tbody id="budget-totals-body">
+			@BudgetTotalsRow(d, false)
+		</tbody>
+	}
+}
+
+templ BudgetGroupTbody(month string, g BudgetGroup) {
+	<tbody id={ fmt.Sprintf("group-%d", g.ID) }>
+		@BudgetGroupHeader(month, g)
+		for _, r := range g.Rows {
+			@BudgetRow(month, r)
+		}
+	</tbody>
+}
+
+templ BudgetGroupHeader(month string, g BudgetGroup) {
+	@budgetGroupHeader(month, g, false)
+}
+
+// budgetGroupHeader renders a group's header row. When oob is true the <tr>
+// carries hx-swap-oob so a response can refresh it out of band (used after
+// adding the first category to a group, to drop the "delete empty group"
+// control). An OOB bare <tr> must be wrapped in a <template> by the caller.
+templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
+	{{ attrs := templ.Attributes{"id": fmt.Sprintf("group-head-%d", g.ID), "class": "bg-muted/40 hover:bg-muted/40"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	@table.Row(table.RowProps{Attributes: attrs}) {
+		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
+			<div class="flex items-center gap-2">
+				<form
+					hx-put={ fmt.Sprintf("/budget/group/%d?month=%s", g.ID, month) }
+					hx-target={ fmt.Sprintf("#group-head-%d", g.ID) }
+					hx-swap="outerHTML"
+					class="flex items-center"
+				>
+					<button
+						type="button"
+						class="js-name-display cursor-text rounded-md px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-transparent hover:ring-border"
+						title="Click to rename"
+					>
+						{ g.Name }
+					</button>
+					<input
+						type="text"
+						name="name"
+						value={ g.Name }
+						autocomplete="off"
+						class="js-name-input hidden h-7 w-56 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					/>
+				</form>
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantOutline,
+					Size:    button.SizeSm,
+					Class:   "ml-auto text-muted-foreground hover:text-foreground",
+					Attributes: templ.Attributes{
+						"hx-get":    fmt.Sprintf("/budget/group/%d/category/new?month=%s", g.ID, month),
+						"hx-target": fmt.Sprintf("#group-%d", g.ID),
+						"hx-swap":   "beforeend",
+						"title":     "Add category",
+					},
+				}) {
+					Add Category
+				}
+				if len(g.Rows) == 0 {
+					@button.Button(button.Props{
+						Type:    "button",
+						Variant: button.VariantGhost,
+						Size:    button.SizeSm,
+						Class:   "text-muted-foreground hover:text-destructive",
+						Attributes: templ.Attributes{
+							"hx-post":    fmt.Sprintf("/budget/group/%d/delete?month=%s", g.ID, month),
+							"hx-target":  "#budget-region",
+							"hx-swap":    "outerHTML",
+							"hx-confirm": "Delete this empty group?",
+							"title":      "Delete empty group",
+						},
+					}) {
+						×
+					}
+				}
+			</div>
+		}
+	}
+}
+
+// BudgetGroupNewRow is the transient editable <tbody> inserted by "+ group".
+// name-edit.js submits it on Enter/blur or removes it if left empty.
+templ BudgetGroupNewRow() {
+	<tbody data-newrow>
+		@table.Row() {
+			@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2"}}) {
+				<form hx-post="/budget/group" hx-target="closest tbody" hx-swap="outerHTML" class="flex items-center">
+					<input
+						type="text"
+						name="name"
+						autocomplete="off"
+						autofocus
+						placeholder="New group name"
+						class="js-name-new h-7 w-56 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					/>
+				</form>
+			}
+		}
+	</tbody>
+}
+
+// BudgetTotalsRow is the footer totals row, factored out with a stable
+// #budget-totals id so an assignment save can refresh just the totals via an
+// out-of-band swap (oob=true) instead of re-rendering the whole table. When
+// swapped OOB it must be wrapped in a <template> by the caller, because the
+// browser strips a bare <tr> that isn't already inside a table.
+templ BudgetTotalsRow(d BudgetData, oob bool) {
+	{{ assigned, spent, available := budgetTotals(d.Groups) }}
+	{{ attrs := templ.Attributes{"id": "budget-totals"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	@table.Row(table.RowProps{Attributes: attrs}) {
+		@table.Cell(table.CellProps{Class: "font-semibold"}) {
+			Totals
+		}
+		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) {
+			{ money.Format(assigned) }
+		}
+		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) {
+			{ money.Format(spent) }
+		}
+		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) {
+			@signedmoney.Money(available)
+		}
+		@table.Cell()
+		@table.Cell()
+	}
+}
+
+func budgetTotals(groups []BudgetGroup) (assigned, spent, available int64) {
+	for _, g := range groups {
+		for _, r := range g.Rows {
+			assigned += r.AssignedCents
+			spent += r.SpentCents
+			available += r.AvailableCents
+		}
+	}
+	return
+}
