@@ -24,19 +24,6 @@ func monthOrNow(c *gin.Context) string {
 	return month
 }
 
-// applyCollapsibleState fills the Income/Credit collapsible open flags from the
-// budget_<name>_open cookies (written client-side on toggle). Both default to
-// open when the cookie is absent. Called at every site that renders the budget
-// sections so a persisted collapse survives full loads and #budget-region swaps.
-func applyCollapsibleState(c *gin.Context, d *views.BudgetData) {
-	open := func(name string) bool {
-		v, err := c.Cookie("budget_" + name + "_open")
-		return err != nil || v != "false"
-	}
-	d.IncomeOpen = open("income")
-	d.CreditOpen = open("credit")
-}
-
 // BudgetIndex renders the budget tab for the requested month (default: current).
 func (h *Handlers) BudgetIndex(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -54,7 +41,6 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 		return
 	}
 	_ = rows
-	applyCollapsibleState(c, &data)
 	render(c, http.StatusOK, views.BudgetPage(data, collapsed))
 }
 
@@ -406,7 +392,6 @@ func (h *Handlers) BudgetGroupDelete(c *gin.Context) {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	applyCollapsibleState(c, &data)
 	render(c, http.StatusOK, views.BudgetRegion(data))
 }
 
@@ -489,7 +474,6 @@ func (h *Handlers) BudgetCategoryArchive(c *gin.Context) {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	applyCollapsibleState(c, &data)
 	render(c, http.StatusOK, views.BudgetRegion(data))
 }
 

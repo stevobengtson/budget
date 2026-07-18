@@ -19,11 +19,6 @@ type BudgetData struct {
 	IncomeRows         []store.Income
 	Accounts           []store.AccountWithBalance
 	UncategorizedSpent int64
-	// IncomeOpen / CreditOpen carry the persisted open state of the Income and
-	// Credit collapsibles (from the budget_<name>_open cookies). They default to
-	// open; a small client script writes the cookie on toggle.
-	IncomeOpen bool
-	CreditOpen bool
 }
 
 // BudgetGroup is one category group plus its month rows, for rendering a
@@ -64,9 +59,6 @@ templ BudgetBody(d BudgetData) {
 templ BudgetRegion(d BudgetData) {
 	<div id="budget-region" class="flex flex-col gap-2">
 		@BudgetMonthSelector(d)
-		@BudgetBanner(d)
-		@BudgetIncomeSection(d)
-		@BudgetCreditSection(d)
 		@BudgetTable(d)
 	</div>
 }

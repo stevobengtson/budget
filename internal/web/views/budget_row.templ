@@ -74,10 +74,10 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 				</form>
 			</div>
 		}
-		@table.Cell(table.CellProps{Class: "tabular-nums"}) {
+		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums"}) {
 			{ money.Format(r.SpentCents) }
 		}
-		@table.Cell(table.CellProps{Class: "tabular-nums"}) {
+		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums"}) {
 			@signedmoney.Money(r.AvailableCents)
 		}
 		@table.Cell() {
@@ -105,16 +105,12 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 }
 
 // BudgetAssignResult is the response to a single assignment save. It replaces
-// the edited category row (primary swap into #cat-<id>) and refreshes the two
-// things a save can move: the footer totals and the summary banner. The totals
-// <tr> is wrapped in a <template> so htmx's out-of-band swap survives the
-// browser's table-parsing rules; the banner is a <div> and needs no wrapper.
+// the edited category row (primary swap into #cat-<id>) and refreshes the footer
+// summary (totals + income/left-to-assign) out of band, since an assignment
+// moves Budgeted, Available and Left to assign.
 templ BudgetAssignResult(month string, edited store.CategoryBudget, d BudgetData) {
 	@BudgetRow(month, edited)
-	<template>
-		@BudgetTotalsRow(d, true)
-	</template>
-	@budgetBanner(d, true)
+	@BudgetSummary(d, true)
 }
 
 // rowMenu renders the per-category three-dot actions menu: rollover toggles,
@@ -275,7 +271,7 @@ templ BudgetGoalEditor(month string, r store.CategoryBudget) {
 
 // BudgetGoalResult removes the editor row (empty primary target) and refreshes
 // the category row out of band. The <template> wrapper lets the OOB <tr>
-// survive the browser's table-parsing rules (same trick as BudgetTotalsRow).
+// survive the browser's table-parsing rules (same trick as BudgetSummary).
 templ BudgetGoalResult(month string, r store.CategoryBudget) {
 	<template>
 		@budgetRow(month, r, true)

@@ -11,46 +11,37 @@ import (
 
 templ BudgetTable(d BudgetData) {
 	@table.Table() {
-		@table.Header() {
-			@table.Row() {
-				@table.Head(table.HeadProps{Class: "w-[34%]"}) {
-					Group / Category
-				}
-				@table.Head() {
-					Assigned
-				}
-				@table.Head() {
-					Spent
-				}
-				@table.Head() {
-					Available
-				}
-				@table.Head() {
-					Goal
-				}
-				@table.Head(table.HeadProps{Class: "text-right"}) {
-					@button.Button(button.Props{
-						Type:    "button",
-						Variant: button.VariantOutline,
-						Size:    button.SizeSm,
-						Class:   "text-muted-foreground hover:text-foreground",
-						Attributes: templ.Attributes{
-							"hx-get":    "/budget/group/new",
-							"hx-target": "#budget-totals-body",
-							"hx-swap":   "beforebegin",
-							"title":     "Add category group",
-						},
-					}) {
-						Add Group
-					}
+		@BudgetIncomeSection(d)
+		@BudgetCreditSection(d)
+		<tbody id="budget-expenses-head">
+			@table.Row(table.RowProps{Class: "bg-muted hover:bg-muted"}) {
+				@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
+					<div class="flex items-center gap-2">
+						<span class="px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Expenses</span>
+						@button.Button(button.Props{
+							Type:    "button",
+							Variant: button.VariantOutline,
+							Size:    button.SizeSm,
+							Class:   "ml-auto text-muted-foreground hover:text-foreground",
+							Attributes: templ.Attributes{
+								"hx-get":    "/budget/group/new",
+								"hx-target": "#budget-totals-body",
+								"hx-swap":   "beforebegin",
+								"title":     "Add category group",
+							},
+						}) {
+							Add Group
+						}
+					</div>
 				}
 			}
-		}
+			@subHeaderRow("Category", "Assigned", "Spent", "Available", "Goal")
+		</tbody>
 		<tbody id="budget-uncategorized-body">
 			@table.Row() {
 				@table.Cell(table.CellProps{Class: "pl-6 text-muted-foreground"}) { Uncategorized }
 				@table.Cell() {}
-				@table.Cell(table.CellProps{Class: "tabular-nums"}) { { money.Format(d.UncategorizedSpent) } }
+				@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums"}) { { money.Format(d.UncategorizedSpent) } }
 				@table.Cell() {}
 				@table.Cell() {}
 				@table.Cell() {}
@@ -59,9 +50,37 @@ templ BudgetTable(d BudgetData) {
 		for _, g := range d.Groups {
 			@BudgetGroupTbody(d.Month, g)
 		}
-		<tbody id="budget-totals-body">
-			@BudgetTotalsRow(d, false)
-		</tbody>
+		@BudgetSummary(d, false)
+	}
+}
+
+// subHeaderRow renders a section's column-label row (Income / Credit / Expenses
+// each get their own instead of one shared table header). The first column (the
+// name) carries the 34% width the old table header used and stays left-aligned;
+// the money columns (indexes 1–3: Amount/Assigned/Spent/Available, Purchases/
+// Payments/Owing) are right-aligned with a pr-4 inset so they line up with the
+// right-aligned figures below; any trailing text column (Goal) stays left.
+// Remaining columns are padded to the table's 6-column grid.
+templ subHeaderRow(labels ...string) {
+	@table.Row() {
+		for i, l := range labels {
+			if i == 0 {
+				@table.Cell(table.CellProps{Class: "w-[34%] pl-6 text-xs font-medium uppercase tracking-wide text-muted-foreground"}) {
+					{ l }
+				}
+			} else if i <= 3 {
+				@table.Cell(table.CellProps{Class: "text-right pr-4 text-xs font-medium uppercase tracking-wide text-muted-foreground"}) {
+					{ l }
+				}
+			} else {
+				@table.Cell(table.CellProps{Class: "text-xs font-medium uppercase tracking-wide text-muted-foreground"}) {
+					{ l }
+				}
+			}
+		}
+		for i := len(labels); i < 6; i++ {
+			@table.Cell()
+		}
 	}
 }
 
@@ -83,11 +102,11 @@ templ BudgetGroupHeader(month string, g BudgetGroup) {
 // adding the first category to a group, to drop the "delete empty group"
 // control). An OOB bare <tr> must be wrapped in a <template> by the caller.
 templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
-	{{ attrs := templ.Attributes{"id": fmt.Sprintf("group-head-%d", g.ID), "class": "bg-muted/40 hover:bg-muted/40"} }}
+	{{ attrs := templ.Attributes{"id": fmt.Sprintf("group-head-%d", g.ID)} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
-	@table.Row(table.RowProps{Attributes: attrs}) {
+	@table.Row(table.RowProps{Class: "bg-muted/20 hover:bg-muted/20", Attributes: attrs}) {
 		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
 			<div class="flex items-center gap-2">
 				<form
@@ -168,30 +187,67 @@ templ BudgetGroupNewRow() {
 	</tbody>
 }
 
-// BudgetTotalsRow is the footer totals row, factored out with a stable
-// #budget-totals id so an assignment save can refresh just the totals via an
-// out-of-band swap (oob=true) instead of re-rendering the whole table. When
-// swapped OOB it must be wrapped in a <template> by the caller, because the
-// browser strips a bare <tr> that isn't already inside a table.
-templ BudgetTotalsRow(d BudgetData, oob bool) {
-	{{ assigned, spent, available := budgetTotals(d.Groups) }}
-	{{ attrs := templ.Attributes{"id": "budget-totals"} }}
+// BudgetSummary is the footer "where you are" block, living inside the table's
+// #budget-totals-body tbody so it stays in the column grid and Add Group can
+// still insert new groups before it. An assignment or income change refreshes it
+// via an out-of-band swap of the whole tbody (oob=true); the tbody is wrapped in
+// a <template> so htmx's OOB swap survives the browser's table-parsing rules.
+templ BudgetSummary(d BudgetData, oob bool) {
 	if oob {
-		{{ attrs["hx-swap-oob"] = "true" }}
+		<template>
+			<tbody id="budget-totals-body" hx-swap-oob="true">
+				@budgetSummaryRows(d)
+			</tbody>
+		</template>
+	} else {
+		<tbody id="budget-totals-body">
+			@budgetSummaryRows(d)
+		</tbody>
 	}
-	@table.Row(table.RowProps{Attributes: attrs}) {
+}
+
+// budgetSummaryRows lays out the totals and the "where you are" difference in
+// the table's columns: the Assigned/Spent/Available totals, then Income and
+// Left to assign (= income − budgeted) stacked under the Assigned column.
+templ budgetSummaryRows(d BudgetData) {
+	{{ assigned, spent, available := budgetTotals(d.Groups) }}
+	@table.Row(table.RowProps{Class: "border-t-4 border-double border-muted-foreground/40"}) {
 		@table.Cell(table.CellProps{Class: "font-semibold"}) {
 			Totals
 		}
-		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) {
+		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-semibold"}) {
 			{ money.Format(assigned) }
 		}
-		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) {
+		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-semibold"}) {
 			{ money.Format(spent) }
 		}
-		@table.Cell(table.CellProps{Class: "tabular-nums font-semibold"}) {
+		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-semibold"}) {
 			@signedmoney.Money(available)
 		}
+		@table.Cell()
+		@table.Cell()
+	}
+	@table.Row() {
+		@table.Cell(table.CellProps{Class: "font-medium"}) {
+			Income
+		}
+		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-medium text-emerald-500"}) {
+			{ money.Format(d.Estimated) }
+		}
+		@table.Cell()
+		@table.Cell()
+		@table.Cell()
+		@table.Cell()
+	}
+	@table.Row() {
+		@table.Cell(table.CellProps{Class: "text-muted-foreground"}) {
+			Left to assign
+		}
+		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums"}) {
+			@signedmoney.Money(d.Remain)
+		}
+		@table.Cell()
+		@table.Cell()
 		@table.Cell()
 		@table.Cell()
 	}

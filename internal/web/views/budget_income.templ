@@ -5,87 +5,91 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/internal/web/components/collapsiblecard"
 	"github.com/templui/templui/components/button"
-	"github.com/templui/templui/components/card"
 	"github.com/templui/templui/components/table"
 )
 
+// BudgetIncomeSection renders income as top-of-table sections that share the
+// main budget table's 6-column grid: a muted "Income" header row (with the
+// copy-from-prev + add controls inline), the income rows, and a totals row.
+// Amounts live in the Assigned column so they align with the expense rows
+// below. It is emitted from BudgetTable, above the Expenses divider.
 templ BudgetIncomeSection(d BudgetData) {
-	@collapsiblecard.Card(collapsiblecard.Props{Title: "Income", ID: "income-collapsible", PersistKey: "income", Open: d.IncomeOpen}) {
-		@card.Content(card.ContentProps{Class: "pt-0"}) {
-			@table.Table() {
-				@table.Header() {
-					@table.Row() {
-						@table.Head() {
-							Source
-						}
-						@table.Head(table.HeadProps{Class: "text-right"}) {
-							Amount
-						}
-						@table.Head(table.HeadProps{Class: "w-10"})
-					}
-				}
-				<tbody id="income-rows">
-					for _, r := range d.IncomeRows {
-						@IncomeRow(d.Month, r)
-					}
-				</tbody>
-				<tfoot>
-					@IncomeTotalsRow(d, false)
-				</tfoot>
-			}
+	<tbody id="income-rows">
+		@incomeHeaderRow(d)
+		@subHeaderRow("Source", "Amount")
+		for _, r := range d.IncomeRows {
+			@IncomeRow(d.Month, r)
 		}
-		@card.Footer(card.FooterProps{Class: "flex justify-between"}) {
-			@button.Button(button.Props{
-				Type:    "button",
-				Variant: button.VariantOutline,
-				Size:    button.SizeSm,
-				Class:   "text-muted-foreground hover:text-foreground",
-				Attributes: templ.Attributes{
-					"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
-					"hx-target":  "#budget-region",
-					"hx-swap":    "outerHTML",
-					"hx-confirm": "Copy all entries from the previous month into this one?",
-					"title":      "Copy every entry from the previous month",
-				},
-			}) {
-				← copy from prev
-			}
-			@button.Button(button.Props{
-				Type:    "button",
-				Variant: button.VariantOutline,
-				Size:    button.SizeSm,
-				Attributes: templ.Attributes{
-					"hx-get":    "/budget/income/new?month=" + d.Month,
-					"hx-target": "#income-rows",
-					"hx-swap":   "beforeend",
-					"title":     "Add income",
-				},
-			}) {
-				Add Income
-			}
+	</tbody>
+	<tbody id="income-totals-body">
+		@IncomeTotalsRow(d, false)
+	</tbody>
+}
+
+// incomeHeaderRow is the muted "Income" section header, mirroring a category
+// group header. It carries the section's copy-from-prev and add-income controls.
+templ incomeHeaderRow(d BudgetData) {
+	@table.Row(table.RowProps{Class: "bg-muted hover:bg-muted"}) {
+		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
+			<div class="flex items-center gap-2">
+				<span class="px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Income</span>
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantGhost,
+					Size:    button.SizeSm,
+					Class:   "ml-auto text-muted-foreground hover:text-foreground",
+					Attributes: templ.Attributes{
+						"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
+						"hx-target":  "#budget-region",
+						"hx-swap":    "outerHTML",
+						"hx-confirm": "Copy all entries from the previous month into this one?",
+						"title":      "Copy every entry from the previous month",
+					},
+				}) {
+					← copy from prev
+				}
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantOutline,
+					Size:    button.SizeSm,
+					Class:   "text-muted-foreground hover:text-foreground",
+					Attributes: templ.Attributes{
+						"hx-get":    "/budget/income/new?month=" + d.Month,
+						"hx-target": "#income-rows",
+						"hx-swap":   "beforeend",
+						"title":     "Add income",
+					},
+				}) {
+					Add Income
+				}
+			</div>
 		}
 	}
 }
 
-// IncomeTotalsRow is the income table footer, with a stable #income-totals id so
-// an income mutation can refresh just the total via an out-of-band swap
-// (oob=true) instead of re-rendering the section. When swapped OOB it must be
-// wrapped in a <template> by the caller, because the browser strips a bare <tr>
-// that isn't already inside a table.
+// IncomeTotalsRow is the income section's totals row, with a stable
+// #income-totals id so an income mutation can refresh just the total via an
+// out-of-band swap (oob=true) instead of re-rendering the section. When swapped
+// OOB it must be wrapped in a <template> by the caller, because the browser
+// strips a bare <tr> that isn't already inside a table.
 templ IncomeTotalsRow(d BudgetData, oob bool) {
 	{{ attrs := templ.Attributes{"id": "income-totals"} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
 	@table.Row(table.RowProps{Attributes: attrs}) {
-		@table.Cell(table.CellProps{Class: "font-semibold"}) {
-			Total
+		@table.Cell(table.CellProps{Class: "pl-6 font-semibold"}) {
+			Total income
 		}
-		@table.Cell(table.CellProps{Class: "text-right font-semibold tabular-nums text-emerald-500"}) {
-			{ money.Format(incomeTotal(d.IncomeRows)) }
+		@table.Cell() {
+			<div class="flex items-center justify-end px-2 py-1 text-sm font-semibold tabular-nums text-emerald-500">
+				{ money.Format(incomeTotal(d.IncomeRows)) }
+			</div>
 		}
+		@table.Cell()
+		@table.Cell()
+		@table.Cell()
 		@table.Cell()
 	}
 }
@@ -97,9 +101,12 @@ func incomeTotal(rows []store.Income) (total int64) {
 	return
 }
 
+// IncomeRow renders one income entry as a main-table row: source in the
+// category column, amount in the Assigned column, the remaining expense columns
+// blank, and the delete control in the trailing actions column.
 templ IncomeRow(month string, r store.Income) {
 	@table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("income-%d", r.ID), "class": "group"}}) {
-		@table.Cell(table.CellProps{Class: "font-medium"}) {
+		@table.Cell(table.CellProps{Class: "pl-6 font-medium"}) {
 			<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="flex items-center">
 				<button type="button" class="js-name-display cursor-text rounded-md px-1 py-0.5 text-sm ring-1 ring-transparent hover:ring-border" title="Click to rename">
 					{ r.Name }
@@ -107,7 +114,7 @@ templ IncomeRow(month string, r store.Income) {
 				<input type="text" name="name" value={ r.Name } autocomplete="off" class="js-name-input hidden h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
 			</form>
 		}
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		@table.Cell() {
 			<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="js-assign flex items-center justify-end">
 				<button type="button" class="js-assign-display cursor-text rounded-md px-2 py-1 text-right text-sm tabular-nums text-emerald-500 ring-1 ring-transparent hover:ring-border" title="Click to edit">
 					{ money.Format(r.AmountCents) }
@@ -115,6 +122,9 @@ templ IncomeRow(month string, r store.Income) {
 				<input type="text" name="amount" value={ money.Format(r.AmountCents) } inputmode="decimal" autocomplete="off" class="js-assign-input hidden h-8 w-28 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
 			</form>
 		}
+		@table.Cell()
+		@table.Cell()
+		@table.Cell()
 		@table.Cell(table.CellProps{Class: "text-right"}) {
 			@button.Button(button.Props{
 				Type:    "button",
@@ -139,7 +149,7 @@ templ IncomeRow(month string, r store.Income) {
 // like the goal editor, not blur-save).
 templ IncomeNewRow(month string) {
 	@table.Row(table.RowProps{Attributes: templ.Attributes{"data-newrow": ""}}) {
-		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "3", "class": "p-2"}}) {
+		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 pl-6"}}) {
 			<form hx-post={ "/budget/income?month=" + month } hx-target="closest tr" hx-swap="outerHTML" class="flex flex-wrap items-end gap-3">
 				<input type="text" name="name" autofocus placeholder="Source" autocomplete="off" class="h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
 				<input type="text" name="amount" placeholder="0.00" inputmode="decimal" autocomplete="off" class="h-8 w-32 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
@@ -163,7 +173,7 @@ templ IncomeNewRow(month string) {
 // total (income changes move Estimated / Remain and the footer sum).
 templ BudgetIncomeRowResult(month string, r store.Income, d BudgetData) {
 	@IncomeRow(month, r)
-	@budgetBanner(d, true)
+	@BudgetSummary(d, true)
 	<template>
 		@IncomeTotalsRow(d, true)
 	</template>
@@ -172,7 +182,7 @@ templ BudgetIncomeRowResult(month string, r store.Income, d BudgetData) {
 // BudgetIncomeDeleteResult removes the income row (empty primary target) and
 // refreshes the banner + income total out of band.
 templ BudgetIncomeDeleteResult(d BudgetData) {
-	@budgetBanner(d, true)
+	@BudgetSummary(d, true)
 	<template>
 		@IncomeTotalsRow(d, true)
 	</template>

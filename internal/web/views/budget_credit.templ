@@ -2,53 +2,49 @@ package views
 
 import (
 	"github.com/sbengtson/budget/internal/core/money"
-	"github.com/sbengtson/budget/internal/web/components/collapsiblecard"
-	"github.com/sbengtson/budget/internal/web/components/signedmoney"
-	"github.com/templui/templui/components/card"
 	"github.com/templui/templui/components/table"
 )
 
+// BudgetCreditSection renders per-card credit activity as a top-of-table
+// section between Income and Expenses: a muted "Credit" header row, an
+// Account/Purchases/Payments/Owing sub-header (credit's own column labels, which
+// differ from the budget grid), then one row per card. Renders nothing when
+// there is no activity for the month.
 templ BudgetCreditSection(d BudgetData) {
 	if len(d.CreditRows) > 0 {
-		@collapsiblecard.Card(collapsiblecard.Props{Title: "Credit", ID: "credit-collapsible", PersistKey: "credit", Open: d.CreditOpen}) {
-			@card.Content(card.ContentProps{Class: "pt-0"}) {
-				@table.Table() {
-					@table.Header() {
-						@table.Row() {
-							@table.Head() {
-								Account
-							}
-							@table.Head() {
-								Purchases
-							}
-							@table.Head() {
-								Payments
-							}
-							@table.Head() {
-								Owing
-							}
-						}
-					}
-					@table.Body() {
-						for _, ca := range d.CreditRows {
-							@table.Row() {
-								@table.Cell() {
-									{ ca.AccountName }
-								}
-								@table.Cell(table.CellProps{Class: "tabular-nums text-red-500"}) {
-									{ money.Format(ca.PurchasesCents) }
-								}
-								@table.Cell(table.CellProps{Class: "tabular-nums text-emerald-500"}) {
-									{ money.Format(ca.PaymentsCents) }
-								}
-								@table.Cell(table.CellProps{Class: "tabular-nums"}) {
-									@signedmoney.Money(ca.OwingCents)
-								}
-							}
-						}
-					}
+		<tbody id="budget-credit-head">
+			@table.Row(table.RowProps{Class: "bg-muted hover:bg-muted"}) {
+				@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
+					<span class="px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credit</span>
 				}
 			}
-		}
+			@subHeaderRow("Account", "Purchases", "Payments", "Owing")
+		</tbody>
+		<tbody id="budget-credit-body">
+			for _, ca := range d.CreditRows {
+				@table.Row() {
+					@table.Cell(table.CellProps{Class: "pl-6 font-medium"}) {
+						{ ca.AccountName }
+					}
+					@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums text-red-500"}) {
+						{ money.Format(ca.PurchasesCents) }
+					}
+					@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums text-emerald-500"}) {
+						{ money.Format(ca.PaymentsCents) }
+					}
+					@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums"}) {
+						if ca.OwingCents > 0 {
+							<span class="text-red-500">{ money.Format(ca.OwingCents) }</span>
+						} else if ca.OwingCents < 0 {
+							<span class="text-emerald-500">{ money.Format(ca.OwingCents) }</span>
+						} else {
+							<span class="text-muted-foreground">{ money.Format(ca.OwingCents) }</span>
+						}
+					}
+					@table.Cell()
+					@table.Cell()
+				}
+			}
+		</tbody>
 	}
 }
