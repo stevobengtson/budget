@@ -9,7 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"github.com/templui/templui/components/button"
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
 )
 
 func MonthSelector(prevMonth string, currentMonth string, nextMonth string) templ.Component {

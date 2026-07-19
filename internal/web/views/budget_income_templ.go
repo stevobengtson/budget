@@ -13,7 +13,7 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/templui/templui/components/button"
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
 	"github.com/templui/templui/components/table"
 )
 

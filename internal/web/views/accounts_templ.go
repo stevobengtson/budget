@@ -13,7 +13,7 @@ import (
 	"strconv"
 
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/templui/templui/components/button"
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
 	"github.com/templui/templui/components/checkbox"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/input"

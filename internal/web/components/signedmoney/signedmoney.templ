@@ -7,9 +7,9 @@ import "github.com/sbengtson/budget/internal/core/money"
 // any page (and the future API views) can share it.
 templ Money(cents int64) {
 	if cents > 0 {
-		<span class="text-emerald-500 tabular-nums">{ money.Format(cents) }</span>
+		<span class="text-emerald-600 dark:text-emerald-400 tabular-nums">{ money.Format(cents) }</span>
 	} else if cents < 0 {
-		<span class="text-red-500 tabular-nums">{ money.Format(cents) }</span>
+		<span class="text-destructive tabular-nums">{ money.Format(cents) }</span>
 	} else {
 		<span class="text-muted-foreground tabular-nums">{ money.Format(cents) }</span>
 	}

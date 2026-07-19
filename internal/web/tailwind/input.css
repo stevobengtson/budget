@@ -1,6 +1,21 @@
 @import "tailwindcss";
 @import "./theme.css";
 
+@font-face {
+  font-family: "Source Sans 3";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/static/fonts/source-sans-3.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Oxanium";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/static/fonts/oxanium.woff2") format("woff2");
+}
+
 /* Detect utility classes emitted by templUI's generated components in the Go
    module cache (import workflow). Adjust the relative depth if GOMODCACHE is
    not ~/go/pkg/mod. */
@@ -48,6 +63,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Oxanium", "Source Sans 3", ui-sans-serif, sans-serif;
 }
 
 @layer base {
@@ -55,6 +73,7 @@
   html, body {
     background-color: var(--background);
     color: var(--foreground);
+    font-family: var(--font-sans);
   }
   .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
   .htmx-request .htmx-indicator,

@@ -6,6 +6,7 @@ import (
 	"github.com/templui/templui/components/datepicker"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/dropdown"
+	"github.com/templui/templui/components/icon"
 	"github.com/templui/templui/components/input"
 	"github.com/templui/templui/components/label"
 	"github.com/templui/templui/components/selectbox"
@@ -18,11 +19,19 @@ import (
 // Layout is the outer HTML shell. Pages embed their content via children.
 templ Layout(title string, active string, collapsed bool) {
 	<!DOCTYPE html>
-	<html lang="en" class="dark">
+	<html lang="en">
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ title } · Pigglet</title>
+			<script>
+				(function () {
+					var t = localStorage.getItem("theme");
+					if (t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+						document.documentElement.classList.add("dark");
+					}
+				})();
+			</script>
 			<link rel="stylesheet" href="/static/app.css"/>
 			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
 			<script src="/static/htmx.min.js"></script>
@@ -40,6 +49,7 @@ templ Layout(title string, active string, collapsed bool) {
 			@sheet.Script()
 			@tooltip.Script()
 			<script src="/static/collapsible-persist.js"></script>
+			<script src="/static/theme-toggle.js"></script>
 		</head>
 		<body class="min-h-screen bg-background text-foreground">
       @appSidebar(collapsed, active) { { children... } }
@@ -65,8 +75,8 @@ templ appSidebar(collapsed bool, active string) {
       @sidebar.Content() {
         @sidebar.Group() {
           @sidebar.Menu() {
-            @navItem("budget", "Budget", "💰", active)
-            @navItem("paydown", "Paydown", "📉", active)
+            @navItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-4"}), active)
+            @navItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-4"}), active)
           }
         }
         @sidebar.Separator(sidebar.SeparatorProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
@@ -92,22 +102,27 @@ templ appSidebar(collapsed bool, active string) {
         @sidebar.Menu() {
           @sidebar.MenuItem() {
             @sidebar.MenuButton(sidebar.MenuButtonProps{
-              Tooltip:    "User",
-              Attributes: templ.Attributes{"disabled": true},
+              Tooltip:    "Toggle theme",
+              Attributes: templ.Attributes{"onclick": "toggleTheme()"},
             }) {
-              <span aria-hidden="true">👤</span>
-              <span>User</span>
+              <span class="dark:hidden">
+                @icon.Sun(icon.Props{Class: "size-4"})
+              </span>
+              <span class="hidden dark:inline">
+                @icon.Moon(icon.Props{Class: "size-4"})
+              </span>
+              <span>Theme</span>
             }
           }
         }
       }
     }
     @sidebar.Inset() {
-      <main id="main" class="mx-auto w-full max-w-screen-2xl px-3 py-4 sm:px-4 sm:py-6">
+      <main id="main" class="min-h-svh bg-muted/40 dark:bg-background mx-auto w-full max-w-screen-2xl px-3 py-4 sm:px-4 sm:py-6">
         { children... }
       </main>
       <div id="modal" class="modal-mount"></div>
-      <div id="flash" hx-swap-oob="true"></div>
+      <div id="flash"></div>
     }
   }
 }
@@ -116,14 +131,14 @@ templ appSidebar(collapsed bool, active string) {
 // navItem renders one primary-nav entry as a sidebar menu button. The icon stays
 // visible in the collapsed icon rail; the label truncates away and reappears as a
 // tooltip.
-templ navItem(slug string, label string, icon string, active string) {
+templ navItem(slug string, label string, ic templ.Component, active string) {
 	@sidebar.MenuItem() {
 		@sidebar.MenuButton(sidebar.MenuButtonProps{
 			Href:     "/" + slug,
 			IsActive: slug == active,
 			Tooltip:  label,
 		}) {
-			<span aria-hidden="true">{ icon }</span>
+			@ic
 			<span>{ label }</span>
 		}
 	}
@@ -162,9 +177,15 @@ templ sheetPanel(class string) {
 }
 
 templ FlashOK(msg string) {
-	<div id="flash" class="fixed bottom-4 right-4 z-50 rounded-md bg-emerald-600 px-4 py-2 font-medium text-white shadow" hx-swap-oob="true">✓ { msg }</div>
+	<div id="flash" class="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground shadow" hx-swap-oob="true">
+		@icon.Check(icon.Props{Class: "size-4"})
+		{ msg }
+	</div>
 }
 
 templ FlashErr(msg string) {
-	<div id="flash" class="fixed bottom-4 right-4 z-50 rounded-md bg-destructive px-4 py-2 font-medium text-destructive-foreground shadow" hx-swap-oob="true">⚠ { msg }</div>
+	<div id="flash" class="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-destructive px-4 py-2 font-medium text-destructive-foreground shadow" hx-swap-oob="true">
+		@icon.TriangleAlert(icon.Props{Class: "size-4"})
+		{ msg }
+	</div>
 }

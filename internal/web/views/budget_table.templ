@@ -5,12 +5,14 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/web/components/signedmoney"
-	"github.com/templui/templui/components/button"
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/templui/templui/components/icon"
 	"github.com/templui/templui/components/table"
 )
 
 templ BudgetTable(d BudgetData) {
-	@table.Table() {
+	<div class="overflow-hidden rounded-xl border bg-card shadow-xs">
+		@table.Table() {
 		@BudgetIncomeSection(d)
 		@BudgetCreditSection(d)
 		<tbody id="budget-expenses-head">
@@ -51,7 +53,8 @@ templ BudgetTable(d BudgetData) {
 			@BudgetGroupTbody(d.Month, g)
 		}
 		@BudgetSummary(d, false)
-	}
+		}
+	</div>
 }
 
 // subHeaderRow renders a section's column-label row (Income / Credit / Expenses
@@ -158,7 +161,7 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 							"title":      "Delete empty group",
 						},
 					}) {
-						×
+						@icon.X(icon.Props{Class: "size-4"})
 					}
 				}
 			</div>
@@ -231,7 +234,7 @@ templ budgetSummaryRows(d BudgetData) {
 		@table.Cell(table.CellProps{Class: "font-medium"}) {
 			Income
 		}
-		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-medium text-emerald-500"}) {
+		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-medium text-emerald-600 dark:text-emerald-400"}) {
 			{ money.Format(d.Estimated) }
 		}
 		@table.Cell()

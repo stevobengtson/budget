@@ -8,7 +8,8 @@ import (
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/signedmoney"
 	"github.com/templui/templui/components/badge"
-	"github.com/templui/templui/components/button"
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/templui/templui/components/icon"
 	"github.com/templui/templui/components/dropdown"
 	"github.com/templui/templui/components/table"
 )
@@ -135,7 +136,7 @@ templ rowMenu(month string, r store.CategoryBudget) {
 			Class:      "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
 			Attributes: templ.Attributes{"title": "Category actions"},
 		}) {
-			⋮
+			@icon.EllipsisVertical(icon.Props{Class: "size-4"})
 		}
 		@dropdown.Content() {
 			@dropdown.Item(dropdown.ItemProps{

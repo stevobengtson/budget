@@ -18,7 +18,7 @@ func render(t *testing.T, cents int64) string {
 
 func TestMoneyPositiveIsEmerald(t *testing.T) {
 	out := render(t, 12345)
-	if !strings.Contains(out, "text-emerald-500") {
+	if !strings.Contains(out, "text-emerald-600") {
 		t.Errorf("positive should be emerald, got %q", out)
 	}
 	if !strings.Contains(out, "$123.45") {
@@ -28,7 +28,7 @@ func TestMoneyPositiveIsEmerald(t *testing.T) {
 
 func TestMoneyNegativeIsRed(t *testing.T) {
 	out := render(t, -12345)
-	if !strings.Contains(out, "text-red-500") {
+	if !strings.Contains(out, "text-destructive") {
 		t.Errorf("negative should be red, got %q", out)
 	}
 	if !strings.Contains(out, "-$123.45") {
