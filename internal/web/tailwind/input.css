@@ -135,6 +135,12 @@
      chosen account). Driven purely by the radio's :checked state — no JS. */
   .tx-transfer-field { display: none; }
   #tx-form-inner:has(input[name="tx_type"][value="transfer"]:checked) .tx-transfer-field { display: block; }
+
+  /* The amount label follows the type: "Inflow" for Income, "Outflow" for
+     Expense/Transfer (a transfer is an outflow from the chosen account). */
+  .tx-amount-inflow { display: none; }
+  #tx-form-inner:has(input[name="tx_type"][value="income"]:checked) .tx-amount-outflow { display: none; }
+  #tx-form-inner:has(input[name="tx_type"][value="income"]:checked) .tx-amount-inflow { display: inline; }
 }
 
 @keyframes sheet-in {

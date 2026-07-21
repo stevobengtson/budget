@@ -278,9 +278,15 @@ templ TransactionForm(d TxFormData) {
 						@SelectField(SelectFieldProps{ID: "tx-transfer", Name: "transfer_to", Placeholder: "(none)"}, transferOptions(d.Accounts, d.TransferAccountID))
 					}
 				</div>
-				@formRow("tx-amount", "Amount") {
-					@input.Input(input.Props{ID: "tx-amount", Name: "amount", Value: d.Amount, Placeholder: "0.00", Class: "tabular-nums"})
-				}
+				<div class="grid gap-1.5">
+					@label.Label(label.Props{For: "tx-amount"}) {
+						<span class="tx-amount-outflow">Outflow</span>
+						<span class="tx-amount-inflow">Inflow</span>
+					}
+					<div class="[&>input]:w-full">
+						@input.Input(input.Props{ID: "tx-amount", Name: "amount", Value: d.Amount, Placeholder: "0.00", Class: "tabular-nums"})
+					</div>
+				</div>
 				@formRow("tx-category", "Category") {
 					@SelectField(SelectFieldProps{ID: "tx-category", Name: "category_id", Placeholder: "(none)"}, categoryOptions(d.Categories, d.CategoryID))
 				}
