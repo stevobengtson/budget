@@ -43,6 +43,34 @@ func (s *Store) UpdateUserName(ctx context.Context, userID int64, name string) e
 	return err
 }
 
+// SetPendingEmail records a not-yet-verified email change for the user. The
+// change only takes effect once the new address is confirmed (ApplyEmailChange).
+func (s *Store) SetPendingEmail(ctx context.Context, userID int64, email string) error {
+	_, err := s.run(ctx,
+		`UPDATE users SET pending_email = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, email, userID)
+	return err
+}
+
+// GetPendingEmail returns the user's pending (unconfirmed) email change, or ""
+// when none is outstanding.
+func (s *Store) GetPendingEmail(ctx context.Context, userID int64) (string, error) {
+	var pending sql.NullString
+	if err := s.queryOne(ctx, `SELECT pending_email FROM users WHERE id = $1`, userID).Scan(&pending); err != nil {
+		return "", err
+	}
+	return pending.String, nil
+}
+
+// ApplyEmailChange promotes a confirmed pending email to the user's login email,
+// clears the pending value, and marks the new address verified.
+func (s *Store) ApplyEmailChange(ctx context.Context, userID int64, newEmail string) error {
+	_, err := s.run(ctx,
+		`UPDATE users
+		 SET email = $1, pending_email = NULL, email_verified_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = $2`, newEmail, userID)
+	return err
+}
+
 func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	var n int
 	if err := s.queryOne(ctx, `SELECT COUNT(*) FROM users`).Scan(&n); err != nil {

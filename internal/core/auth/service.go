@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	netmail "net/mail"
 	"strings"
 	"time"
 
@@ -188,6 +189,65 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, current, nex
 		return err
 	}
 	return s.store.UpdatePasswordHash(ctx, userID, hash)
+}
+
+// RequestEmailChange starts a verified email change: it re-checks the user's
+// password, ensures the new address is valid, different, and unused, records it
+// as pending, and emails a confirmation link to the NEW address. The login email
+// stays put until the link is confirmed (ConfirmEmailChange).
+func (s *Service) RequestEmailChange(ctx context.Context, userID int64, newEmail, currentPassword string) error {
+	u, err := s.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	ok, err := VerifyPassword(u.PasswordHash, currentPassword)
+	if err != nil || !ok {
+		return ErrInvalidCredentials
+	}
+	newEmail = normalizeEmail(newEmail)
+	if addr, err := netmail.ParseAddress(newEmail); err != nil || addr.Address != newEmail {
+		return ErrInvalidEmail
+	}
+	if newEmail == u.Email {
+		return ErrSameEmail
+	}
+	if _, err := s.store.GetUserByEmail(ctx, newEmail); err == nil {
+		return ErrEmailTaken
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err := s.store.SetPendingEmail(ctx, userID, newEmail); err != nil {
+		return err
+	}
+	return s.sendToken(ctx, userID, newEmail, "email_change", "/account/email/verify",
+		"Confirm your new Pigglet email",
+		"Confirm this address to make it your new Pigglet login email.")
+}
+
+// ConfirmEmailChange applies a pending email change after the link sent to the
+// new address is clicked. It re-checks the address is still free (someone may
+// have registered it since the request) before switching the login email over.
+func (s *Service) ConfirmEmailChange(ctx context.Context, rawToken string) error {
+	userID, err := s.store.ConsumeToken(ctx, HashToken(rawToken), "email_change")
+	if errors.Is(err, store.ErrTokenInvalid) {
+		return ErrInvalidToken
+	}
+	if err != nil {
+		return err
+	}
+	pending, err := s.store.GetPendingEmail(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if pending == "" {
+		return ErrInvalidToken
+	}
+	if existing, err := s.store.GetUserByEmail(ctx, pending); err == nil && existing.ID != userID {
+		return ErrEmailTaken
+	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	return s.store.ApplyEmailChange(ctx, userID, pending)
 }
 
 // sendToken creates a verification token and emails a link to baseURL+path?token=raw.

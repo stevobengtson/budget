@@ -118,14 +118,60 @@ func (h *Handlers) AccountPage(c *gin.Context) {
 // accountData builds the settings view model for the given active tab, loading
 // the current user so name/email are fresh (e.g. right after a profile save).
 func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountData {
-	u, _ := h.store.GetUserByID(c.Request.Context(), currentUserID(c))
+	uid := currentUserID(c)
+	u, _ := h.store.GetUserByID(c.Request.Context(), uid)
+	pending, _ := h.store.GetPendingEmail(c.Request.Context(), uid)
 	return views.AccountData{
 		Name:          u.Name,
 		Email:         u.Email,
+		PendingEmail:  pending,
 		AvatarVersion: u.AvatarVersion(),
 		ActiveTab:     activeTab,
 		Collapsed:     sidebarCollapsed(c),
 	}
+}
+
+// RequestEmailChange starts a verified email change from the Account tab: it
+// re-checks the password and emails a confirmation link to the new address. The
+// login email is unchanged until that link is confirmed.
+func (h *Handlers) RequestEmailChange(c *gin.Context) {
+	uid := currentUserID(c)
+	newEmail := c.PostForm("new_email")
+	password := c.PostForm("password")
+
+	err := h.auth.RequestEmailChange(c.Request.Context(), uid, newEmail, password)
+	d := h.accountData(c, "account")
+	if err != nil {
+		switch {
+		case errors.Is(err, auth.ErrInvalidCredentials):
+			d.EmailErr = "Current password is incorrect."
+		case errors.Is(err, auth.ErrInvalidEmail):
+			d.EmailErr = "Enter a valid email address."
+		case errors.Is(err, auth.ErrSameEmail):
+			d.EmailErr = "That is already your email."
+		case errors.Is(err, auth.ErrEmailTaken):
+			d.EmailErr = "That email is already in use."
+		default:
+			d.EmailErr = "Could not start the email change."
+		}
+		render(c, http.StatusBadRequest, views.AccountPage(d))
+		return
+	}
+	d.EmailOK = "Check " + d.PendingEmail + " for a link to confirm your new email."
+	render(c, http.StatusOK, views.AccountPage(d))
+}
+
+// ConfirmEmailChange applies a pending email change when the link sent to the new
+// address is clicked. It is public (the click may come from a logged-out inbox);
+// the token authorizes it.
+func (h *Handlers) ConfirmEmailChange(c *gin.Context) {
+	if err := h.auth.ConfirmEmailChange(c.Request.Context(), c.Query("token")); err != nil {
+		render(c, http.StatusBadRequest, views.MessagePage("Email Change Failed",
+			"That link is invalid or expired.", ""))
+		return
+	}
+	render(c, http.StatusOK, views.MessagePage("Email Updated",
+		"Your login email has been updated.", ""))
 }
 
 // UpdateAvatar accepts a multipart image upload, normalizes it (square 256px

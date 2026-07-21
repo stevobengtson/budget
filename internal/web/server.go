@@ -96,6 +96,9 @@ func (s *Server) routes(cfg config.Config) {
 	s.engine.GET("/signup", hs.SignupForm)
 	s.engine.POST("/signup", hs.Signup)
 	s.engine.GET("/verify", hs.Verify)
+	// Public: the email-change confirmation link is clicked from the new address's
+	// inbox, possibly while logged out, so the token (not a session) authorizes it.
+	s.engine.GET("/account/email/verify", hs.ConfirmEmailChange)
 	s.engine.GET("/forgot", hs.ForgotForm)
 	s.engine.POST("/forgot", hs.Forgot)
 	s.engine.GET("/reset", hs.ResetForm)
@@ -110,6 +113,7 @@ func (s *Server) routes(cfg config.Config) {
 
 	app.GET("/account", hs.AccountPage)
 	app.POST("/account/profile", hs.UpdateProfile)
+	app.POST("/account/email", hs.RequestEmailChange)
 	app.POST("/account/avatar", hs.UpdateAvatar)
 	app.POST("/account/avatar/remove", hs.RemoveAvatar)
 	app.GET("/account/avatar", hs.ServeAvatar)

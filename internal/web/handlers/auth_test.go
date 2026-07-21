@@ -262,6 +262,88 @@ func multipartImage(t *testing.T, filename string, data []byte) (*bytes.Buffer, 
 	return &buf, mw.FormDataContentType()
 }
 
+// captureMailer records the last message so a test can read a token out of the
+// emailed link.
+type captureMailer struct{ last mail.Message }
+
+func (m *captureMailer) Send(_ context.Context, msg mail.Message) error {
+	m.last = msg
+	return nil
+}
+
+func TestEmailChangeFlow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	st := store.New(openTestDB(t))
+	mailer := &captureMailer{}
+	svc := auth.NewService(st, mailer, "http://localhost:8080", auth.Config{})
+	h := New(st, svc, false, 3600)
+
+	ctx := context.Background()
+	hash, _ := auth.HashPassword("password1")
+	uid, err := st.CreateUser(ctx, "old@example.com", hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set("userID", uid); c.Set("userEmail", "old@example.com") })
+	r.POST("/account/email", h.RequestEmailChange)
+	r.GET("/account/email/verify", h.ConfirmEmailChange)
+
+	// Wrong password is rejected and nothing is pending.
+	w := postForm(t, r, "/account/email", url.Values{"new_email": {"new@example.com"}, "password": {"wrong"}})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("wrong password: got %d, want 400", w.Code)
+	}
+	if p, _ := st.GetPendingEmail(ctx, uid); p != "" {
+		t.Errorf("pending email set despite bad password: %q", p)
+	}
+
+	// Correct password records the pending change and emails the new address.
+	w = postForm(t, r, "/account/email", url.Values{"new_email": {"New@Example.com"}, "password": {"password1"}})
+	if w.Code != http.StatusOK {
+		t.Fatalf("request: got %d, want 200: %s", w.Code, w.Body.String())
+	}
+	if p, _ := st.GetPendingEmail(ctx, uid); p != "new@example.com" {
+		t.Errorf("pending email = %q, want new@example.com", p)
+	}
+	if mailer.last.To != "new@example.com" {
+		t.Errorf("mail sent to %q, want new@example.com", mailer.last.To)
+	}
+	// The login email hasn't changed yet.
+	if u, _ := st.GetUserByID(ctx, uid); u.Email != "old@example.com" {
+		t.Errorf("login email changed before confirmation: %q", u.Email)
+	}
+
+	// Extract the token from the emailed link and confirm.
+	token := tokenFromLink(t, mailer.last.Text)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/account/email/verify?token="+token, nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("confirm: got %d, want 200: %s", w.Code, w.Body.String())
+	}
+	if u, _ := st.GetUserByID(ctx, uid); u.Email != "new@example.com" {
+		t.Errorf("login email after confirm = %q, want new@example.com", u.Email)
+	}
+	if p, _ := st.GetPendingEmail(ctx, uid); p != "" {
+		t.Errorf("pending email not cleared after confirm: %q", p)
+	}
+}
+
+// tokenFromLink pulls the ?token=... value out of an emailed link.
+func tokenFromLink(t *testing.T, body string) string {
+	t.Helper()
+	i := strings.Index(body, "token=")
+	if i < 0 {
+		t.Fatalf("no token in mail body: %q", body)
+	}
+	tok := body[i+len("token="):]
+	if j := strings.IndexAny(tok, "\n \t"); j >= 0 {
+		tok = tok[:j]
+	}
+	return tok
+}
+
 func TestUpdateProfile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := newTestHandlers(t)

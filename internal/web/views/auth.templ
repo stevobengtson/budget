@@ -175,13 +175,16 @@ templ ResetPage(token, errMsg string) {
 type AccountData struct {
 	Name          string
 	Email         string
-	AvatarVersion int64 // >0 renders the stored image; 0 renders the monogram
+	PendingEmail  string // a not-yet-confirmed email change, "" when none
+	AvatarVersion int64  // >0 renders the stored image; 0 renders the monogram
 	ActiveTab     string // "account" | "security"
 	Collapsed     bool
 	AvatarErr     string
 	AvatarOK      string
 	ProfileErr    string
 	ProfileOK     string
+	EmailErr      string
+	EmailOK       string
 	PasswordErr   string
 	PasswordOK    string
 }
@@ -202,7 +205,10 @@ templ AccountPage(d AccountData) {
 					}
 				}
 				@tabs.Content(tabs.ContentProps{Value: "account", IsActive: d.ActiveTab != "security", Class: "mt-6"}) {
-					@accountProfileSection(d)
+					<div class="space-y-6">
+						@accountProfileSection(d)
+						@accountEmailSection(d)
+					</div>
 				}
 				@tabs.Content(tabs.ContentProps{Value: "security", IsActive: d.ActiveTab == "security", Class: "mt-6"}) {
 					@accountSecuritySection(d)
@@ -262,6 +268,38 @@ templ accountProfileSection(d AccountData) {
 				}
 			</div>
 		</div>
+	</section>
+}
+
+// accountEmailSection is the Account tab's "Change email" card. Submitting emails
+// a confirmation link to the new address; the login email only changes once that
+// link is clicked, so a pending change is surfaced here.
+templ accountEmailSection(d AccountData) {
+	<section class="space-y-2">
+		<h2 class="text-sm font-semibold">Change email</h2>
+		<form method="post" action="/account/email" class="overflow-hidden rounded-xl border bg-card">
+			<div class="space-y-4 p-4 sm:p-6">
+				if d.PendingEmail != "" {
+					<div class="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-muted-foreground">
+						Pending confirmation for <span class="font-medium text-foreground">{ d.PendingEmail }</span>. Your login email stays { d.Email } until that link is clicked.
+					</div>
+				}
+				<div class="space-y-1.5">
+					<label for="new-email" class="text-sm font-medium leading-none">New email</label>
+					@input.Input(input.Props{ID: "new-email", Name: "new_email", Type: input.TypeEmail, Placeholder: d.Email, Attributes: templ.Attributes{"required": true, "autocomplete": "email"}})
+				</div>
+				<div class="space-y-1.5">
+					<label for="email-password" class="text-sm font-medium leading-none">Current password</label>
+					@input.Input(input.Props{ID: "email-password", Name: "password", Type: input.TypePassword, Attributes: templ.Attributes{"required": true, "autocomplete": "current-password"}})
+				</div>
+				@settingsMessages(d.EmailErr, d.EmailOK)
+			</div>
+			<div class="flex items-center border-t bg-muted/30 px-4 py-3 sm:px-6">
+				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm}) {
+					Update email
+				}
+			</div>
+		</form>
 	</section>
 }
 
