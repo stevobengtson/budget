@@ -48,6 +48,17 @@
       group: "budget-categories",
       animation: 150,
       ghostClass: "opacity-50",
+      // A group's header row (first <tr>, data-group-head) isn't a draggable
+      // item, so when dragging a category up to the top of a group — or into an
+      // empty group where the header is the only row — SortableJS could try to
+      // drop it *above* the header. Block any move that would insert a category
+      // before a header, keeping categories pinned below their group title.
+      onMove: function (evt) {
+        if (evt.related && evt.related.hasAttribute("data-group-head")) {
+          return evt.willInsertAfter;
+        }
+        return true;
+      },
       onEnd: function (evt) {
         if (evt.from !== evt.to || evt.oldIndex !== evt.newIndex) {
           persist(evt.to, evt.from);

@@ -105,7 +105,7 @@ templ BudgetGroupHeader(month string, g BudgetGroup) {
 // adding the first category to a group, to drop the "delete empty group"
 // control). An OOB bare <tr> must be wrapped in a <template> by the caller.
 templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
-	{{ attrs := templ.Attributes{"id": fmt.Sprintf("group-head-%d", g.ID)} }}
+	{{ attrs := templ.Attributes{"id": fmt.Sprintf("group-head-%d", g.ID), "data-group-head": ""} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}

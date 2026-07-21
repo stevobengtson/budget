@@ -557,7 +557,7 @@ func budgetGroupHeader(month string, g BudgetGroup, oob bool) templ.Component {
 			templ_7745c5c3_Var22 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		attrs := templ.Attributes{"id": fmt.Sprintf("group-head-%d", g.ID)}
+		attrs := templ.Attributes{"id": fmt.Sprintf("group-head-%d", g.ID), "data-group-head": ""}
 		if oob {
 			attrs["hx-swap-oob"] = "true"
 		}
