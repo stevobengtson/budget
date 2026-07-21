@@ -2,27 +2,110 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/sbengtson/budget/internal/core/db"
 )
 
-func newTestStore(t *testing.T) *Store {
+// testDSN returns the Postgres DSN for the shared test database. Postgres is
+// required — if BUDGET_POSTGRES_URL is unset we default to the local budget_test
+// database rather than skipping.
+func testDSN() string {
+	if u := os.Getenv("BUDGET_POSTGRES_URL"); u != "" {
+		return u
+	}
+	return "postgres://postgres:postgres@127.0.0.1:5432/budget_test?sslmode=disable"
+}
+
+// testTables lists every table truncated between tests, ordered so a single
+// TRUNCATE ... CASCADE resets identities cleanly.
+var testTables = []string{
+	"transactions", "budgets", "categories", "category_groups",
+	"incomes", "accounts", "verification_tokens", "sessions", "users",
+}
+
+// testDBLockKey is a global Postgres advisory-lock key. `go test ./...` runs
+// each package's test binary in parallel, and they all share the one
+// budget_test database, so every DB-backed test grabs this lock for its whole
+// duration — serializing access so tests don't clobber each other's data.
+const testDBLockKey = 918273645
+
+// openTestDB opens the shared Postgres test database, holds a global advisory
+// lock for the life of the test, applies migrations, then truncates every table
+// and re-seeds the global Income group/category that migration 00005 creates
+// (NULL user_id, exactly as the migration leaves it). The returned pool is
+// closed on cleanup, releasing the lock.
+func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	conn, _, err := db.Open(":memory:", true)
+
+	// Dedicated single-connection pool that holds the advisory lock, kept apart
+	// from the store's own pool so store queries aren't constrained to one conn.
+	lockConn, _, err := db.Open(testDSN(), false)
 	if err != nil {
-		t.Fatalf("open db: %v", err)
+		t.Fatalf("open lock conn: %v", err)
+	}
+	lockConn.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = lockConn.Close() })
+	if _, err := lockConn.Exec("SELECT pg_advisory_lock($1)", testDBLockKey); err != nil {
+		t.Fatalf("advisory lock: %v", err)
+	}
+
+	conn, dialect, err := db.Open(testDSN(), false)
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return New(conn)
+
+	// Migrate under the lock so concurrent first-run migrations can't race.
+	if err := db.MigrateUp(conn, dialect); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if _, err := conn.Exec("TRUNCATE TABLE " + strings.Join(testTables, ", ") + " RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	var gid int64
+	if err := conn.QueryRow(
+		`INSERT INTO category_groups(name, sort_order) VALUES ('Income', -100) RETURNING id`).Scan(&gid); err != nil {
+		t.Fatalf("seed income group: %v", err)
+	}
+	if _, err := conn.Exec(
+		`INSERT INTO categories(group_id, name, is_income, sort_order) VALUES ($1, 'Income', TRUE, 0)`, gid); err != nil {
+		t.Fatalf("seed income category: %v", err)
+	}
+	return conn
+}
+
+func newTestStore(t *testing.T) *Store {
+	t.Helper()
+	return New(openTestDB(t))
+}
+
+// newTestStoreUser returns a store plus a verified user id that owns the
+// migration-seeded rows (previously NULL-owner), for exercising the
+// user-scoped store methods. ClaimOrphanData hands the seeded Income
+// category/group to this user so ListCategories(uid) still surfaces it.
+func newTestStoreUser(t *testing.T) (*Store, int64) {
+	t.Helper()
+	s := newTestStore(t)
+	uid, err := s.CreateUser(context.Background(), "owner@example.com", "hash")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := s.ClaimOrphanData(context.Background(), uid); err != nil {
+		t.Fatalf("claim orphan: %v", err)
+	}
+	return s, uid
 }
 
 func TestAccountsCRUDAndBalance(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	id, err := s.CreateAccount(ctx, Account{
+	id, err := s.CreateAccount(ctx, uid, Account{
 		Name: "Checking", Type: TypeChecking, StartingBalanceCents: 100_000,
 	})
 	if err != nil {
@@ -31,7 +114,7 @@ func TestAccountsCRUDAndBalance(t *testing.T) {
 
 	limit := int64(500_000)
 	apr := int64(1999)
-	visaID, err := s.CreateAccount(ctx, Account{
+	visaID, err := s.CreateAccount(ctx, uid, Account{
 		Name: "Visa", Type: TypeCredit,
 		CreditLimitCents: &limit, AprBps: &apr,
 	})
@@ -39,7 +122,7 @@ func TestAccountsCRUDAndBalance(t *testing.T) {
 		t.Fatalf("create visa: %v", err)
 	}
 
-	accs, err := s.ListAccounts(ctx, false)
+	accs, err := s.ListAccounts(ctx, uid, false)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -65,26 +148,26 @@ func TestAccountsCRUDAndBalance(t *testing.T) {
 }
 
 func TestTransactionsAffectBalance(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
-	visa, _ := s.CreateAccount(ctx, Account{Name: "Visa", Type: TypeCredit})
-	gid, _ := s.CreateGroup(ctx, "Monthly", 0)
-	groc, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Groceries"})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	visa, _ := s.CreateAccount(ctx, uid, Account{Name: "Visa", Type: TypeCredit})
+	gid, _ := s.CreateGroup(ctx, uid, "Monthly", 0)
+	groc, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Groceries"})
 
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: time.Now(), AccountID: chk, CategoryID: &groc, OutflowCents: 8000,
 	}); err != nil {
 		t.Fatalf("tx1: %v", err)
 	}
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: time.Now(), AccountID: visa, CategoryID: &groc, OutflowCents: 5000,
 	}); err != nil {
 		t.Fatalf("tx2: %v", err)
 	}
 
-	accs, _ := s.ListAccounts(ctx, false)
+	accs, _ := s.ListAccounts(ctx, uid, false)
 	for _, a := range accs {
 		switch a.ID {
 		case chk:
@@ -100,13 +183,13 @@ func TestTransactionsAffectBalance(t *testing.T) {
 }
 
 func TestTransfer(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
-	visa, _ := s.CreateAccount(ctx, Account{Name: "Visa", Type: TypeCredit})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	visa, _ := s.CreateAccount(ctx, uid, Account{Name: "Visa", Type: TypeCredit})
 
-	out, in, err := s.CreateTransfer(ctx, TransferInput{
+	out, in, err := s.CreateTransfer(ctx, uid, TransferInput{
 		Date: time.Now(), FromAccountID: chk, ToAccountID: visa, AmountCents: 10_000,
 	})
 	if err != nil {
@@ -116,7 +199,7 @@ func TestTransfer(t *testing.T) {
 		t.Fatalf("transfer ids missing")
 	}
 
-	accs, _ := s.ListAccounts(ctx, false)
+	accs, _ := s.ListAccounts(ctx, uid, false)
 	for _, a := range accs {
 		switch a.ID {
 		case chk:
@@ -131,38 +214,38 @@ func TestTransfer(t *testing.T) {
 	}
 
 	// Deleting one leg removes both.
-	if err := s.DeleteTransaction(ctx, out); err != nil {
+	if err := s.DeleteTransaction(ctx, uid, out); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	txs, _ := s.ListTransactions(ctx, TxFilter{})
+	txs, _ := s.ListTransactions(ctx, uid, TxFilter{})
 	if len(txs) != 0 {
 		t.Errorf("expected 0 txs after transfer delete, got %d", len(txs))
 	}
 }
 
 func TestMonthBudget(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
-	gid, _ := s.CreateGroup(ctx, "Monthly", 0)
-	groc, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Groceries"})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	gid, _ := s.CreateGroup(ctx, uid, "Monthly", 0)
+	groc, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Groceries"})
 
 	now := time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC)
 	month := MonthKey(now)
 
 	// Spend $80 this month.
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: now, AccountID: chk, CategoryID: &groc, OutflowCents: 8000,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	// Assign $200 this month.
-	if err := s.SetAssigned(ctx, month, groc, 20_000); err != nil {
+	if err := s.SetAssigned(ctx, uid, month, groc, 20_000); err != nil {
 		t.Fatal(err)
 	}
 
-	rows, err := s.MonthBudget(ctx, month)
+	rows, err := s.MonthBudget(ctx, uid, month)
 	if err != nil {
 		t.Fatalf("month budget: %v", err)
 	}
@@ -179,32 +262,32 @@ func TestMonthBudget(t *testing.T) {
 }
 
 func TestMonthBudgetSpentNetsInflows(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
-	gid, _ := s.CreateGroup(ctx, "Monthly", 0)
-	dining, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Dining Out"})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	gid, _ := s.CreateGroup(ctx, uid, "Monthly", 0)
+	dining, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Dining Out"})
 
 	now := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
 	month := MonthKey(now)
 
 	// Spend $80, then receive a $45 refund into the same category.
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: now, AccountID: chk, CategoryID: &dining, OutflowCents: 8000,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: now, AccountID: chk, CategoryID: &dining, InflowCents: 4500,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetAssigned(ctx, month, dining, 20_000); err != nil {
+	if err := s.SetAssigned(ctx, uid, month, dining, 20_000); err != nil {
 		t.Fatal(err)
 	}
 
-	rows, err := s.MonthBudget(ctx, month)
+	rows, err := s.MonthBudget(ctx, uid, month)
 	if err != nil {
 		t.Fatalf("month budget: %v", err)
 	}
@@ -235,22 +318,22 @@ func findCategoryRow(t *testing.T, rows []CategoryBudget, name string) CategoryB
 }
 
 func TestIncomesCRUDAndTotal(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
 	month := "2026-04"
-	work, err := s.CreateIncome(ctx, Income{Month: month, Name: "Work", AmountCents: 980_000})
+	work, err := s.CreateIncome(ctx, uid, Income{Month: month, Name: "Work", AmountCents: 980_000})
 	if err != nil {
 		t.Fatalf("create work: %v", err)
 	}
-	if _, err := s.CreateIncome(ctx, Income{Month: month, Name: "Government", AmountCents: 6_600}); err != nil {
+	if _, err := s.CreateIncome(ctx, uid, Income{Month: month, Name: "Government", AmountCents: 6_600}); err != nil {
 		t.Fatalf("create gov: %v", err)
 	}
-	if _, err := s.CreateIncome(ctx, Income{Month: month, Name: "Contract", AmountCents: 80_000}); err != nil {
+	if _, err := s.CreateIncome(ctx, uid, Income{Month: month, Name: "Contract", AmountCents: 80_000}); err != nil {
 		t.Fatalf("create contract: %v", err)
 	}
 
-	total, err := s.TotalIncome(ctx, month)
+	total, err := s.TotalIncome(ctx, uid, month)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +341,7 @@ func TestIncomesCRUDAndTotal(t *testing.T) {
 		t.Errorf("total = %d, want 1066600", total)
 	}
 
-	rows, err := s.ListIncomes(ctx, month)
+	rows, err := s.ListIncomes(ctx, uid, month)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,33 +350,33 @@ func TestIncomesCRUDAndTotal(t *testing.T) {
 	}
 
 	// Different month is isolated.
-	if _, err := s.CreateIncome(ctx, Income{Month: "2026-05", Name: "Work", AmountCents: 1}); err != nil {
+	if _, err := s.CreateIncome(ctx, uid, Income{Month: "2026-05", Name: "Work", AmountCents: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if total, _ := s.TotalIncome(ctx, month); total != 1_066_600 {
+	if total, _ := s.TotalIncome(ctx, uid, month); total != 1_066_600 {
 		t.Errorf("total leaked across months: %d", total)
 	}
 
 	// Update + delete.
-	if err := s.UpdateIncome(ctx, Income{ID: work, Name: "Work", AmountCents: 1_000_000}); err != nil {
+	if err := s.UpdateIncome(ctx, uid, Income{ID: work, Name: "Work", AmountCents: 1_000_000}); err != nil {
 		t.Fatal(err)
 	}
-	if total, _ := s.TotalIncome(ctx, month); total != 1_086_600 {
+	if total, _ := s.TotalIncome(ctx, uid, month); total != 1_086_600 {
 		t.Errorf("after update, total = %d, want 1086600", total)
 	}
-	if err := s.DeleteIncome(ctx, work); err != nil {
+	if err := s.DeleteIncome(ctx, uid, work); err != nil {
 		t.Fatal(err)
 	}
-	if total, _ := s.TotalIncome(ctx, month); total != 86_600 {
+	if total, _ := s.TotalIncome(ctx, uid, month); total != 86_600 {
 		t.Errorf("after delete, total = %d, want 86600", total)
 	}
 }
 
 func TestIncomeCategorySeededAndLocked(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	cats, err := s.ListCategories(ctx, false)
+	cats, err := s.ListCategories(ctx, uid, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,22 +391,22 @@ func TestIncomeCategorySeededAndLocked(t *testing.T) {
 		t.Fatal("Income category not seeded by migration")
 	}
 
-	if err := s.ArchiveCategory(ctx, income.ID); err == nil {
+	if err := s.ArchiveCategory(ctx, uid, income.ID); err == nil {
 		t.Error("ArchiveCategory should refuse income category")
 	}
-	if err := s.DeleteCategory(ctx, income.ID); err == nil {
+	if err := s.DeleteCategory(ctx, uid, income.ID); err == nil {
 		t.Error("DeleteCategory should refuse income category")
 	}
 }
 
 func TestActualIncomeForMonth(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking})
 
 	// Find seeded Income.
-	cats, _ := s.ListCategories(ctx, false)
+	cats, _ := s.ListCategories(ctx, uid, false)
 	var income int64
 	for _, c := range cats {
 		if c.IsIncome {
@@ -335,21 +418,21 @@ func TestActualIncomeForMonth(t *testing.T) {
 	month := MonthKey(now)
 
 	// Paycheck inflow categorized as Income.
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: now, AccountID: chk, CategoryID: &income, InflowCents: 500_000,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	// Refund inflow on a non-income category — must NOT count.
-	gid, _ := s.CreateGroup(ctx, "Misc", 0)
-	other, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Refunds"})
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	gid, _ := s.CreateGroup(ctx, uid, "Misc", 0)
+	other, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Refunds"})
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: now, AccountID: chk, CategoryID: &other, InflowCents: 1_000,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := s.ActualIncomeForMonth(ctx, month)
+	got, err := s.ActualIncomeForMonth(ctx, uid, month)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,38 +442,38 @@ func TestActualIncomeForMonth(t *testing.T) {
 }
 
 func TestCreditCardActivityForMonth(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000_00})
-	visa, _ := s.CreateAccount(ctx, Account{Name: "Visa", Type: TypeCredit, StartingBalanceCents: -100_000})
-	gid, _ := s.CreateGroup(ctx, "Bills", 0)
-	groc, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Groceries"})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000_00})
+	visa, _ := s.CreateAccount(ctx, uid, Account{Name: "Visa", Type: TypeCredit, StartingBalanceCents: -100_000})
+	gid, _ := s.CreateGroup(ctx, uid, "Bills", 0)
+	groc, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Groceries"})
 
 	now := time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC)
 	month := MonthKey(now)
 
 	// $500 of purchases on Visa.
-	_, _ = s.CreateTransaction(ctx, Transaction{
+	_, _ = s.CreateTransaction(ctx, uid, Transaction{
 		Date: now, AccountID: visa, CategoryID: &groc, OutflowCents: 50_000,
 	})
 	// Bank-booked interest on Visa (no category) — should also count as
 	// "purchase" since it raises the balance owed.
-	_, _ = s.CreateTransaction(ctx, Transaction{
+	_, _ = s.CreateTransaction(ctx, uid, Transaction{
 		Date: now, AccountID: visa, OutflowCents: 4_500,
 	})
 	// $300 transfer from Checking → Visa (covers some of the spend).
-	_, _, _ = s.CreateTransfer(ctx, TransferInput{
+	_, _, _ = s.CreateTransfer(ctx, uid, TransferInput{
 		Date: now, FromAccountID: chk, ToAccountID: visa, AmountCents: 30_000,
 	})
 
 	// Activity from a different month must not leak.
 	other := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	_, _ = s.CreateTransaction(ctx, Transaction{
+	_, _ = s.CreateTransaction(ctx, uid, Transaction{
 		Date: other, AccountID: visa, OutflowCents: 99_999,
 	})
 
-	rows, err := s.CreditCardActivityForMonth(ctx, month)
+	rows, err := s.CreditCardActivityForMonth(ctx, uid, month)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -413,38 +496,38 @@ func TestCreditCardActivityForMonth(t *testing.T) {
 }
 
 func TestCategorizedTransfer(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 200_000})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 200_000})
 	limit := int64(500_000)
 	apr := int64(2099)
-	visa, _ := s.CreateAccount(ctx, Account{
+	visa, _ := s.CreateAccount(ctx, uid, Account{
 		Name: "Visa", Type: TypeCredit, CreditLimitCents: &limit, AprBps: &apr,
 		StartingBalanceCents: -100_000, // owe $1000
 	})
-	gid, _ := s.CreateGroup(ctx, "Bills", 0)
-	ccPay, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "CC Payment"})
-	if err := s.SetAssigned(ctx, MonthKey(time.Now()), ccPay, 10_000); err != nil {
+	gid, _ := s.CreateGroup(ctx, uid, "Bills", 0)
+	ccPay, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "CC Payment"})
+	if err := s.SetAssigned(ctx, uid, MonthKey(time.Now()), ccPay, 10_000); err != nil {
 		t.Fatal(err)
 	}
 
 	// Interest charge on the card itself (no category — purely a balance event).
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: time.Now(), AccountID: visa, OutflowCents: 4_500,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Transfer 1: cover interest.
-	if _, _, err := s.CreateTransfer(ctx, TransferInput{
+	if _, _, err := s.CreateTransfer(ctx, uid, TransferInput{
 		Date: time.Now(), FromAccountID: chk, ToAccountID: visa,
 		AmountCents: 4_500, CategoryID: &ccPay,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	// Transfer 2: pay down principal.
-	if _, _, err := s.CreateTransfer(ctx, TransferInput{
+	if _, _, err := s.CreateTransfer(ctx, uid, TransferInput{
 		Date: time.Now(), FromAccountID: chk, ToAccountID: visa,
 		AmountCents: 5_500, CategoryID: &ccPay,
 	}); err != nil {
@@ -452,7 +535,7 @@ func TestCategorizedTransfer(t *testing.T) {
 	}
 
 	// Visa balance: -100000 - 4500 (interest) + 4500 + 5500 = -94500.
-	accs, _ := s.ListAccounts(ctx, false)
+	accs, _ := s.ListAccounts(ctx, uid, false)
 	for _, a := range accs {
 		if a.ID == visa && a.BalanceCents != -94_500 {
 			t.Errorf("Visa balance = %d, want -94500", a.BalanceCents)
@@ -463,7 +546,7 @@ func TestCategorizedTransfer(t *testing.T) {
 	}
 
 	// Budget impact: CC Payment should be spent 10000 (4500 + 5500), available 0.
-	rows, err := s.MonthBudget(ctx, MonthKey(time.Now()))
+	rows, err := s.MonthBudget(ctx, uid, MonthKey(time.Now()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +567,7 @@ func TestCategorizedTransfer(t *testing.T) {
 	}
 
 	// Deleting one leg of the categorized transfer must remove both legs.
-	txs, _ := s.ListTransactions(ctx, TxFilter{})
+	txs, _ := s.ListTransactions(ctx, uid, TxFilter{})
 	var firstTransferID int64
 	for _, tx := range txs {
 		if tx.TransferAccountID != nil && tx.OutflowCents == 4_500 {
@@ -495,10 +578,10 @@ func TestCategorizedTransfer(t *testing.T) {
 	if firstTransferID == 0 {
 		t.Fatal("could not locate categorized transfer")
 	}
-	if err := s.DeleteTransaction(ctx, firstTransferID); err != nil {
+	if err := s.DeleteTransaction(ctx, uid, firstTransferID); err != nil {
 		t.Fatal(err)
 	}
-	left, _ := s.ListTransactions(ctx, TxFilter{})
+	left, _ := s.ListTransactions(ctx, uid, TxFilter{})
 	// 1 interest charge + 2 legs of remaining transfer = 3 rows.
 	if len(left) != 3 {
 		t.Errorf("after delete, %d rows remain, want 3", len(left))
@@ -506,15 +589,15 @@ func TestCategorizedTransfer(t *testing.T) {
 }
 
 func TestListTransactionsMonthFilter(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
-	gid, _ := s.CreateGroup(ctx, "M", 0)
-	cat, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Groceries"})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	gid, _ := s.CreateGroup(ctx, uid, "M", 0)
+	cat, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Groceries"})
 
 	mkTx := func(date time.Time, cents int64) {
-		_, err := s.CreateTransaction(ctx, Transaction{
+		_, err := s.CreateTransaction(ctx, uid, Transaction{
 			Date: date, AccountID: chk, CategoryID: &cat, OutflowCents: cents,
 		})
 		if err != nil {
@@ -526,7 +609,7 @@ func TestListTransactionsMonthFilter(t *testing.T) {
 	mkTx(time.Date(2026, 4, 28, 0, 0, 0, 0, time.UTC), 3_000)
 	mkTx(time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), 4_000)
 
-	rows, err := s.ListTransactions(ctx, TxFilter{Month: "2026-04"})
+	rows, err := s.ListTransactions(ctx, uid, TxFilter{Month: "2026-04"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -535,39 +618,39 @@ func TestListTransactionsMonthFilter(t *testing.T) {
 		t.Fatalf("April rows = %d, want 2", len(apr))
 	}
 
-	all, _ := s.ListTransactions(ctx, TxFilter{})
+	all, _ := s.ListTransactions(ctx, uid, TxFilter{})
 	if len(all) != 4 {
 		t.Errorf("no-filter rows = %d, want 4", len(all))
 	}
 
-	none, _ := s.ListTransactions(ctx, TxFilter{Month: "2027-01"})
+	none, _ := s.ListTransactions(ctx, uid, TxFilter{Month: "2027-01"})
 	if len(none) != 0 {
 		t.Errorf("empty-month rows = %d, want 0", len(none))
 	}
 }
 
 func TestPaymentScheduleForCategory(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
-	gid, _ := s.CreateGroup(ctx, "Monthly", 0)
-	visaPay, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Visa Payment"})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
+	gid, _ := s.CreateGroup(ctx, uid, "Monthly", 0)
+	visaPay, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Visa Payment"})
 
 	// Apr 2026: assigned $800, spent $800 (paid).
-	_ = s.SetAssigned(ctx, "2026-04", visaPay, 80_000)
-	_, _ = s.CreateTransaction(ctx, Transaction{
+	_ = s.SetAssigned(ctx, uid, "2026-04", visaPay, 80_000)
+	_, _ = s.CreateTransaction(ctx, uid, Transaction{
 		Date:      time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC),
 		AccountID: chk, CategoryID: &visaPay, OutflowCents: 80_000,
 	})
 
 	// May 2026: assigned $1000, not paid yet.
-	_ = s.SetAssigned(ctx, "2026-05", visaPay, 100_000)
+	_ = s.SetAssigned(ctx, uid, "2026-05", visaPay, 100_000)
 
 	// Jun 2026: nothing — should fall back.
 
 	start := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
-	sched, err := s.PaymentScheduleForCategory(ctx, &visaPay, start, 3, 50_000)
+	sched, err := s.PaymentScheduleForCategory(ctx, uid, &visaPay, start, 3, 50_000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -585,7 +668,7 @@ func TestPaymentScheduleForCategory(t *testing.T) {
 	}
 
 	// Nil category → all default.
-	sched, _ = s.PaymentScheduleForCategory(ctx, nil, start, 2, 12_345)
+	sched, _ = s.PaymentScheduleForCategory(ctx, uid, nil, start, 2, 12_345)
 	for _, m := range sched {
 		if m.Source != PaymentDefault || m.Cents != 12_345 {
 			t.Errorf("nil-category month should be default 12345, got %+v", m)
@@ -594,26 +677,26 @@ func TestPaymentScheduleForCategory(t *testing.T) {
 }
 
 func TestSinkingFundCarryover(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
-	gid, _ := s.CreateGroup(ctx, "Annual", 0)
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
+	gid, _ := s.CreateGroup(ctx, uid, "Annual", 0)
 	due := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
 	goal := int64(120_000)
-	ins, _ := s.CreateCategory(ctx, Category{
+	ins, _ := s.CreateCategory(ctx, uid, Category{
 		GroupID: gid, Name: "Insurance", GoalCents: &goal, GoalDueDate: &due,
 	})
 
 	// Assign $100 in Jan and Feb 2026; no spending.
-	if err := s.SetAssigned(ctx, "2026-01", ins, 10_000); err != nil {
+	if err := s.SetAssigned(ctx, uid, "2026-01", ins, 10_000); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetAssigned(ctx, "2026-02", ins, 10_000); err != nil {
+	if err := s.SetAssigned(ctx, uid, "2026-02", ins, 10_000); err != nil {
 		t.Fatal(err)
 	}
 
-	rows, err := s.MonthBudget(ctx, "2026-02")
+	rows, err := s.MonthBudget(ctx, uid, "2026-02")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -626,13 +709,13 @@ func TestSinkingFundCarryover(t *testing.T) {
 	}
 
 	// Spend $5 in Feb to make sure spending counts.
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date:      time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC),
 		AccountID: chk, CategoryID: &ins, OutflowCents: 500,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	rows, _ = s.MonthBudget(ctx, "2026-02")
+	rows, _ = s.MonthBudget(ctx, uid, "2026-02")
 	r = findCategoryRow(t, rows, "Insurance")
 	if r.AvailableCents != 19_500 {
 		t.Errorf("after Feb spend, available = %d, want 19500", r.AvailableCents)
@@ -640,17 +723,17 @@ func TestSinkingFundCarryover(t *testing.T) {
 }
 
 func TestUpdateTransfer(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
-	sav, _ := s.CreateAccount(ctx, Account{Name: "Sav", Type: TypeChecking})
-	wallet, _ := s.CreateAccount(ctx, Account{Name: "Wallet", Type: TypeChecking})
-	gid, _ := s.CreateGroup(ctx, "Bills", 0)
-	cat, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "CC Payment"})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	sav, _ := s.CreateAccount(ctx, uid, Account{Name: "Sav", Type: TypeChecking})
+	wallet, _ := s.CreateAccount(ctx, uid, Account{Name: "Wallet", Type: TypeChecking})
+	gid, _ := s.CreateGroup(ctx, uid, "Bills", 0)
+	cat, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "CC Payment"})
 
 	// $100 transfer: Chk (out) -> Sav (in), category on the from-leg.
-	outID, inID, err := s.CreateTransfer(ctx, TransferInput{
+	outID, inID, err := s.CreateTransfer(ctx, uid, TransferInput{
 		Date: time.Now(), FromAccountID: chk, ToAccountID: sav,
 		AmountCents: 10_000, CategoryID: &cat,
 	})
@@ -661,14 +744,14 @@ func TestUpdateTransfer(t *testing.T) {
 	date := time.Now()
 
 	// Rule 2: change the out leg's outflow to $50 -> the in leg's inflow mirrors.
-	if err := s.UpdateTransfer(ctx, outID, TransferLegEdit{
+	if err := s.UpdateTransfer(ctx, uid, outID, TransferLegEdit{
 		Date: date, AccountID: chk, TransferAccountID: sav,
 		OutflowCents: 5_000, CategoryID: &cat,
 	}); err != nil {
 		t.Fatalf("update amount: %v", err)
 	}
-	out := getTx(t, s, outID)
-	in := getTx(t, s, inID)
+	out := getTx(t, s, uid, outID)
+	in := getTx(t, s, uid, inID)
 	if out.OutflowCents != 5_000 || out.InflowCents != 0 {
 		t.Errorf("out leg = (%d,%d), want (5000,0)", out.OutflowCents, out.InflowCents)
 	}
@@ -679,14 +762,14 @@ func TestUpdateTransfer(t *testing.T) {
 	// Rule 2 (direction flip): flip the edited leg from outflow to inflow ->
 	// the paired leg flips the opposite way, and the category follows the
 	// spending (outflow) leg, which is now the pair.
-	if err := s.UpdateTransfer(ctx, outID, TransferLegEdit{
+	if err := s.UpdateTransfer(ctx, uid, outID, TransferLegEdit{
 		Date: date, AccountID: chk, TransferAccountID: sav,
 		InflowCents: 5_000, CategoryID: &cat,
 	}); err != nil {
 		t.Fatalf("update flip: %v", err)
 	}
-	out = getTx(t, s, outID)
-	in = getTx(t, s, inID)
+	out = getTx(t, s, uid, outID)
+	in = getTx(t, s, uid, inID)
 	if out.InflowCents != 5_000 || out.OutflowCents != 0 {
 		t.Errorf("edited leg after flip = (%d,%d), want inflow 5000", out.OutflowCents, out.InflowCents)
 	}
@@ -701,19 +784,19 @@ func TestUpdateTransfer(t *testing.T) {
 	}
 
 	// Restore the original direction for the remaining checks.
-	mustUpdate(t, s, outID, TransferLegEdit{
+	mustUpdate(t, s, uid, outID, TransferLegEdit{
 		Date: date, AccountID: chk, TransferAccountID: sav,
 		OutflowCents: 5_000, CategoryID: &cat,
 	})
 
 	// Rule 1: change the edited leg's account only. The paired leg keeps its
 	// own posted account, but its back-pointer follows so the label stays truthful.
-	mustUpdate(t, s, outID, TransferLegEdit{
+	mustUpdate(t, s, uid, outID, TransferLegEdit{
 		Date: date, AccountID: wallet, TransferAccountID: sav,
 		OutflowCents: 5_000, CategoryID: &cat,
 	})
-	out = getTx(t, s, outID)
-	in = getTx(t, s, inID)
+	out = getTx(t, s, uid, outID)
+	in = getTx(t, s, uid, inID)
 	if out.AccountID != wallet {
 		t.Errorf("edited leg account = %d, want wallet %d", out.AccountID, wallet)
 	}
@@ -725,12 +808,12 @@ func TestUpdateTransfer(t *testing.T) {
 	}
 
 	// Rule 6: change the edited leg's "transfer to" -> the paired leg moves.
-	mustUpdate(t, s, outID, TransferLegEdit{
+	mustUpdate(t, s, uid, outID, TransferLegEdit{
 		Date: date, AccountID: wallet, TransferAccountID: chk,
 		OutflowCents: 5_000, CategoryID: &cat,
 	})
-	out = getTx(t, s, outID)
-	in = getTx(t, s, inID)
+	out = getTx(t, s, uid, outID)
+	in = getTx(t, s, uid, inID)
 	if in.AccountID != chk {
 		t.Errorf("paired leg should move to chk %d, got %d", chk, in.AccountID)
 	}
@@ -740,27 +823,27 @@ func TestUpdateTransfer(t *testing.T) {
 
 	// Rule 4: date applies to both legs.
 	newDate := time.Now().AddDate(0, 0, -3)
-	mustUpdate(t, s, outID, TransferLegEdit{
+	mustUpdate(t, s, uid, outID, TransferLegEdit{
 		Date: newDate, AccountID: wallet, TransferAccountID: chk,
 		OutflowCents: 5_000, CategoryID: &cat,
 	})
-	out = getTx(t, s, outID)
-	in = getTx(t, s, inID)
+	out = getTx(t, s, uid, outID)
+	in = getTx(t, s, uid, inID)
 	if out.Date.Format("2006-01-02") != newDate.Format("2006-01-02") ||
 		in.Date.Format("2006-01-02") != newDate.Format("2006-01-02") {
 		t.Errorf("both legs should share date %v: out=%v in=%v", newDate, out.Date, in.Date)
 	}
 
 	// Guard: from and to accounts must differ.
-	if err := s.UpdateTransfer(ctx, outID, TransferLegEdit{
+	if err := s.UpdateTransfer(ctx, uid, outID, TransferLegEdit{
 		Date: date, AccountID: chk, TransferAccountID: chk, OutflowCents: 5_000,
 	}); err == nil {
 		t.Error("expected error when from == to")
 	}
 
 	// Guard: updating a non-transfer row is rejected.
-	plain, _ := s.CreateTransaction(ctx, Transaction{Date: date, AccountID: chk, OutflowCents: 100})
-	if err := s.UpdateTransfer(ctx, plain, TransferLegEdit{
+	plain, _ := s.CreateTransaction(ctx, uid, Transaction{Date: date, AccountID: chk, OutflowCents: 100})
+	if err := s.UpdateTransfer(ctx, uid, plain, TransferLegEdit{
 		Date: date, AccountID: chk, TransferAccountID: sav, OutflowCents: 100,
 	}); err == nil {
 		t.Error("expected error when leg is not a transfer")
@@ -768,110 +851,110 @@ func TestUpdateTransfer(t *testing.T) {
 }
 
 func TestSetClearedTransfer(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
-	sav, _ := s.CreateAccount(ctx, Account{Name: "Sav", Type: TypeChecking})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	sav, _ := s.CreateAccount(ctx, uid, Account{Name: "Sav", Type: TypeChecking})
 
-	outID, inID, _ := s.CreateTransfer(ctx, TransferInput{
+	outID, inID, _ := s.CreateTransfer(ctx, uid, TransferInput{
 		Date: time.Now(), FromAccountID: chk, ToAccountID: sav, AmountCents: 10_000,
 	})
 
 	// Rule 3: toggling cleared on one leg applies to both.
-	if err := s.SetCleared(ctx, inID, true); err != nil {
+	if err := s.SetCleared(ctx, uid, inID, true); err != nil {
 		t.Fatalf("set cleared: %v", err)
 	}
-	if !getTx(t, s, outID).Cleared || !getTx(t, s, inID).Cleared {
+	if !getTx(t, s, uid, outID).Cleared || !getTx(t, s, uid, inID).Cleared {
 		t.Error("both legs should be cleared")
 	}
-	if err := s.SetCleared(ctx, outID, false); err != nil {
+	if err := s.SetCleared(ctx, uid, outID, false); err != nil {
 		t.Fatalf("unset cleared: %v", err)
 	}
-	if getTx(t, s, outID).Cleared || getTx(t, s, inID).Cleared {
+	if getTx(t, s, uid, outID).Cleared || getTx(t, s, uid, inID).Cleared {
 		t.Error("both legs should be uncleared")
 	}
 }
 
-func getTx(t *testing.T, s *Store, id int64) *Transaction {
+func getTx(t *testing.T, s *Store, userID, id int64) *Transaction {
 	t.Helper()
-	tx, err := s.GetTransaction(context.Background(), id)
+	tx, err := s.GetTransaction(context.Background(), userID, id)
 	if err != nil {
 		t.Fatalf("get tx %d: %v", id, err)
 	}
 	return tx
 }
 
-func mustUpdate(t *testing.T, s *Store, legID int64, in TransferLegEdit) {
+func mustUpdate(t *testing.T, s *Store, userID, legID int64, in TransferLegEdit) {
 	t.Helper()
-	if err := s.UpdateTransfer(context.Background(), legID, in); err != nil {
+	if err := s.UpdateTransfer(context.Background(), userID, legID, in); err != nil {
 		t.Fatalf("update transfer: %v", err)
 	}
 }
 
 func TestMaxSortOrderHelpers(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
 	// Groups: the seed migration adds an "Income" group at sort_order -100,
 	// so append helpers must key off MAX, not COUNT.
-	if _, err := s.CreateGroup(ctx, "Bills", 5); err != nil {
+	if _, err := s.CreateGroup(ctx, uid, "Bills", 5); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateGroup(ctx, "Fun", 9); err != nil {
+	if _, err := s.CreateGroup(ctx, uid, "Fun", 9); err != nil {
 		t.Fatal(err)
 	}
-	if g, err := s.MaxGroupSortOrder(ctx); err != nil {
+	if g, err := s.MaxGroupSortOrder(ctx, uid); err != nil {
 		t.Fatalf("max group: %v", err)
 	} else if g != 9 {
 		t.Errorf("max group sort = %d, want 9", g)
 	}
 
-	gid, err := s.CreateGroup(ctx, "Home", 0)
+	gid, err := s.CreateGroup(ctx, uid, "Home", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Rent", SortOrder: 3}); err != nil {
+	if _, err := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Rent", SortOrder: 3}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Power", SortOrder: 7}); err != nil {
+	if _, err := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Power", SortOrder: 7}); err != nil {
 		t.Fatal(err)
 	}
-	if c, err := s.MaxCategorySortOrder(ctx, gid); err != nil {
+	if c, err := s.MaxCategorySortOrder(ctx, uid, gid); err != nil {
 		t.Fatal(err)
 	} else if c != 7 {
 		t.Errorf("max cat sort = %d, want 7", c)
 	}
 
-	empty, err := s.CreateGroup(ctx, "Empty", 0)
+	empty, err := s.CreateGroup(ctx, uid, "Empty", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c, _ := s.MaxCategorySortOrder(ctx, empty); c != 0 {
+	if c, _ := s.MaxCategorySortOrder(ctx, uid, empty); c != 0 {
 		t.Errorf("empty group cat sort = %d, want 0", c)
 	}
 
 	month := "2026-07"
-	if v, _ := s.MaxIncomeSortOrder(ctx, month); v != 0 {
+	if v, _ := s.MaxIncomeSortOrder(ctx, uid, month); v != 0 {
 		t.Errorf("empty income sort = %d, want 0", v)
 	}
-	if _, err := s.CreateIncome(ctx, Income{Month: month, Name: "Salary", AmountCents: 1000, SortOrder: 2}); err != nil {
+	if _, err := s.CreateIncome(ctx, uid, Income{Month: month, Name: "Salary", AmountCents: 1000, SortOrder: 2}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateIncome(ctx, Income{Month: month, Name: "Side", AmountCents: 500, SortOrder: 8}); err != nil {
+	if _, err := s.CreateIncome(ctx, uid, Income{Month: month, Name: "Side", AmountCents: 500, SortOrder: 8}); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := s.MaxIncomeSortOrder(ctx, month); v != 8 {
+	if v, _ := s.MaxIncomeSortOrder(ctx, uid, month); v != 8 {
 		t.Errorf("income sort = %d, want 8", v)
 	}
 }
 
 func TestDeleteGroup(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
 
 	groupExists := func(id int64) bool {
-		groups, err := s.ListGroups(ctx)
+		groups, err := s.ListGroups(ctx, uid)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -884,8 +967,8 @@ func TestDeleteGroup(t *testing.T) {
 	}
 
 	// (a) A truly empty group deletes.
-	g1, _ := s.CreateGroup(ctx, "Empty", 1)
-	if err := s.DeleteGroup(ctx, g1); err != nil {
+	g1, _ := s.CreateGroup(ctx, uid, "Empty", 1)
+	if err := s.DeleteGroup(ctx, uid, g1); err != nil {
 		t.Fatalf("empty group: %v", err)
 	}
 	if groupExists(g1) {
@@ -893,11 +976,11 @@ func TestDeleteGroup(t *testing.T) {
 	}
 
 	// (b) A group with an active category is rejected.
-	g2, _ := s.CreateGroup(ctx, "HasActive", 2)
-	if _, err := s.CreateCategory(ctx, Category{GroupID: g2, Name: "Active"}); err != nil {
+	g2, _ := s.CreateGroup(ctx, uid, "HasActive", 2)
+	if _, err := s.CreateCategory(ctx, uid, Category{GroupID: g2, Name: "Active"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteGroup(ctx, g2); err == nil {
+	if err := s.DeleteGroup(ctx, uid, g2); err == nil {
 		t.Error("group with active category should be rejected")
 	}
 	if !groupExists(g2) {
@@ -906,12 +989,12 @@ func TestDeleteGroup(t *testing.T) {
 
 	// (c) A group whose only categories are archived and unreferenced deletes,
 	// cleaning up the archived rows (this is the reported bug).
-	g3, _ := s.CreateGroup(ctx, "HasArchived", 3)
-	c3, _ := s.CreateCategory(ctx, Category{GroupID: g3, Name: "Old"})
-	if err := s.ArchiveCategory(ctx, c3); err != nil {
+	g3, _ := s.CreateGroup(ctx, uid, "HasArchived", 3)
+	c3, _ := s.CreateCategory(ctx, uid, Category{GroupID: g3, Name: "Old"})
+	if err := s.ArchiveCategory(ctx, uid, c3); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteGroup(ctx, g3); err != nil {
+	if err := s.DeleteGroup(ctx, uid, g3); err != nil {
 		t.Fatalf("group with unreferenced archived category: %v", err)
 	}
 	if groupExists(g3) {
@@ -920,18 +1003,18 @@ func TestDeleteGroup(t *testing.T) {
 
 	// (d) A group with an archived category that still carries transaction
 	// history is rejected, and left intact.
-	acctID, _ := s.CreateAccount(ctx, Account{Name: "Checking", Type: TypeChecking})
-	g4, _ := s.CreateGroup(ctx, "HasHistory", 4)
-	c4, _ := s.CreateCategory(ctx, Category{GroupID: g4, Name: "Spent"})
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	acctID, _ := s.CreateAccount(ctx, uid, Account{Name: "Checking", Type: TypeChecking})
+	g4, _ := s.CreateGroup(ctx, uid, "HasHistory", 4)
+	c4, _ := s.CreateCategory(ctx, uid, Category{GroupID: g4, Name: "Spent"})
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: time.Now(), AccountID: acctID, CategoryID: &c4, OutflowCents: 100,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ArchiveCategory(ctx, c4); err != nil {
+	if err := s.ArchiveCategory(ctx, uid, c4); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.DeleteGroup(ctx, g4); err == nil {
+	if err := s.DeleteGroup(ctx, uid, g4); err == nil {
 		t.Error("group with referenced archived category should be rejected")
 	}
 	if !groupExists(g4) {
@@ -940,24 +1023,24 @@ func TestDeleteGroup(t *testing.T) {
 }
 
 func TestCategoryRolloverModeDefaultAndSet(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
-	gid, _ := s.CreateGroup(ctx, "G", 0)
-	id, err := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Groceries"})
+	gid, _ := s.CreateGroup(ctx, uid, "G", 0)
+	id, err := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Groceries"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	cats, _ := s.ListCategories(ctx, false)
+	cats, _ := s.ListCategories(ctx, uid, false)
 	got := findCat(t, cats, id)
 	if got.RolloverMode != RolloverCarryPositive {
 		t.Errorf("default rollover_mode = %q, want %q", got.RolloverMode, RolloverCarryPositive)
 	}
 
-	if err := s.SetRolloverMode(ctx, id, RolloverNone); err != nil {
+	if err := s.SetRolloverMode(ctx, uid, id, RolloverNone); err != nil {
 		t.Fatal(err)
 	}
-	cats, _ = s.ListCategories(ctx, false)
+	cats, _ = s.ListCategories(ctx, uid, false)
 	if got := findCat(t, cats, id); got.RolloverMode != RolloverNone {
 		t.Errorf("after set, rollover_mode = %q, want %q", got.RolloverMode, RolloverNone)
 	}
@@ -990,22 +1073,22 @@ func TestRolloverModes(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.mode, func(t *testing.T) {
-			s := newTestStore(t)
+			s, uid := newTestStoreUser(t)
 			ctx := context.Background()
-			chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
-			gid, _ := s.CreateGroup(ctx, "G", 0)
-			cat, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Fun", RolloverMode: tc.mode})
+			chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
+			gid, _ := s.CreateGroup(ctx, uid, "G", 0)
+			cat, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Fun", RolloverMode: tc.mode})
 
-			if err := s.SetAssigned(ctx, "2026-01", cat, 10_000); err != nil {
+			if err := s.SetAssigned(ctx, uid, "2026-01", cat, 10_000); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.CreateTransaction(ctx, Transaction{
+			if _, err := s.CreateTransaction(ctx, uid, Transaction{
 				Date: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), AccountID: chk, CategoryID: &cat, OutflowCents: 15_000,
 			}); err != nil {
 				t.Fatal(err)
 			}
 
-			rows, err := s.MonthBudget(ctx, "2026-02")
+			rows, err := s.MonthBudget(ctx, uid, "2026-02")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1019,20 +1102,20 @@ func TestRolloverModes(t *testing.T) {
 
 func TestRolloverNoneIgnoresCarryIn(t *testing.T) {
 	// none mode with a prior surplus: Jan leftover must NOT flow into Feb.
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
-	gid, _ := s.CreateGroup(ctx, "G", 0)
-	cat, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Iso", RolloverMode: RolloverNone})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
+	gid, _ := s.CreateGroup(ctx, uid, "G", 0)
+	cat, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Iso", RolloverMode: RolloverNone})
 	_ = chk
 
-	if err := s.SetAssigned(ctx, "2026-01", cat, 10_000); err != nil { // $100 surplus, unspent
+	if err := s.SetAssigned(ctx, uid, "2026-01", cat, 10_000); err != nil { // $100 surplus, unspent
 		t.Fatal(err)
 	}
-	if err := s.SetAssigned(ctx, "2026-02", cat, 3_000); err != nil {
+	if err := s.SetAssigned(ctx, uid, "2026-02", cat, 3_000); err != nil {
 		t.Fatal(err)
 	}
-	rows, _ := s.MonthBudget(ctx, "2026-02")
+	rows, _ := s.MonthBudget(ctx, uid, "2026-02")
 	r := findCategoryRow(t, rows, "Iso")
 	if r.AvailableCents != 3_000 { // Feb assigned only, no carry-in
 		t.Errorf("none-mode Feb available = %d, want 3000", r.AvailableCents)
@@ -1040,38 +1123,38 @@ func TestRolloverNoneIgnoresCarryIn(t *testing.T) {
 }
 
 func TestUncategorizedSpent(t *testing.T) {
-	s := newTestStore(t)
+	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
-	sav, _ := s.CreateAccount(ctx, Account{Name: "Sav", Type: TypeSavings})
-	gid, _ := s.CreateGroup(ctx, "G", 0)
-	cat, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Cat"})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 1_000_000})
+	sav, _ := s.CreateAccount(ctx, uid, Account{Name: "Sav", Type: TypeSavings})
+	gid, _ := s.CreateGroup(ctx, uid, "G", 0)
+	cat, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Cat"})
 
 	// Uncategorized outflow $40 and inflow $10 in Feb → net 3000.
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC), AccountID: chk, OutflowCents: 4_000,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: time.Date(2026, 2, 4, 0, 0, 0, 0, time.UTC), AccountID: chk, InflowCents: 1_000,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	// Categorized tx must NOT count.
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC), AccountID: chk, CategoryID: &cat, OutflowCents: 9_999,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	// A transfer (no category) must NOT count. CreateTransfer returns (fromID, toID, error).
-	if _, _, err := s.CreateTransfer(ctx, TransferInput{
+	if _, _, err := s.CreateTransfer(ctx, uid, TransferInput{
 		Date: time.Date(2026, 2, 6, 0, 0, 0, 0, time.UTC), FromAccountID: chk, ToAccountID: sav, AmountCents: 5_000,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := s.UncategorizedSpent(ctx, "2026-02")
+	got, err := s.UncategorizedSpent(ctx, uid, "2026-02")
 	if err != nil {
 		t.Fatal(err)
 	}

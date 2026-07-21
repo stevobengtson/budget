@@ -16,6 +16,7 @@ import (
 
 func (h *Handlers) PaydownIndex(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	collapsed := sidebarCollapsed(c)
 
 	horizon, _ := strconv.Atoi(c.Query("horizon"))
@@ -23,7 +24,7 @@ func (h *Handlers) PaydownIndex(c *gin.Context) {
 		horizon = 60
 	}
 
-	all, _ := h.store.ListAccounts(ctx, false)
+	all, _ := h.store.ListAccounts(ctx, uid, false)
 	included := make([]store.AccountWithBalance, 0)
 	for _, a := range all {
 		if a.IncludeInPaydown && a.AprBps != nil {
@@ -34,7 +35,7 @@ func (h *Handlers) PaydownIndex(c *gin.Context) {
 	now := time.Now()
 	var totalMonthly, totalInterest int64
 	for _, a := range included {
-		p, err := h.computePlan(ctx, a, horizon, now)
+		p, err := h.computePlan(ctx, uid, a, horizon, now)
 		if err != nil {
 			c.String(http.StatusInternalServerError, err.Error())
 			return
@@ -43,7 +44,7 @@ func (h *Handlers) PaydownIndex(c *gin.Context) {
 		totalMonthly += p.PaymentCents
 		totalInterest += p.TotalInterestCents
 	}
-	cats, _ := h.store.ListCategories(ctx, false)
+	cats, _ := h.store.ListCategories(ctx, uid, false)
 	render(c, http.StatusOK, views.PaydownPage(views.PaydownData{
 		Plans:         plans,
 		Accounts:      included,
@@ -60,6 +61,7 @@ func (h *Handlers) PaydownIndex(c *gin.Context) {
 // account. The page query param is 1-based; out-of-range values clamp.
 func (h *Handlers) PaydownRows(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	id, _ := strconv.ParseInt(c.Param("acctID"), 10, 64)
 	horizon, _ := strconv.Atoi(c.Query("horizon"))
 	if horizon < 12 || horizon > 360 {
@@ -72,7 +74,7 @@ func (h *Handlers) PaydownRows(c *gin.Context) {
 
 	// We don't have a store.GetAccountWithBalance; just reuse ListAccounts
 	// and find the row. The list is small (n ≤ 30 in practice).
-	all, err := h.store.ListAccounts(ctx, false)
+	all, err := h.store.ListAccounts(ctx, uid, false)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -92,7 +94,7 @@ func (h *Handlers) PaydownRows(c *gin.Context) {
 		c.String(http.StatusBadRequest, "account has no APR")
 		return
 	}
-	p, err := h.computePlan(ctx, *acct, horizon, time.Now())
+	p, err := h.computePlan(ctx, uid, *acct, horizon, time.Now())
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -103,13 +105,13 @@ func (h *Handlers) PaydownRows(c *gin.Context) {
 // computePlan runs the paydown projection for a single account. Shared by
 // the index handler and the row fragment handler so they always return
 // numerically identical schedules.
-func (h *Handlers) computePlan(ctx context.Context, a store.AccountWithBalance, horizon int, now time.Time) (paydown.Plan, error) {
+func (h *Handlers) computePlan(ctx context.Context, userID int64, a store.AccountWithBalance, horizon int, now time.Time) (paydown.Plan, error) {
 	startCents := debtCents(a)
 	var fallback int64
 	if a.MonthlyPaymentCents != nil {
 		fallback = *a.MonthlyPaymentCents
 	}
-	ms, _ := h.store.PaymentScheduleForCategory(ctx, a.PaymentCategoryID, now, horizon, fallback)
+	ms, _ := h.store.PaymentScheduleForCategory(ctx, userID, a.PaymentCategoryID, now, horizon, fallback)
 	schedule := make([]paydown.MonthPayment, len(ms))
 	for i, m := range ms {
 		schedule[i] = paydown.MonthPayment{Cents: m.Cents, Source: convSrc(m.Source)}
@@ -122,7 +124,7 @@ func (h *Handlers) computePlan(ctx context.Context, a store.AccountWithBalance, 
 func (h *Handlers) PaydownPaymentForm(c *gin.Context) {
 	ctx := c.Request.Context()
 	id, _ := strconv.ParseInt(c.Param("acctID"), 10, 64)
-	a, err := h.store.GetAccount(ctx, id)
+	a, err := h.store.GetAccount(ctx, currentUserID(c), id)
 	if err != nil {
 		c.String(http.StatusNotFound, err.Error())
 		return
@@ -134,14 +136,15 @@ func (h *Handlers) PaydownPaymentForm(c *gin.Context) {
 // category to a paydown account.
 func (h *Handlers) PaydownCategoryForm(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	id, _ := strconv.ParseInt(c.Param("acctID"), 10, 64)
-	a, err := h.store.GetAccount(ctx, id)
+	a, err := h.store.GetAccount(ctx, uid, id)
 	if err != nil {
 		c.String(http.StatusNotFound, err.Error())
 		return
 	}
-	cats, _ := h.store.ListCategories(ctx, false)
-	groups, _ := h.store.ListGroups(ctx)
+	cats, _ := h.store.ListCategories(ctx, uid, false)
+	groups, _ := h.store.ListGroups(ctx, uid)
 	render(c, http.StatusOK, views.CategoryModal(store.AccountWithBalance{Account: a}, cats, groups))
 }
 
@@ -149,15 +152,16 @@ func (h *Handlers) PaydownInclude(c *gin.Context) { h.toggleInclude(c, true) }
 func (h *Handlers) PaydownExclude(c *gin.Context) { h.toggleInclude(c, false) }
 func (h *Handlers) toggleInclude(c *gin.Context, include bool) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	id, _ := strconv.ParseInt(c.Param("acctID"), 10, 64)
-	a, err := h.store.GetAccount(ctx, id)
+	a, err := h.store.GetAccount(ctx, uid, id)
 	if err != nil {
 		c.String(http.StatusNotFound, err.Error())
 		return
 	}
 	a.IncludeInPaydown = include
-	if err := h.store.UpdateAccount(ctx, a); err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+	if err := h.store.UpdateAccount(ctx, uid, a); err != nil {
+		writeStoreErr(c, err)
 		return
 	}
 	c.Header("HX-Redirect", "/paydown")
@@ -166,8 +170,9 @@ func (h *Handlers) toggleInclude(c *gin.Context, include bool) {
 
 func (h *Handlers) PaydownSetPayment(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	id, _ := strconv.ParseInt(c.Param("acctID"), 10, 64)
-	a, err := h.store.GetAccount(ctx, id)
+	a, err := h.store.GetAccount(ctx, uid, id)
 	if err != nil {
 		c.String(http.StatusNotFound, err.Error())
 		return
@@ -182,8 +187,8 @@ func (h *Handlers) PaydownSetPayment(c *gin.Context) {
 	} else {
 		a.MonthlyPaymentCents = nil
 	}
-	if err := h.store.UpdateAccount(ctx, a); err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+	if err := h.store.UpdateAccount(ctx, uid, a); err != nil {
+		writeStoreErr(c, err)
 		return
 	}
 	c.Header("HX-Redirect", "/paydown")
@@ -192,8 +197,9 @@ func (h *Handlers) PaydownSetPayment(c *gin.Context) {
 
 func (h *Handlers) PaydownSetCategory(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	id, _ := strconv.ParseInt(c.Param("acctID"), 10, 64)
-	a, err := h.store.GetAccount(ctx, id)
+	a, err := h.store.GetAccount(ctx, uid, id)
 	if err != nil {
 		c.String(http.StatusNotFound, err.Error())
 		return
@@ -205,8 +211,8 @@ func (h *Handlers) PaydownSetCategory(c *gin.Context) {
 	} else {
 		a.PaymentCategoryID = nil
 	}
-	if err := h.store.UpdateAccount(ctx, a); err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+	if err := h.store.UpdateAccount(ctx, uid, a); err != nil {
+		writeStoreErr(c, err)
 		return
 	}
 	c.Header("HX-Redirect", "/paydown")

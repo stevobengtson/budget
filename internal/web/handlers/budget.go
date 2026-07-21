@@ -35,7 +35,7 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 
 	collapsed := sidebarCollapsed(c)
 
-	data, rows, err := h.budgetData(ctx, month)
+	data, rows, err := h.budgetData(ctx, currentUserID(c), month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "month budget: %v", err)
 		return
@@ -48,22 +48,22 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 // requested month and returns the rendered view-model plus the flat row
 // slice (callers that need to find a single row by ID can reuse it without
 // a second store round-trip).
-func (h *Handlers) budgetData(ctx context.Context, month string) (views.BudgetData, []store.CategoryBudget, error) {
-	rows, err := h.store.MonthBudget(ctx, month)
+func (h *Handlers) budgetData(ctx context.Context, userID int64, month string) (views.BudgetData, []store.CategoryBudget, error) {
+	rows, err := h.store.MonthBudget(ctx, userID, month)
 	if err != nil {
 		return views.BudgetData{}, nil, fmt.Errorf("month budget: %w", err)
 	}
-	groups, err := h.buildGroups(ctx, rows)
+	groups, err := h.buildGroups(ctx, userID, rows)
 	if err != nil {
 		return views.BudgetData{}, nil, fmt.Errorf("build groups: %w", err)
 	}
 
-	incTotal, _ := h.store.TotalIncome(ctx, month)
-	uncat, _ := h.store.UncategorizedSpent(ctx, month)
-	credit, _ := h.store.CreditCardActivityForMonth(ctx, month)
-	incomeRows, _ := h.store.ListIncomes(ctx, month)
+	incTotal, _ := h.store.TotalIncome(ctx, userID, month)
+	uncat, _ := h.store.UncategorizedSpent(ctx, userID, month)
+	credit, _ := h.store.CreditCardActivityForMonth(ctx, userID, month)
+	incomeRows, _ := h.store.ListIncomes(ctx, userID, month)
 
-	accts, err := h.store.ListAccounts(ctx, false) // exclude archived
+	accts, err := h.store.ListAccounts(ctx, userID, false) // exclude archived
 	if err != nil {
 		return views.BudgetData{}, nil, fmt.Errorf("list accounts: %w", err)
 	}
@@ -102,8 +102,8 @@ func (h *Handlers) budgetData(ctx context.Context, month string) (views.BudgetDa
 }
 
 // groupName returns a group's name, or "" if not found.
-func (h *Handlers) groupName(ctx context.Context, gid int64) string {
-	groups, err := h.store.ListGroups(ctx)
+func (h *Handlers) groupName(ctx context.Context, userID, gid int64) string {
+	groups, err := h.store.ListGroups(ctx, userID)
 	if err != nil {
 		return ""
 	}
@@ -120,7 +120,7 @@ func (h *Handlers) groupName(ctx context.Context, gid int64) string {
 // that owns the is_income category) is excluded — its category is surfaced in
 // the banner and the income section, not the budget table. Empty user groups
 // are kept so the user can add the first category to them.
-func (h *Handlers) buildGroups(ctx context.Context, rows []store.CategoryBudget) ([]views.BudgetGroup, error) {
+func (h *Handlers) buildGroups(ctx context.Context, userID int64, rows []store.CategoryBudget) ([]views.BudgetGroup, error) {
 	incomeGroupID := int64(-1)
 	byGroup := make(map[int64][]store.CategoryBudget)
 	for _, r := range rows {
@@ -131,7 +131,7 @@ func (h *Handlers) buildGroups(ctx context.Context, rows []store.CategoryBudget)
 		byGroup[r.GroupID] = append(byGroup[r.GroupID], r)
 	}
 
-	groups, err := h.store.ListGroups(ctx)
+	groups, err := h.store.ListGroups(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +150,7 @@ func (h *Handlers) buildGroups(ctx context.Context, rows []store.CategoryBudget)
 // that move when an assignment changes (Budgeted, Remain).
 func (h *Handlers) BudgetAssign(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
 	month := c.Query("month")
 	if month == "" {
@@ -161,12 +162,12 @@ func (h *Handlers) BudgetAssign(c *gin.Context) {
 		c.String(http.StatusBadRequest, "invalid amount: %v", err)
 		return
 	}
-	if err := h.store.SetAssigned(ctx, month, catID, cents); err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+	if err := h.store.SetAssigned(ctx, uid, month, catID, cents); err != nil {
+		writeStoreErr(c, err)
 		return
 	}
 
-	data, rows, err := h.budgetData(ctx, month)
+	data, rows, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -192,6 +193,7 @@ func findCatRow(rows []store.CategoryBudget, catID int64) store.CategoryBudget {
 // fragment used by BudgetAssign so the banner + totals stay in sync.
 func (h *Handlers) BudgetAssignCopyPrev(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
 	month := c.Query("month")
 	if month == "" {
@@ -199,17 +201,17 @@ func (h *Handlers) BudgetAssignCopyPrev(c *gin.Context) {
 	}
 
 	prev := store.PrevMonth(month)
-	prevCents, err := h.store.GetAssigned(ctx, prev, catID)
+	prevCents, err := h.store.GetAssigned(ctx, uid, prev, catID)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := h.store.SetAssigned(ctx, month, catID, prevCents); err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+	if err := h.store.SetAssigned(ctx, uid, month, catID, prevCents); err != nil {
+		writeStoreErr(c, err)
 		return
 	}
 
-	data, rows, err := h.budgetData(ctx, month)
+	data, rows, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -221,6 +223,7 @@ func (h *Handlers) BudgetAssignCopyPrev(c *gin.Context) {
 // region fragment as BudgetAssign so Available/totals/banner stay in sync.
 func (h *Handlers) BudgetSetRollover(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
 	month := monthOrNow(c)
 
@@ -231,12 +234,12 @@ func (h *Handlers) BudgetSetRollover(c *gin.Context) {
 		c.String(http.StatusBadRequest, "invalid rollover mode: %q", mode)
 		return
 	}
-	if err := h.store.SetRolloverMode(ctx, catID, mode); err != nil {
+	if err := h.store.SetRolloverMode(ctx, uid, catID, mode); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	data, rows, err := h.budgetData(ctx, month)
+	data, rows, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -249,7 +252,7 @@ func (h *Handlers) BudgetGoalEdit(c *gin.Context) {
 	ctx := c.Request.Context()
 	month := monthOrNow(c)
 	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
-	_, rows, err := h.budgetData(ctx, month)
+	_, rows, err := h.budgetData(ctx, currentUserID(c), month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -261,10 +264,11 @@ func (h *Handlers) BudgetGoalEdit(c *gin.Context) {
 // Blank Goal $ clears goal_cents; blank Goal due clears goal_due_date.
 func (h *Handlers) BudgetGoal(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
 
-	cur, err := h.findCategory(ctx, catID)
+	cur, err := h.findCategory(ctx, uid, catID)
 	if err != nil {
 		c.String(http.StatusBadRequest, err.Error())
 		return
@@ -287,12 +291,12 @@ func (h *Handlers) BudgetGoal(c *gin.Context) {
 		}
 		cur.GoalDueDate = &t
 	}
-	if err := h.store.UpdateCategory(ctx, *cur); err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+	if err := h.store.UpdateCategory(ctx, uid, *cur); err != nil {
+		writeStoreErr(c, err)
 		return
 	}
 
-	_, rows, err := h.budgetData(ctx, month)
+	_, rows, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -308,18 +312,19 @@ func (h *Handlers) BudgetGroupNew(c *gin.Context) {
 // BudgetGroupCreate creates a group at the end and returns its real <tbody>.
 func (h *Handlers) BudgetGroupCreate(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	name := strings.TrimSpace(c.PostForm("name"))
 	if name == "" {
 		c.String(http.StatusBadRequest, "name required")
 		return
 	}
-	max, err := h.store.MaxGroupSortOrder(ctx)
+	max, err := h.store.MaxGroupSortOrder(ctx, uid)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	id, err := h.store.CreateGroup(ctx, name, max+1)
+	id, err := h.store.CreateGroup(ctx, uid, name, max+1)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -330,6 +335,7 @@ func (h *Handlers) BudgetGroupCreate(c *gin.Context) {
 // BudgetGroupRename updates a group's name and returns the refreshed header row.
 func (h *Handlers) BudgetGroupRename(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	gid, _ := strconv.ParseInt(c.Param("gid"), 10, 64)
 	name := strings.TrimSpace(c.PostForm("name"))
@@ -338,7 +344,7 @@ func (h *Handlers) BudgetGroupRename(c *gin.Context) {
 		return
 	}
 
-	groups, err := h.store.ListGroups(ctx)
+	groups, err := h.store.ListGroups(ctx, uid)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -354,14 +360,14 @@ func (h *Handlers) BudgetGroupRename(c *gin.Context) {
 		c.String(http.StatusNotFound, "group not found")
 		return
 	}
-	if err := h.store.UpdateGroup(ctx, store.CategoryGroup{ID: gid, Name: name, SortOrder: cur.SortOrder}); err != nil {
+	if err := h.store.UpdateGroup(ctx, uid, store.CategoryGroup{ID: gid, Name: name, SortOrder: cur.SortOrder}); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	// Rebuild the group (with rows) so the header knows whether to show the
 	// "delete empty group" control.
-	_, rows, err := h.budgetData(ctx, month)
+	_, rows, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -378,16 +384,17 @@ func (h *Handlers) BudgetGroupRename(c *gin.Context) {
 // BudgetGroupDelete removes an empty group and re-renders the region.
 func (h *Handlers) BudgetGroupDelete(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	gid, _ := strconv.ParseInt(c.Param("gid"), 10, 64)
 
 	// DeleteGroup enforces emptiness (including cleaning up the group's archived
 	// categories, and rejecting any that still carry transaction history).
-	if err := h.store.DeleteGroup(ctx, gid); err != nil {
+	if err := h.store.DeleteGroup(ctx, uid, gid); err != nil {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	data, _, err := h.budgetData(ctx, month)
+	data, _, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -404,6 +411,7 @@ func (h *Handlers) BudgetCategoryNew(c *gin.Context) {
 // BudgetCategoryCreate appends a category to a group and returns its row.
 func (h *Handlers) BudgetCategoryCreate(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	gid, _ := strconv.ParseInt(c.Param("gid"), 10, 64)
 	name := strings.TrimSpace(c.PostForm("name"))
@@ -411,14 +419,14 @@ func (h *Handlers) BudgetCategoryCreate(c *gin.Context) {
 		c.String(http.StatusBadRequest, "name required")
 		return
 	}
-	max, err := h.store.MaxCategorySortOrder(ctx, gid)
+	max, err := h.store.MaxCategorySortOrder(ctx, uid, gid)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	id, err := h.store.CreateCategory(ctx, store.Category{GroupID: gid, Name: name, SortOrder: max + 1})
+	id, err := h.store.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: name, SortOrder: max + 1})
 	if err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+		writeStoreErr(c, err)
 		return
 	}
 	// A brand-new category has zero assigned/spent/available and no goal.
@@ -427,13 +435,14 @@ func (h *Handlers) BudgetCategoryCreate(c *gin.Context) {
 	// Refresh the group header out of band: the group is no longer empty, so its
 	// "delete empty group" control must disappear. Rows need only be non-empty
 	// for the header to hide that control.
-	g := views.BudgetGroup{ID: gid, Name: h.groupName(ctx, gid), Rows: []store.CategoryBudget{row}}
+	g := views.BudgetGroup{ID: gid, Name: h.groupName(ctx, uid, gid), Rows: []store.CategoryBudget{row}}
 	render(c, http.StatusOK, views.BudgetCategoryCreateResult(month, row, g))
 }
 
 // BudgetCategoryRename updates a category's name and returns its refreshed row.
 func (h *Handlers) BudgetCategoryRename(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
 	name := strings.TrimSpace(c.PostForm("name"))
@@ -441,17 +450,17 @@ func (h *Handlers) BudgetCategoryRename(c *gin.Context) {
 		c.String(http.StatusBadRequest, "name required")
 		return
 	}
-	cur, err := h.findCategory(ctx, catID)
+	cur, err := h.findCategory(ctx, uid, catID)
 	if err != nil {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
 	cur.Name = name
-	if err := h.store.UpdateCategory(ctx, *cur); err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+	if err := h.store.UpdateCategory(ctx, uid, *cur); err != nil {
+		writeStoreErr(c, err)
 		return
 	}
-	_, rows, err := h.budgetData(ctx, month)
+	_, rows, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -463,13 +472,14 @@ func (h *Handlers) BudgetCategoryRename(c *gin.Context) {
 // and banner can move when a category with spending is removed).
 func (h *Handlers) BudgetCategoryArchive(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
-	if err := h.store.ArchiveCategory(ctx, catID); err != nil {
+	if err := h.store.ArchiveCategory(ctx, uid, catID); err != nil {
 		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	data, _, err := h.budgetData(ctx, month)
+	data, _, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -479,8 +489,8 @@ func (h *Handlers) BudgetCategoryArchive(c *gin.Context) {
 
 // findCategory loads one active category by id, rejecting the system Income
 // category (which must not be renamed or re-goaled from the budget page).
-func (h *Handlers) findCategory(ctx context.Context, id int64) (*store.Category, error) {
-	cats, err := h.store.ListCategories(ctx, false)
+func (h *Handlers) findCategory(ctx context.Context, userID, id int64) (*store.Category, error) {
+	cats, err := h.store.ListCategories(ctx, userID, false)
 	if err != nil {
 		return nil, err
 	}

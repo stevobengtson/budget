@@ -1,0 +1,34 @@
+[Unit]
+Description=Pigglet
+Documentation=https://pigglet.ca
+# Postgres is local on this box; wait for it and prefer starting after it.
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+
+# The binary embeds static assets, templates and migrations, so this single
+# file plus the config below is the entire runtime. Migrations run on boot.
+ExecStart=/opt/budget/budget web --config /etc/budget/budget.yaml
+
+Restart=on-failure
+RestartSec=2s
+# Give in-flight HTTP requests a moment on stop/restart.
+TimeoutStopSec=15s
+
+# --- Hardening (the app is stateless; all state lives in Postgres) ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# Only needs to reach local Postgres + accept loopback HTTP from nginx.
+# (No ReadWritePaths — nothing on disk is written at runtime.)
+
+[Install]
+WantedBy=multi-user.target

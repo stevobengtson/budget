@@ -60,8 +60,40 @@ func TestDefault(t *testing.T) {
 	if cfg.DB.DSN == "" {
 		t.Error("expected default DSN")
 	}
-	// Should end with budget.db.
-	if !strings.HasSuffix(cfg.DB.DSN, "budget.db") {
-		t.Errorf("default DSN: %q", cfg.DB.DSN)
+	// The app is Postgres-only; the default DSN points at a local Postgres.
+	if cfg.DB.DSN != DefaultPostgresDSN {
+		t.Errorf("default DSN: got %q, want %q", cfg.DB.DSN, DefaultPostgresDSN)
+	}
+	if !strings.HasPrefix(cfg.DB.DSN, "postgres://") {
+		t.Errorf("default DSN should be a postgres URL: %q", cfg.DB.DSN)
+	}
+}
+
+func TestAuthMailDefaults(t *testing.T) {
+	v := viper.New()
+	cfg, err := Load(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Web.BaseURL != "http://localhost:8080" {
+		t.Errorf("base_url default: %q", cfg.Web.BaseURL)
+	}
+	if cfg.Mail.Driver != "console" {
+		t.Errorf("mail driver default: %q", cfg.Mail.Driver)
+	}
+	if cfg.Auth.SessionTTL.Hours() != 720 {
+		t.Errorf("session ttl default: %v", cfg.Auth.SessionTTL)
+	}
+	if cfg.Auth.TokenTTL.Hours() != 1 {
+		t.Errorf("token ttl default: %v", cfg.Auth.TokenTTL)
+	}
+}
+
+func TestResendKeyFromEnv(t *testing.T) {
+	t.Setenv("BUDGET_MAIL_RESEND_API_KEY", "re_xyz")
+	v := viper.New()
+	cfg, _ := Load(v)
+	if cfg.Mail.ResendAPIKey != "re_xyz" {
+		t.Errorf("resend key from env: %q, %q", cfg.Mail.ResendAPIKey, cfg.Mail.Driver)
 	}
 }

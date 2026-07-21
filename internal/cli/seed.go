@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/db"
 	"github.com/sbengtson/budget/internal/core/store"
 )
@@ -21,32 +22,60 @@ func (a *App) seedCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			conn, dialect, err := db.Open(cfg.DB.DSN, true)
+			conn, _, err := db.Open(cfg.DB.DSN, true)
 			if err != nil {
 				return fmt.Errorf("open db: %w", err)
 			}
 			defer func() { _ = conn.Close() }()
 
-			sd := store.DialectSQLite
-			if dialect == db.DialectPostgres {
-				sd = store.DialectPostgres
-			}
-			s := store.NewWithDialect(conn, sd)
+			s := store.New(conn)
 			ctx := context.Background()
 
-			groups, _ := s.ListGroups(ctx)
+			// All seeded rows are owned by a demo user. Create (or reuse) that
+			// user, then claim any pre-auth NULL-owner rows (the Income category
+			// seeded by migration 00005) so the demo user owns them too.
+			uid, err := demoUser(ctx, s)
+			if err != nil {
+				return err
+			}
+			if err := s.ClaimOrphanData(ctx, uid); err != nil {
+				return fmt.Errorf("claim orphan data: %w", err)
+			}
+
+			groups, _ := s.ListGroups(ctx, uid)
 			for _, g := range groups {
 				if g.Name != "Income" {
 					return fmt.Errorf("database already has data — wipe it first")
 				}
 			}
-			if err := seed(ctx, s); err != nil {
+			if err := seed(ctx, s, uid); err != nil {
 				return err
 			}
 			fmt.Println("seeded successfully")
 			return nil
 		},
 	}
+}
+
+// demoUser returns the id of the verified demo account, creating it on first
+// run. Seeded data is owned by this user so it is visible after login.
+func demoUser(ctx context.Context, s *store.Store) (int64, error) {
+	const email = "demo@example.com"
+	if u, err := s.GetUserByEmail(ctx, email); err == nil {
+		return u.ID, nil
+	}
+	hash, err := auth.HashPassword("password1")
+	if err != nil {
+		return 0, err
+	}
+	uid, err := s.CreateUser(ctx, email, hash)
+	if err != nil {
+		return 0, fmt.Errorf("create demo user: %w", err)
+	}
+	if err := s.SetEmailVerified(ctx, uid); err != nil {
+		return 0, err
+	}
+	return uid, nil
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -66,7 +95,7 @@ func day(month string, d int) time.Time {
 
 // ── seed ─────────────────────────────────────────────────────────────────────
 
-func seed(ctx context.Context, s *store.Store) error {
+func seed(ctx context.Context, s *store.Store, uid int64) error {
 	now := time.Now()
 	monthKey := func(offset int) string {
 		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).
@@ -75,7 +104,7 @@ func seed(ctx context.Context, s *store.Store) error {
 	months := [3]string{monthKey(-2), monthKey(-1), monthKey(0)}
 
 	// Find the system Income category created by migration 00005.
-	allCats, _ := s.ListCategories(ctx, false)
+	allCats, _ := s.ListCategories(ctx, uid, false)
 	var incomeCatID int64
 	for _, c := range allCats {
 		if c.IsIncome {
@@ -144,12 +173,12 @@ func seed(ctx context.Context, s *store.Store) error {
 
 	catID := map[string]int64{} // "Group/Category" → id
 	for _, gd := range groupDefs {
-		gid, err := s.CreateGroup(ctx, gd.name, gd.order)
+		gid, err := s.CreateGroup(ctx, uid, gd.name, gd.order)
 		if err != nil {
 			return fmt.Errorf("group %q: %w", gd.name, err)
 		}
 		for _, cd := range gd.cats {
-			cid, err := s.CreateCategory(ctx, store.Category{
+			cid, err := s.CreateCategory(ctx, uid, store.Category{
 				GroupID:     gid,
 				Name:        cd.name,
 				SortOrder:   cd.order,
@@ -168,7 +197,7 @@ func seed(ctx context.Context, s *store.Store) error {
 
 	ccPayCat := catID["Debt/Credit Card Payment"]
 
-	checkingID, err := s.CreateAccount(ctx, store.Account{
+	checkingID, err := s.CreateAccount(ctx, uid, store.Account{
 		Name:                 "Main Checking",
 		Type:                 store.TypeChecking,
 		StartingBalanceCents: cents(4250),
@@ -177,7 +206,7 @@ func seed(ctx context.Context, s *store.Store) error {
 		return fmt.Errorf("account: %w", err)
 	}
 
-	savingsID, err := s.CreateAccount(ctx, store.Account{
+	savingsID, err := s.CreateAccount(ctx, uid, store.Account{
 		Name:                 "High-Yield Savings",
 		Type:                 store.TypeSavings,
 		StartingBalanceCents: cents(11500),
@@ -186,7 +215,7 @@ func seed(ctx context.Context, s *store.Store) error {
 		return fmt.Errorf("account: %w", err)
 	}
 
-	chaseID, err := s.CreateAccount(ctx, store.Account{
+	chaseID, err := s.CreateAccount(ctx, uid, store.Account{
 		Name:                 "Chase Sapphire",
 		Type:                 store.TypeCredit,
 		StartingBalanceCents: -cents(2840),
@@ -200,7 +229,7 @@ func seed(ctx context.Context, s *store.Store) error {
 		return fmt.Errorf("account: %w", err)
 	}
 
-	_, err = s.CreateAccount(ctx, store.Account{
+	_, err = s.CreateAccount(ctx, uid, store.Account{
 		Name:                 "Honda Car Loan",
 		Type:                 store.TypeLoan,
 		StartingBalanceCents: -cents(9600),
@@ -254,13 +283,13 @@ func seed(ctx context.Context, s *store.Store) error {
 
 	for mi, mo := range months {
 		// Income entries (estimated/budgeted).
-		if _, err := s.CreateIncome(ctx, store.Income{
+		if _, err := s.CreateIncome(ctx, uid, store.Income{
 			Month: mo, Name: "Salary", AmountCents: cents(5400), SortOrder: 0,
 		}); err != nil {
 			return err
 		}
 		if fl := freelance[mi]; fl > 0 {
-			if _, err := s.CreateIncome(ctx, store.Income{
+			if _, err := s.CreateIncome(ctx, uid, store.Income{
 				Month: mo, Name: "Freelance", AmountCents: cents(fl), SortOrder: 1,
 			}); err != nil {
 				return err
@@ -406,7 +435,7 @@ func seed(ctx context.Context, s *store.Store) error {
 			if tx.notes != "" {
 				notesPtr = ptrStr(tx.notes)
 			}
-			if _, err := s.CreateTransaction(ctx, store.Transaction{
+			if _, err := s.CreateTransaction(ctx, uid, store.Transaction{
 				Date:         day(mo, tx.d),
 				AccountID:    tx.acct,
 				CategoryID:   catPtr,
@@ -430,7 +459,7 @@ func seed(ctx context.Context, s *store.Store) error {
 			if xf.note != "" {
 				notePtr = ptrStr(xf.note)
 			}
-			if _, _, err := s.CreateTransfer(ctx, store.TransferInput{
+			if _, _, err := s.CreateTransfer(ctx, uid, store.TransferInput{
 				Date:          day(mo, xf.d),
 				FromAccountID: xf.from,
 				ToAccountID:   xf.to,
@@ -470,7 +499,7 @@ func seed(ctx context.Context, s *store.Store) error {
 			if !ok {
 				continue
 			}
-			if err := s.SetAssigned(ctx, mo, cid, cents(d)); err != nil {
+			if err := s.SetAssigned(ctx, uid, mo, cid, cents(d)); err != nil {
 				return fmt.Errorf("assign %q: %w", key, err)
 			}
 		}

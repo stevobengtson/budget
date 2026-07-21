@@ -26,8 +26,8 @@ templ Layout(title string, active string, collapsed bool) {
 			<title>{ title } · Pigglet</title>
 			<script>
 				(function () {
-					var t = localStorage.getItem("theme");
-					if (t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+					var t = localStorage.getItem("theme") || "system";
+					if (t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
 						document.documentElement.classList.add("dark");
 					}
 				})();
@@ -101,18 +101,7 @@ templ appSidebar(collapsed bool, active string) {
       @sidebar.Footer() {
         @sidebar.Menu() {
           @sidebar.MenuItem() {
-            @sidebar.MenuButton(sidebar.MenuButtonProps{
-              Tooltip:    "Toggle theme",
-              Attributes: templ.Attributes{"onclick": "toggleTheme()"},
-            }) {
-              <span class="dark:hidden">
-                @icon.Sun(icon.Props{Class: "size-4"})
-              </span>
-              <span class="hidden dark:inline">
-                @icon.Moon(icon.Props{Class: "size-4"})
-              </span>
-              <span>Theme</span>
-            }
+            @userMenu()
           }
         }
       }
@@ -141,6 +130,75 @@ templ navItem(slug string, label string, ic templ.Component, active string) {
 			@ic
 			<span>{ label }</span>
 		}
+	}
+}
+
+// userMenu renders the sidebar footer account control: a trigger showing the
+// signed-in email that opens a popover with a Theme submenu, Settings, and Log
+// out. The email comes from the request context (set by requireAuth).
+templ userMenu() {
+	@dropdown.Dropdown() {
+		@dropdown.Trigger(dropdown.TriggerProps{
+			Class: "flex h-9 w-full items-center justify-between gap-2 rounded-md px-2 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+		}) {
+			<span class="flex min-w-0 items-center gap-2">
+				@icon.User(icon.Props{Class: "size-4 shrink-0"})
+				<span class="truncate group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">{ UserEmailFromContext(ctx) }</span>
+			</span>
+			@icon.ChevronsUpDown(icon.Props{Class: "size-4 shrink-0 text-muted-foreground group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
+		}
+		@dropdown.Content(dropdown.ContentProps{Class: "w-56", Placement: dropdown.PlacementTopStart}) {
+			@dropdown.Sub() {
+				@dropdown.SubTrigger() {
+					<span class="flex items-center gap-2">
+						@icon.Sun(icon.Props{Class: "size-4"})
+						Theme
+					</span>
+				}
+				@dropdown.SubContent() {
+					@themeOption("system", "System", icon.Monitor(icon.Props{Class: "size-4"}))
+					@themeOption("light", "Light", icon.Sun(icon.Props{Class: "size-4"}))
+					@themeOption("dark", "Dark", icon.Moon(icon.Props{Class: "size-4"}))
+				}
+			}
+			@dropdown.Item(dropdown.ItemProps{Href: "/account"}) {
+				<span class="flex items-center gap-2">
+					@icon.Settings(icon.Props{Class: "size-4"})
+					Settings
+				</span>
+			}
+			@dropdown.Separator()
+			@dropdown.Item(dropdown.ItemProps{
+				Class:      "text-destructive",
+				Attributes: templ.Attributes{"hx-post": "/logout"},
+			}) {
+				<span class="flex items-center gap-2">
+					@icon.LogOut(icon.Props{Class: "size-4"})
+					Log out
+				</span>
+			}
+		}
+	}
+}
+
+// themeOption is one row of the Theme submenu. It stays open on click
+// (PreventClose) so the active check updates in place; theme-toggle.js persists
+// the choice and toggles the check.
+templ themeOption(value string, label string, ic templ.Component) {
+	@dropdown.Item(dropdown.ItemProps{
+		PreventClose: true,
+		Attributes: templ.Attributes{
+			"onclick":           "setTheme('" + value + "')",
+			"data-theme-option": value,
+		},
+	}) {
+		<span class="flex items-center gap-2">
+			@ic
+			{ label }
+		</span>
+		<span data-theme-check class="invisible">
+			@icon.Check(icon.Props{Class: "size-4"})
+		</span>
 	}
 }
 

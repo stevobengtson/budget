@@ -4,13 +4,14 @@ Guidance for Claude Code (claude.ai/code) working in this repository.
 
 ## Project Overview
 
-Local-first personal finance app with envelope budgeting. **Single Go module**
+Personal finance app with envelope budgeting. **Single Go module**
 (`github.com/sbengtson/budget`):
 
 - **Web** (`cmd/web`) — server-rendered web UI (Gin + HTMX + Templ).
 
-SQLite is the primary/local store; the store layer also supports Postgres via a dialect
-abstraction. No separate JS frontend — the web UI is Go templates + HTMX.
+**Postgres is the only supported store** (via the pgx driver). All store SQL uses
+native `$1,$2,...` placeholders — there is no SQLite backend or dialect/rebind layer.
+No separate JS frontend — the web UI is Go templates + HTMX.
 
 ## Build & Run
 
@@ -19,14 +20,14 @@ All commands run from the repo root via [Task](https://taskfile.dev)
 was removed in favor of Task on 2026-07-12.)
 
 **Devbox (preferred toolchain).** `devbox.json` pins the exact tool versions
-(go, go-task, templ, goose, air, tailwindcss_4, sqlite) — the single source of
+(go, go-task, templ, goose, air, tailwindcss_4) — the single source of
 truth, matched to `go.mod` + the Taskfile. Work inside `devbox shell` (or `devbox
 run <script>`; scripts: `web`, `tui`, `dev`, `test`, `migrate`, `seed`). The
 shell's `init_hook` exports `TAILWIND`/`TEMPL` to the nix binaries, so Task uses
 them and **skips the tailwind download + `go install` steps**. `.air.toml` uses
 `${TAILWIND}`/`${TEMPL}` with fallbacks so `task dev` works in and out of Devbox.
-No CGO — `modernc.org/sqlite` is pure Go, so no compiler in the shell.
-When adding a tool (later: postgres, mailpit), `devbox add <pkg>` and pin it here.
+No CGO — the pgx driver is pure Go, so no compiler in the shell. A running
+Postgres is required (app + tests). When adding a tool, `devbox add <pkg>` and pin it here.
 
 ```bash
 task setup          # go mod download + install goose; installs templ + tailwind CLIs
@@ -44,11 +45,12 @@ task templ          # templ generate for internal/web
 task css            # compile Tailwind -> internal/web/static/app.css
 task tailwind-watch # watch mode
 
-# Database (SQLite, default DB_PATH=./data/budget.db):
-task db:migrate     # goose up
-task db:reset       # delete DB + re-migrate
+# Database (Postgres; DSN from BUDGET_DB_DSN, else the local budget default):
+task db:migrate     # goose up (Postgres)
+task db:reset       # goose reset + up (DESTRUCTIVE — wipes data)
 task db:status      # goose migration status
-task db:seed        # migrate + load demo data (via TUI binary)
+task db:seed        # migrate + load demo data (via the web binary)
+task db:dsn         # print the DSN the admin targets use
 ```
 
 The Tailwind entry point and theme tokens live in
@@ -56,13 +58,20 @@ The Tailwind entry point and theme tokens live in
 
 Web listen address comes from `--addr`, else config `web.addr` (default `:8080`).
 
-**DB path for the web/tui binaries:** the DSN comes from the `--db` flag, else
-`BUDGET_DB_DSN`, else `budget.yaml`'s `db.dsn` (checked-in value: `./data/budget.db`),
-else the XDG default. **There is no `DB_PATH` env var for the binaries** — that name
-only appears in the Taskfile's goose targets. Because `budget.yaml` sets
-`./data/budget.db`, running `go run ./cmd/web` from the repo root hits the **real dev
-database**. For any throwaway/smoke run, always pass `--db /tmp/<name>.db` so tests
-never mutate real data.
+**DB DSN for the web binary:** the Postgres DSN comes from the `--db` flag, else
+`BUDGET_DB_DSN`, else `budget.yaml`'s `db.dsn` (checked-in value:
+`postgres://postgres:postgres@127.0.0.1:5432/budget?sslmode=disable`), else the
+built-in local default (same URL). Because `budget.yaml` points at the **real dev
+database**, running `go run ./cmd/web` from the repo root migrates and mutates it.
+For any throwaway/smoke run, pass `--db postgres://.../<scratch_db>` so you don't
+touch real data.
+
+**Tests require Postgres.** The suite uses a shared `budget_test` database, reset
+per-test via `TRUNCATE ... RESTART IDENTITY CASCADE`. The DSN comes from
+`BUDGET_POSTGRES_URL` (default `postgres://postgres:postgres@127.0.0.1:5432/budget_test?sslmode=disable`);
+Postgres is required — tests do not skip. `go test ./...` runs package binaries in
+parallel, so every DB-backed test grabs one global Postgres advisory lock to
+serialize access to the shared DB.
 
 ## Architecture
 
@@ -72,11 +81,11 @@ cmd/web/main.go            Web binary entrypoint (opens db, builds store, serves
 internal/cli/              Shared Cobra/Viper CLI: root flags, config, db/migrate/seed
                            subcommands. Imports only internal/core, never a UI package.
 
-internal/core/store/       Persistence layer — raw SQL with `?` placeholders + dialect
-                           rebind (SQLite/Postgres). One file per aggregate: accounts,
+internal/core/store/       Persistence layer — raw SQL with native Postgres `$1,$2`
+                           placeholders. One file per aggregate: accounts,
                            budgets, categories, incomes, transactions.
-internal/core/db/          DB open, dialect detect, embedded goose migrations
-                           (migrations/{sqlite,postgres}/ — keep both in sync).
+internal/core/db/          Postgres open (pgx) + embedded goose migrations
+                           (migrations/postgres/).
 internal/core/config/      Viper config (budget.yaml / BUDGET_* env / CLI flags).
 internal/core/money/       Integer cents <-> human string parsing/formatting.
 internal/core/format/      Presentation helpers shared by TUI + web (goal/date wording).
@@ -101,10 +110,10 @@ dialog, label, selectbox, ...), styled via Tailwind v4.
 
 - **Amounts are integer cents everywhere** in code; formatting happens at the
   boundary via the `money` / `format` packages.
-- **Store**: all SQL uses `?` placeholders; the dialect helper rebinds for
-  Postgres. Construct with `store.New(db)` (SQLite) or `store.NewWithDialect`.
-- **Migrations** live in `internal/core/db/migrations/{sqlite,postgres}/` —
-  add schema changes to **both** dirs.
+- **Store**: all SQL uses native Postgres `$1,$2,...` placeholders. Construct
+  with `store.New(db)`. Bind Go bools directly (`true`/`false`), never integer
+  literals — Postgres rejects int→boolean.
+- **Migrations** live in `internal/core/db/migrations/postgres/`.
 - **Config precedence**: CLI flag → `BUDGET_*` env → `budget.yaml` → defaults.
 - **Web is server-rendered**: Templ generates Go; HTMX drives partial updates.
   After editing a `.templ` file, run `task templ` (or `task test`, which does it)
@@ -115,5 +124,6 @@ dialog, label, selectbox, ...), styled via Tailwind v4.
 - NEVER commit API keys or secrets — use environment variables.
 - Run `task test` before considering backend/core work done.
 - After editing `.templ` or Tailwind sources, regenerate (`task templ` / `task css`).
-- Keep SQLite and Postgres migration directories in sync.
+- Postgres-only: all new store SQL uses `$1,$2,...`; add migrations under
+  `migrations/postgres/`.
 - Do not suggest or create commits, merges, or PRs — the user does all of this.

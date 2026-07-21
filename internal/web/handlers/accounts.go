@@ -17,12 +17,12 @@ import (
 // emits the "accountsChanged" HTMX event. Month is empty so per-account links
 // default to the current month on the transactions page.
 func (h *Handlers) AccountsOverviewPartial(c *gin.Context) {
-	accts, _ := h.store.ListAccounts(c.Request.Context(), true)
+	accts, _ := h.store.ListAccounts(c.Request.Context(), currentUserID(c), true)
 	render(c, http.StatusOK, accountsoverview.AccountsOverview(accts, ""))
 }
 
 func (h *Handlers) AccountsNew(c *gin.Context) {
-	cats, _ := h.store.ListCategories(c.Request.Context(), false)
+	cats, _ := h.store.ListCategories(c.Request.Context(), currentUserID(c), false)
 	d := views.AccountFormData{
 		Type: string(store.TypeChecking), Categories: cats,
 	}
@@ -31,13 +31,14 @@ func (h *Handlers) AccountsNew(c *gin.Context) {
 
 func (h *Handlers) AccountsEdit(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	a, err := h.store.GetAccount(ctx, id)
+	a, err := h.store.GetAccount(ctx, uid, id)
 	if err != nil {
 		c.String(http.StatusNotFound, err.Error())
 		return
 	}
-	cats, _ := h.store.ListCategories(ctx, false)
+	cats, _ := h.store.ListCategories(ctx, uid, false)
 	d := views.AccountFormData{
 		Editing: true, ID: a.ID, Name: a.Name, Type: string(a.Type),
 		StartingBalance:   money.Format(a.StartingBalanceCents),
@@ -65,7 +66,7 @@ func (h *Handlers) AccountsUpdate(c *gin.Context) {
 
 func (h *Handlers) AccountsArchive(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err := h.store.ArchiveAccount(c.Request.Context(), id); err != nil {
+	if err := h.store.ArchiveAccount(c.Request.Context(), currentUserID(c), id); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -76,6 +77,7 @@ func (h *Handlers) AccountsArchive(c *gin.Context) {
 
 func (h *Handlers) upsertAccount(c *gin.Context, id int64) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	a := store.Account{ID: id, Name: c.PostForm("name"), Type: store.AccountType(c.PostForm("type"))}
 
 	if v := c.PostForm("starting_balance"); v != "" {
@@ -114,14 +116,14 @@ func (h *Handlers) upsertAccount(c *gin.Context, id int64) {
 	}
 
 	if id == 0 {
-		_, err := h.store.CreateAccount(ctx, a)
+		_, err := h.store.CreateAccount(ctx, uid, a)
 		if err != nil {
-			c.String(http.StatusInternalServerError, err.Error())
+			writeStoreErr(c, err)
 			return
 		}
 	} else {
-		if err := h.store.UpdateAccount(ctx, a); err != nil {
-			c.String(http.StatusInternalServerError, err.Error())
+		if err := h.store.UpdateAccount(ctx, uid, a); err != nil {
+			writeStoreErr(c, err)
 			return
 		}
 	}

@@ -1,18 +1,12 @@
 package db
 
-// Dialect identifies which SQL dialect the underlying *sql.DB speaks.
-// Defined here (rather than in store) to avoid an import cycle, since
-// store_test.go imports the db package for opening test connections.
+// Dialect identifies which SQL dialect the underlying *sql.DB speaks. The app
+// targets Postgres only; the type is retained (Postgres-only) so the
+// admin/migration helpers keep a stable signature.
 type Dialect int
 
 const (
-	DialectSQLite Dialect = iota
-	DialectPostgres
+	DialectPostgres Dialect = iota
 )
 
-func (d Dialect) String() string {
-	if d == DialectPostgres {
-		return "postgres"
-	}
-	return "sqlite"
-}
+func (d Dialect) String() string { return "postgres" }

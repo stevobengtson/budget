@@ -6,8 +6,9 @@ version: "3"
 vars:
   BIN_WEB: ./bin/web/budget
   CMD_WEB: ./cmd/web
-  MIGRATIONS: ./internal/core/db/migrations/sqlite
-  DB_PATH: '{{.DB_PATH | default "./data/budget.db"}}'
+  MIGRATIONS: ./internal/core/db/migrations/postgres
+  # Postgres DSN for the goose admin targets. Override with BUDGET_DB_DSN.
+  DEFAULT_DSN: "postgres://postgres:postgres@127.0.0.1:5432/budget?sslmode=disable"
 
   # Overridden by devbox env (nix paths); default to bundled/PATH binaries.
   TEMPL: '{{.TEMPL | default "templ"}}'
@@ -115,36 +116,31 @@ tasks:
     cmds:
       - rm -rf ./bin/tui ./bin/web {{.CSS_OUT}}
 
-  db:path:
-    desc: Print the DB path
+  db:dsn:
+    desc: Print the Postgres DSN the admin targets use (BUDGET_DB_DSN or default)
     cmds:
-      - echo {{.DB_PATH}}
+      - 'echo "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}"'
     silent: true
 
-  db:delete:
-    desc: Delete the SQLite DB (+ wal/shm)
-    cmds:
-      - rm -f {{.DB_PATH}} {{.DB_PATH}}-shm {{.DB_PATH}}-wal
-
   db:migrate:
-    desc: Run goose migrations up
+    desc: Run goose migrations up against Postgres
     cmds:
-      - goose -dir {{.MIGRATIONS}} sqlite3 {{.DB_PATH}} up
+      - 'goose -dir {{.MIGRATIONS}} postgres "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}" up'
 
   db:reset:
-    desc: Delete DB + re-migrate
+    desc: Roll all migrations back then re-apply them (DESTRUCTIVE — wipes data)
     cmds:
-      - task: db:delete
-      - task: db:migrate
+      - 'goose -dir {{.MIGRATIONS}} postgres "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}" reset'
+      - 'goose -dir {{.MIGRATIONS}} postgres "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}" up'
 
   db:status:
     desc: Show goose migration status
     cmds:
-      - goose -dir {{.MIGRATIONS}} sqlite3 {{.DB_PATH}} status
+      - 'goose -dir {{.MIGRATIONS}} postgres "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}" status'
 
   db:seed:
-    desc: Migrate + load demo data via the TUI binary
-    deps: [build:tui]
+    desc: Migrate + load demo data via the web binary
+    deps: [build]
     cmds:
       - task: db:migrate
-      - "{{.BIN_TUI}} --db {{.DB_PATH}} db seed"
+      - '{{.BIN_WEB}} --db "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}" db seed'

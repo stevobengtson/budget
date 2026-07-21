@@ -45,7 +45,8 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 		page = 1
 	}
 
-	rows, err := h.store.ListTransactions(ctx, store.TxFilter{
+	uid := currentUserID(c)
+	rows, err := h.store.ListTransactions(ctx, uid, store.TxFilter{
 		AccountID: acctPtr, Month: month, Limit: 5000,
 	})
 	if err != nil {
@@ -63,9 +64,9 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 	}
 	rows = rows[start:end]
 
-	accts, _ := h.store.ListAccounts(ctx, true)
-	cats, _ := h.store.ListCategories(ctx, true)
-	groups, _ := h.store.ListGroups(ctx)
+	accts, _ := h.store.ListAccounts(ctx, uid, true)
+	cats, _ := h.store.ListCategories(ctx, uid, true)
+	groups, _ := h.store.ListGroups(ctx, uid)
 
 	prev, next := "", ""
 	if month != "" {
@@ -91,8 +92,9 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 }
 
 func (h *Handlers) TransactionsNew(c *gin.Context) {
-	accts, _ := h.store.ListAccounts(c.Request.Context(), false)
-	cats, _ := h.store.ListCategories(c.Request.Context(), false)
+	uid := currentUserID(c)
+	accts, _ := h.store.ListAccounts(c.Request.Context(), uid, false)
+	cats, _ := h.store.ListCategories(c.Request.Context(), uid, false)
 	d := views.TxFormData{
 		Date:       time.Now().Format("2006-01-02"),
 		Accounts:   accts,
@@ -126,14 +128,15 @@ func (h *Handlers) TransactionsCreate(c *gin.Context) {
 
 func (h *Handlers) TransactionsEdit(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	t, err := h.store.GetTransaction(ctx, id)
+	t, err := h.store.GetTransaction(ctx, uid, id)
 	if err != nil {
 		c.String(http.StatusNotFound, "tx not found")
 		return
 	}
-	accts, _ := h.store.ListAccounts(ctx, true)
-	cats, _ := h.store.ListCategories(ctx, true)
+	accts, _ := h.store.ListAccounts(ctx, uid, true)
+	cats, _ := h.store.ListCategories(ctx, uid, true)
 	d := views.TxFormData{
 		Editing:           true,
 		ID:                t.ID,
@@ -147,7 +150,7 @@ func (h *Handlers) TransactionsEdit(c *gin.Context) {
 	// A transfer's category lives on the outflow (spending) leg. When editing
 	// the inflow leg, surface the pair's category so it's visible and editable.
 	if t.TransferPairID != nil && t.CategoryID == nil {
-		if pair, err := h.store.GetTransaction(ctx, *t.TransferPairID); err == nil {
+		if pair, err := h.store.GetTransaction(ctx, uid, *t.TransferPairID); err == nil {
 			d.CategoryID = pair.CategoryID
 		}
 	}
@@ -182,7 +185,7 @@ func (h *Handlers) TransactionsUpdate(c *gin.Context) {
 func (h *Handlers) TransactionsDelete(c *gin.Context) {
 	ctx := c.Request.Context()
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err := h.store.DeleteTransaction(ctx, id); err != nil {
+	if err := h.store.DeleteTransaction(ctx, currentUserID(c), id); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -194,21 +197,22 @@ func (h *Handlers) TransactionsDelete(c *gin.Context) {
 
 func (h *Handlers) TransactionsToggleCleared(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	t, err := h.store.GetTransaction(ctx, id)
+	t, err := h.store.GetTransaction(ctx, uid, id)
 	if err != nil {
 		c.String(http.StatusBadRequest, "not toggleable")
 		return
 	}
 	// For a transfer leg SetCleared flips both legs; the paired row updates on
 	// the next full render (HTMX partial-sync is handled separately).
-	if err := h.store.SetCleared(ctx, id, !t.Cleared); err != nil {
+	if err := h.store.SetCleared(ctx, uid, id, !t.Cleared); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 	t.Cleared = !t.Cleared
-	accts, _ := h.store.ListAccounts(ctx, true)
-	cats, _ := h.store.ListCategories(ctx, true)
+	accts, _ := h.store.ListAccounts(ctx, uid, true)
+	cats, _ := h.store.ListCategories(ctx, uid, true)
 	render(c, http.StatusOK, views.TransactionRow(*t, accts, cats, false))
 }
 
@@ -216,6 +220,7 @@ func (h *Handlers) TransactionsToggleCleared(c *gin.Context) {
 // from the form fields. Mirrors the TUI's parsing rules.
 func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	dateStr := c.PostForm("date")
 	if dateStr == "" {
 		dateStr = time.Now().Format("2006-01-02")
@@ -259,7 +264,7 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 	// Editing an existing transfer leg: update both legs in place rather than
 	// deleting and recreating, so ids and the pair linkage survive.
 	if id != 0 {
-		existing, err := h.store.GetTransaction(ctx, id)
+		existing, err := h.store.GetTransaction(ctx, uid, id)
 		if err != nil {
 			return err
 		}
@@ -270,7 +275,7 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 			if outCents+inCents <= 0 {
 				return errInvalid("transfer amount required")
 			}
-			return h.store.UpdateTransfer(ctx, id, store.TransferLegEdit{
+			return h.store.UpdateTransfer(ctx, uid, id, store.TransferLegEdit{
 				Date: t, AccountID: acctID, TransferAccountID: *transferTo,
 				OutflowCents: outCents, InflowCents: inCents,
 				CategoryID: catPtr, Notes: notesPtr,
@@ -287,7 +292,7 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 		if outCents == 0 {
 			fromID, toID = *transferTo, acctID
 		}
-		_, _, err := h.store.CreateTransfer(ctx, store.TransferInput{
+		_, _, err := h.store.CreateTransfer(ctx, uid, store.TransferInput{
 			Date: t, FromAccountID: fromID, ToAccountID: toID,
 			AmountCents: amount, CategoryID: catPtr, Notes: notesPtr,
 		})
@@ -300,10 +305,10 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 		OutflowCents: outCents, InflowCents: inCents,
 	}
 	if id == 0 {
-		_, err := h.store.CreateTransaction(ctx, tx)
+		_, err := h.store.CreateTransaction(ctx, uid, tx)
 		return err
 	}
-	return h.store.UpdateTransaction(ctx, tx)
+	return h.store.UpdateTransaction(ctx, uid, tx)
 }
 
 // renderTxRows writes the row HTML for <tbody id="tx-rows"> followed by
@@ -331,11 +336,12 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 		}
 	}
 
-	rows, _ := h.store.ListTransactions(ctx, store.TxFilter{
+	uid := currentUserID(c)
+	rows, _ := h.store.ListTransactions(ctx, uid, store.TxFilter{
 		AccountID: acctPtr, Month: month, Limit: txPageSize,
 	})
-	accts, _ := h.store.ListAccounts(ctx, true)
-	cats, _ := h.store.ListCategories(ctx, true)
+	accts, _ := h.store.ListAccounts(ctx, uid, true)
+	cats, _ := h.store.ListCategories(ctx, uid, true)
 	c.Status(http.StatusOK)
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = views.TxRows(rows, accts, cats).Render(ctx, c.Writer)

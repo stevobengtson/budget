@@ -7,17 +7,22 @@ package handlers
 import (
 	"github.com/gin-gonic/gin"
 
+	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
 // Handlers is a struct of all HTTP handlers; constructed once per process.
 type Handlers struct {
-	store *store.Store
+	store         *store.Store
+	auth          *auth.Service
+	secure        bool // Secure flag on the session cookie
+	sessionMaxAge int  // session cookie Max-Age in seconds (mirrors auth session TTL)
 }
 
-// New constructs a Handlers wired to the supplied store.
-func New(s *store.Store) *Handlers {
-	return &Handlers{store: s}
+// New constructs a Handlers wired to the supplied store and auth service.
+// sessionMaxAge is the session cookie lifetime in seconds.
+func New(s *store.Store, a *auth.Service, secure bool, sessionMaxAge int) *Handlers {
+	return &Handlers{store: s, auth: a, secure: secure, sessionMaxAge: sessionMaxAge}
 }
 
 // sidebarCollapsed reports whether the sidebar should render collapsed, from the

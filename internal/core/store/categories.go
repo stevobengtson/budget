@@ -39,18 +39,18 @@ type Category struct {
 
 // --- Groups ---
 
-func (s *Store) CreateGroup(ctx context.Context, name string, sortOrder int64) (int64, error) {
+func (s *Store) CreateGroup(ctx context.Context, userID int64, name string, sortOrder int64) (int64, error) {
 	id, err := s.insertReturningID(ctx,
-		`INSERT INTO category_groups(name, sort_order) VALUES (?, ?)`, name, sortOrder)
+		`INSERT INTO category_groups(user_id, name, sort_order) VALUES ($1, $2, $3)`, userID, name, sortOrder)
 	if err != nil {
 		return 0, fmt.Errorf("create group: %w", err)
 	}
 	return id, nil
 }
 
-func (s *Store) UpdateGroup(ctx context.Context, g CategoryGroup) error {
+func (s *Store) UpdateGroup(ctx context.Context, userID int64, g CategoryGroup) error {
 	_, err := s.run(ctx,
-		`UPDATE category_groups SET name=?, sort_order=? WHERE id=?`, g.Name, g.SortOrder, g.ID)
+		`UPDATE category_groups SET name=$1, sort_order=$2 WHERE id=$3 AND user_id=$4`, g.Name, g.SortOrder, g.ID, userID)
 	return err
 }
 
@@ -61,7 +61,7 @@ func (s *Store) UpdateGroup(ctx context.Context, g CategoryGroup) error {
 // group still has an active category, or an archived category that carries
 // history (referenced by a transaction or an account's payment category) — the
 // foreign key rolls the whole delete back so no history is lost.
-func (s *Store) DeleteGroup(ctx context.Context, id int64) error {
+func (s *Store) DeleteGroup(ctx context.Context, userID, id int64) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -70,7 +70,7 @@ func (s *Store) DeleteGroup(ctx context.Context, id int64) error {
 
 	var active int
 	if err := s.txQueryOne(ctx, tx,
-		`SELECT COUNT(*) FROM categories WHERE group_id=? AND archived_at IS NULL`, id).Scan(&active); err != nil {
+		`SELECT COUNT(*) FROM categories WHERE group_id=$1 AND archived_at IS NULL AND user_id=$2`, id, userID).Scan(&active); err != nil {
 		return err
 	}
 	if active > 0 {
@@ -78,18 +78,18 @@ func (s *Store) DeleteGroup(ctx context.Context, id int64) error {
 	}
 
 	if _, err := s.txExec(ctx, tx,
-		`DELETE FROM categories WHERE group_id=? AND archived_at IS NOT NULL`, id); err != nil {
+		`DELETE FROM categories WHERE group_id=$1 AND archived_at IS NOT NULL AND user_id=$2`, id, userID); err != nil {
 		return fmt.Errorf("group has categories with history and cannot be deleted: %w", err)
 	}
-	if _, err := s.txExec(ctx, tx, `DELETE FROM category_groups WHERE id=?`, id); err != nil {
+	if _, err := s.txExec(ctx, tx, `DELETE FROM category_groups WHERE id=$1 AND user_id=$2`, id, userID); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-func (s *Store) ListGroups(ctx context.Context) ([]CategoryGroup, error) {
+func (s *Store) ListGroups(ctx context.Context, userID int64) ([]CategoryGroup, error) {
 	rows, err := s.queryAll(ctx,
-		`SELECT id, name, sort_order FROM category_groups ORDER BY sort_order, name`)
+		`SELECT id, name, sort_order FROM category_groups WHERE user_id=$1 ORDER BY sort_order, name`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,25 +107,25 @@ func (s *Store) ListGroups(ctx context.Context) ([]CategoryGroup, error) {
 
 // MaxGroupSortOrder returns the largest sort_order among category groups, or 0
 // if there are none. Callers add 1 to append a new group at the end.
-func (s *Store) MaxGroupSortOrder(ctx context.Context) (int64, error) {
+func (s *Store) MaxGroupSortOrder(ctx context.Context, userID int64) (int64, error) {
 	var max int64
 	err := s.queryOne(ctx,
-		`SELECT COALESCE(MAX(sort_order), 0) FROM category_groups`).Scan(&max)
+		`SELECT COALESCE(MAX(sort_order), 0) FROM category_groups WHERE user_id=$1`, userID).Scan(&max)
 	return max, err
 }
 
 // MaxCategorySortOrder returns the largest sort_order among categories in a
 // group, or 0 if the group has none. Callers add 1 to append.
-func (s *Store) MaxCategorySortOrder(ctx context.Context, groupID int64) (int64, error) {
+func (s *Store) MaxCategorySortOrder(ctx context.Context, userID, groupID int64) (int64, error) {
 	var max int64
 	err := s.queryOne(ctx,
-		`SELECT COALESCE(MAX(sort_order), 0) FROM categories WHERE group_id=?`, groupID).Scan(&max)
+		`SELECT COALESCE(MAX(sort_order), 0) FROM categories WHERE group_id=$1 AND user_id=$2`, groupID, userID).Scan(&max)
 	return max, err
 }
 
 // --- Categories ---
 
-func (s *Store) CreateCategory(ctx context.Context, c Category) (int64, error) {
+func (s *Store) CreateCategory(ctx context.Context, userID int64, c Category) (int64, error) {
 	var due sql.NullTime
 	if c.GoalDueDate != nil {
 		due = sql.NullTime{Time: *c.GoalDueDate, Valid: true}
@@ -133,50 +133,58 @@ func (s *Store) CreateCategory(ctx context.Context, c Category) (int64, error) {
 	if c.RolloverMode == "" {
 		c.RolloverMode = RolloverCarryPositive
 	}
+	if err := s.requireGroup(ctx, userID, c.GroupID); err != nil {
+		return 0, err
+	}
 	id, err := s.insertReturningID(ctx,
-		`INSERT INTO categories(group_id, name, goal_cents, goal_due_date, sort_order, rollover_mode)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		c.GroupID, c.Name, nullInt(c.GoalCents), due, c.SortOrder, c.RolloverMode)
+		`INSERT INTO categories(user_id, group_id, name, goal_cents, goal_due_date, sort_order, rollover_mode)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		userID, c.GroupID, c.Name, nullInt(c.GoalCents), due, c.SortOrder, c.RolloverMode)
 	if err != nil {
 		return 0, fmt.Errorf("create category: %w", err)
 	}
 	return id, nil
 }
 
-func (s *Store) UpdateCategory(ctx context.Context, c Category) error {
+func (s *Store) UpdateCategory(ctx context.Context, userID int64, c Category) error {
 	var due sql.NullTime
 	if c.GoalDueDate != nil {
 		due = sql.NullTime{Time: *c.GoalDueDate, Valid: true}
 	}
+	// UpdateCategory can move a category between groups; the destination group
+	// must belong to the acting user.
+	if err := s.requireGroup(ctx, userID, c.GroupID); err != nil {
+		return err
+	}
 	_, err := s.run(ctx,
 		`UPDATE categories
-		 SET group_id=?, name=?, goal_cents=?, goal_due_date=?, sort_order=?, rollover_mode=?
-		 WHERE id=?`,
-		c.GroupID, c.Name, nullInt(c.GoalCents), due, c.SortOrder, c.RolloverMode, c.ID)
+		 SET group_id=$1, name=$2, goal_cents=$3, goal_due_date=$4, sort_order=$5, rollover_mode=$6
+		 WHERE id=$7 AND user_id=$8`,
+		c.GroupID, c.Name, nullInt(c.GoalCents), due, c.SortOrder, c.RolloverMode, c.ID, userID)
 	return err
 }
 
-func (s *Store) ArchiveCategory(ctx context.Context, id int64) error {
-	if err := s.checkNotIncome(ctx, id); err != nil {
+func (s *Store) ArchiveCategory(ctx context.Context, userID, id int64) error {
+	if err := s.checkNotIncome(ctx, userID, id); err != nil {
 		return err
 	}
 	_, err := s.run(ctx,
-		`UPDATE categories SET archived_at=CURRENT_TIMESTAMP WHERE id=?`, id)
+		`UPDATE categories SET archived_at=CURRENT_TIMESTAMP WHERE id=$1 AND user_id=$2`, id, userID)
 	return err
 }
 
-func (s *Store) DeleteCategory(ctx context.Context, id int64) error {
-	if err := s.checkNotIncome(ctx, id); err != nil {
+func (s *Store) DeleteCategory(ctx context.Context, userID, id int64) error {
+	if err := s.checkNotIncome(ctx, userID, id); err != nil {
 		return err
 	}
-	_, err := s.run(ctx, `DELETE FROM categories WHERE id=?`, id)
+	_, err := s.run(ctx, `DELETE FROM categories WHERE id=$1 AND user_id=$2`, id, userID)
 	return err
 }
 
-func (s *Store) checkNotIncome(ctx context.Context, id int64) error {
+func (s *Store) checkNotIncome(ctx context.Context, userID, id int64) error {
 	var isIncome bool
 	if err := s.queryOne(ctx,
-		`SELECT is_income FROM categories WHERE id=?`, id).Scan(&isIncome); err != nil {
+		`SELECT is_income FROM categories WHERE id=$1 AND user_id=$2`, id, userID).Scan(&isIncome); err != nil {
 		return err
 	}
 	if isIncome {
@@ -186,13 +194,13 @@ func (s *Store) checkNotIncome(ctx context.Context, id int64) error {
 }
 
 // ListCategories returns active categories.
-func (s *Store) ListCategories(ctx context.Context, includeArchived bool) ([]Category, error) {
-	q := `SELECT id, group_id, name, goal_cents, goal_due_date, sort_order, archived_at, is_income, rollover_mode FROM categories`
+func (s *Store) ListCategories(ctx context.Context, userID int64, includeArchived bool) ([]Category, error) {
+	q := `SELECT id, group_id, name, goal_cents, goal_due_date, sort_order, archived_at, is_income, rollover_mode FROM categories WHERE user_id=$1`
 	if !includeArchived {
-		q += ` WHERE archived_at IS NULL`
+		q += ` AND archived_at IS NULL`
 	}
 	q += ` ORDER BY sort_order, name`
-	rows, err := s.queryAll(ctx, q)
+	rows, err := s.queryAll(ctx, q, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -215,8 +223,8 @@ func (s *Store) ListCategories(ctx context.Context, includeArchived bool) ([]Cat
 
 // SetRolloverMode updates a category's rollover mode. mode must be one of the
 // Rollover* constants; the DB CHECK constraint rejects anything else.
-func (s *Store) SetRolloverMode(ctx context.Context, categoryID int64, mode string) error {
+func (s *Store) SetRolloverMode(ctx context.Context, userID, categoryID int64, mode string) error {
 	_, err := s.run(ctx,
-		`UPDATE categories SET rollover_mode=? WHERE id=?`, mode, categoryID)
+		`UPDATE categories SET rollover_mode=$1 WHERE id=$2 AND user_id=$3`, mode, categoryID, userID)
 	return err
 }

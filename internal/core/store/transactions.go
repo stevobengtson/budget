@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -41,7 +42,7 @@ type TransferInput struct {
 	Cleared       bool
 }
 
-func (s *Store) CreateTransaction(ctx context.Context, t Transaction) (int64, error) {
+func (s *Store) CreateTransaction(ctx context.Context, userID int64, t Transaction) (int64, error) {
 	if t.OutflowCents < 0 || t.InflowCents < 0 {
 		return 0, errors.New("outflow/inflow must be non-negative")
 	}
@@ -51,10 +52,18 @@ func (s *Store) CreateTransaction(ctx context.Context, t Transaction) (int64, er
 	if t.TransferAccountID != nil {
 		return 0, errors.New("use CreateTransfer for transfers")
 	}
+	if err := s.requireAccount(ctx, userID, t.AccountID); err != nil {
+		return 0, err
+	}
+	if t.CategoryID != nil {
+		if err := s.requireCategory(ctx, userID, *t.CategoryID); err != nil {
+			return 0, err
+		}
+	}
 	id, err := s.insertReturningID(ctx,
-		`INSERT INTO transactions(date, account_id, category_id, payee, notes, outflow_cents, inflow_cents, cleared)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.Date.Format("2006-01-02"), t.AccountID, nullInt(t.CategoryID),
+		`INSERT INTO transactions(user_id, date, account_id, category_id, payee, notes, outflow_cents, inflow_cents, cleared)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		userID, t.Date.Format("2006-01-02"), t.AccountID, nullInt(t.CategoryID),
 		nullStr(t.Payee), nullStr(t.Notes), t.OutflowCents, t.InflowCents, t.Cleared)
 	if err != nil {
 		return 0, fmt.Errorf("create transaction: %w", err)
@@ -62,28 +71,41 @@ func (s *Store) CreateTransaction(ctx context.Context, t Transaction) (int64, er
 	return id, nil
 }
 
-func (s *Store) UpdateTransaction(ctx context.Context, t Transaction) error {
+func (s *Store) UpdateTransaction(ctx context.Context, userID int64, t Transaction) error {
 	if t.TransferPairID != nil {
 		return errors.New("update transfers via DeleteTransaction + CreateTransfer")
 	}
+	if err := s.requireAccount(ctx, userID, t.AccountID); err != nil {
+		return err
+	}
+	if t.TransferAccountID != nil {
+		if err := s.requireAccount(ctx, userID, *t.TransferAccountID); err != nil {
+			return err
+		}
+	}
+	if t.CategoryID != nil {
+		if err := s.requireCategory(ctx, userID, *t.CategoryID); err != nil {
+			return err
+		}
+	}
 	_, err := s.run(ctx,
 		`UPDATE transactions
-		 SET date=?, account_id=?, category_id=?, payee=?, notes=?, outflow_cents=?, inflow_cents=?, cleared=?
-		 WHERE id=?`,
+		 SET date=$1, account_id=$2, category_id=$3, payee=$4, notes=$5, outflow_cents=$6, inflow_cents=$7, cleared=$8
+		 WHERE id=$9 AND user_id=$10`,
 		t.Date.Format("2006-01-02"), t.AccountID, nullInt(t.CategoryID),
-		nullStr(t.Payee), nullStr(t.Notes), t.OutflowCents, t.InflowCents, t.Cleared, t.ID)
+		nullStr(t.Payee), nullStr(t.Notes), t.OutflowCents, t.InflowCents, t.Cleared, t.ID, userID)
 	return err
 }
 
 // GetTransaction fetches a single transaction by id.
-func (s *Store) GetTransaction(ctx context.Context, id int64) (*Transaction, error) {
+func (s *Store) GetTransaction(ctx context.Context, userID, id int64) (*Transaction, error) {
 	q := `SELECT id, date, account_id, category_id, transfer_account_id, transfer_pair_id,
 	             payee, notes, outflow_cents, inflow_cents, cleared, created_at
-	      FROM transactions WHERE id=?`
+	      FROM transactions WHERE id=$1 AND user_id=$2`
 	var t Transaction
 	var cat, transferAcc, pair sql.NullInt64
 	var payee, notes sql.NullString
-	err := s.queryOne(ctx, q, id).Scan(&t.ID, &t.Date, &t.AccountID, &cat, &transferAcc, &pair,
+	err := s.queryOne(ctx, q, id, userID).Scan(&t.ID, &t.Date, &t.AccountID, &cat, &transferAcc, &pair,
 		&payee, &notes, &t.OutflowCents, &t.InflowCents, &t.Cleared, &t.CreatedAt)
 	if err != nil {
 		return nil, err
@@ -117,7 +139,7 @@ type TransferLegEdit struct {
 
 // UpdateTransfer updates both legs of the transfer that legID belongs to,
 // atomically, from the edited leg's new state. See TransferLegEdit.
-func (s *Store) UpdateTransfer(ctx context.Context, legID int64, in TransferLegEdit) error {
+func (s *Store) UpdateTransfer(ctx context.Context, userID, legID int64, in TransferLegEdit) error {
 	if in.OutflowCents < 0 || in.InflowCents < 0 {
 		return errors.New("outflow/inflow must be non-negative")
 	}
@@ -127,6 +149,17 @@ func (s *Store) UpdateTransfer(ctx context.Context, legID int64, in TransferLegE
 	if in.AccountID == in.TransferAccountID {
 		return errors.New("from and to accounts must differ")
 	}
+	if err := s.requireAccount(ctx, userID, in.AccountID); err != nil {
+		return err
+	}
+	if err := s.requireAccount(ctx, userID, in.TransferAccountID); err != nil {
+		return err
+	}
+	if in.CategoryID != nil {
+		if err := s.requireCategory(ctx, userID, *in.CategoryID); err != nil {
+			return err
+		}
+	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -135,7 +168,7 @@ func (s *Store) UpdateTransfer(ctx context.Context, legID int64, in TransferLegE
 	defer func() { _ = tx.Rollback() }()
 
 	var pair sql.NullInt64
-	if err := s.txQueryOne(ctx, tx, `SELECT transfer_pair_id FROM transactions WHERE id=?`, legID).Scan(&pair); err != nil {
+	if err := s.txQueryOne(ctx, tx, `SELECT transfer_pair_id FROM transactions WHERE id=$1 AND user_id=$2`, legID, userID).Scan(&pair); err != nil {
 		return err
 	}
 	if !pair.Valid {
@@ -158,11 +191,11 @@ func (s *Store) UpdateTransfer(ctx context.Context, legID int64, in TransferLegE
 	// Edited leg: exactly the values the user chose.
 	if _, err := s.txExec(ctx, tx,
 		`UPDATE transactions
-		 SET date=?, account_id=?, transfer_account_id=?, category_id=?, notes=?,
-		     outflow_cents=?, inflow_cents=?, cleared=?
-		 WHERE id=?`,
+		 SET date=$1, account_id=$2, transfer_account_id=$3, category_id=$4, notes=$5,
+		     outflow_cents=$6, inflow_cents=$7, cleared=$8
+		 WHERE id=$9 AND user_id=$10`,
 		dateStr, in.AccountID, in.TransferAccountID, nullInt(editedCat), nullStr(in.Notes),
-		in.OutflowCents, in.InflowCents, false, legID); err != nil {
+		in.OutflowCents, in.InflowCents, false, legID, userID); err != nil {
 		return fmt.Errorf("update edited leg: %w", err)
 	}
 
@@ -170,11 +203,11 @@ func (s *Store) UpdateTransfer(ctx context.Context, legID int64, in TransferLegE
 	// back-pointer follows the edited leg's account.
 	if _, err := s.txExec(ctx, tx,
 		`UPDATE transactions
-		 SET date=?, account_id=?, transfer_account_id=?, category_id=?, notes=?,
-		     outflow_cents=?, inflow_cents=?, cleared=?
-		 WHERE id=?`,
+		 SET date=$1, account_id=$2, transfer_account_id=$3, category_id=$4, notes=$5,
+		     outflow_cents=$6, inflow_cents=$7, cleared=$8
+		 WHERE id=$9 AND user_id=$10`,
 		dateStr, in.TransferAccountID, in.AccountID, nullInt(pairCat), nullStr(in.Notes),
-		in.InflowCents, in.OutflowCents, false, pairID); err != nil {
+		in.InflowCents, in.OutflowCents, false, pairID, userID); err != nil {
 		return fmt.Errorf("update paired leg: %w", err)
 	}
 
@@ -183,7 +216,7 @@ func (s *Store) UpdateTransfer(ctx context.Context, legID int64, in TransferLegE
 
 // SetCleared sets the cleared flag on a transaction. If it's part of a
 // transfer, both legs are updated so their cleared state stays identical.
-func (s *Store) SetCleared(ctx context.Context, id int64, cleared bool) error {
+func (s *Store) SetCleared(ctx context.Context, userID, id int64, cleared bool) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -191,17 +224,25 @@ func (s *Store) SetCleared(ctx context.Context, id int64, cleared bool) error {
 	defer func() { _ = tx.Rollback() }()
 
 	var pair sql.NullInt64
-	if err := s.txQueryOne(ctx, tx, `SELECT transfer_pair_id FROM transactions WHERE id=?`, id).Scan(&pair); err != nil {
+	if err := s.txQueryOne(ctx, tx, `SELECT transfer_pair_id FROM transactions WHERE id=$1 AND user_id=$2`, id, userID).Scan(&pair); err != nil {
 		return err
 	}
-	ids := []any{id}
-	q := `UPDATE transactions SET cleared=? WHERE id IN (?`
+	// Build the placeholder list sequentially: $1 = cleared, then one $n per id,
+	// then user_id last.
+	args := []any{cleared}
+	ids := []int64{id}
 	if pair.Valid {
-		q += `, ?`
 		ids = append(ids, pair.Int64)
 	}
-	q += `)`
-	if _, err := s.txExec(ctx, tx, q, append([]any{cleared}, ids...)...); err != nil {
+	inClauses := make([]string, len(ids))
+	for i, tid := range ids {
+		args = append(args, tid)
+		inClauses[i] = fmt.Sprintf("$%d", len(args))
+	}
+	args = append(args, userID)
+	q := fmt.Sprintf(`UPDATE transactions SET cleared=$1 WHERE id IN (%s) AND user_id=$%d`,
+		strings.Join(inClauses, ", "), len(args))
+	if _, err := s.txExec(ctx, tx, q, args...); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -209,7 +250,7 @@ func (s *Store) SetCleared(ctx context.Context, id int64, cleared bool) error {
 
 // DeleteTransaction removes a transaction. If it's part of a transfer, both
 // legs are removed atomically.
-func (s *Store) DeleteTransaction(ctx context.Context, id int64) error {
+func (s *Store) DeleteTransaction(ctx context.Context, userID, id int64) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -217,19 +258,19 @@ func (s *Store) DeleteTransaction(ctx context.Context, id int64) error {
 	defer func() { _ = tx.Rollback() }()
 
 	var pair sql.NullInt64
-	if err := s.txQueryOne(ctx, tx, `SELECT transfer_pair_id FROM transactions WHERE id=?`, id).Scan(&pair); err != nil {
+	if err := s.txQueryOne(ctx, tx, `SELECT transfer_pair_id FROM transactions WHERE id=$1 AND user_id=$2`, id, userID).Scan(&pair); err != nil {
 		return err
 	}
 	if pair.Valid {
 		// Break the cycle so neither row references the other before deletion.
-		if _, err := s.txExec(ctx, tx, `UPDATE transactions SET transfer_pair_id=NULL WHERE id IN (?, ?)`, id, pair.Int64); err != nil {
+		if _, err := s.txExec(ctx, tx, `UPDATE transactions SET transfer_pair_id=NULL WHERE id IN ($1, $2) AND user_id=$3`, id, pair.Int64, userID); err != nil {
 			return err
 		}
-		if _, err := s.txExec(ctx, tx, `DELETE FROM transactions WHERE id=?`, pair.Int64); err != nil {
+		if _, err := s.txExec(ctx, tx, `DELETE FROM transactions WHERE id=$1 AND user_id=$2`, pair.Int64, userID); err != nil {
 			return err
 		}
 	}
-	if _, err := s.txExec(ctx, tx, `DELETE FROM transactions WHERE id=?`, id); err != nil {
+	if _, err := s.txExec(ctx, tx, `DELETE FROM transactions WHERE id=$1 AND user_id=$2`, id, userID); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -237,12 +278,23 @@ func (s *Store) DeleteTransaction(ctx context.Context, id int64) error {
 
 // CreateTransfer inserts two linked rows in a single SQL transaction.
 // Returns IDs (fromLegID, toLegID).
-func (s *Store) CreateTransfer(ctx context.Context, in TransferInput) (int64, int64, error) {
+func (s *Store) CreateTransfer(ctx context.Context, userID int64, in TransferInput) (int64, int64, error) {
 	if in.AmountCents <= 0 {
 		return 0, 0, errors.New("transfer amount must be positive")
 	}
 	if in.FromAccountID == in.ToAccountID {
 		return 0, 0, errors.New("from and to accounts must differ")
+	}
+	if err := s.requireAccount(ctx, userID, in.FromAccountID); err != nil {
+		return 0, 0, err
+	}
+	if err := s.requireAccount(ctx, userID, in.ToAccountID); err != nil {
+		return 0, 0, err
+	}
+	if in.CategoryID != nil {
+		if err := s.requireCategory(ctx, userID, *in.CategoryID); err != nil {
+			return 0, 0, err
+		}
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -254,23 +306,23 @@ func (s *Store) CreateTransfer(ctx context.Context, in TransferInput) (int64, in
 	dateStr := in.Date.Format("2006-01-02")
 
 	outID, err := s.txInsertReturningID(ctx, tx,
-		`INSERT INTO transactions(date, account_id, transfer_account_id, category_id, notes, outflow_cents, cleared)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		dateStr, in.FromAccountID, in.ToAccountID, nullInt(in.CategoryID), nullStr(in.Notes), in.AmountCents, in.Cleared)
+		`INSERT INTO transactions(user_id, date, account_id, transfer_account_id, category_id, notes, outflow_cents, cleared)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		userID, dateStr, in.FromAccountID, in.ToAccountID, nullInt(in.CategoryID), nullStr(in.Notes), in.AmountCents, in.Cleared)
 	if err != nil {
 		return 0, 0, fmt.Errorf("transfer out leg: %w", err)
 	}
 
 	inID, err := s.txInsertReturningID(ctx, tx,
-		`INSERT INTO transactions(date, account_id, transfer_account_id, transfer_pair_id, notes, inflow_cents, cleared)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		dateStr, in.ToAccountID, in.FromAccountID, outID, nullStr(in.Notes), in.AmountCents, in.Cleared)
+		`INSERT INTO transactions(user_id, date, account_id, transfer_account_id, transfer_pair_id, notes, inflow_cents, cleared)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		userID, dateStr, in.ToAccountID, in.FromAccountID, outID, nullStr(in.Notes), in.AmountCents, in.Cleared)
 	if err != nil {
 		return 0, 0, fmt.Errorf("transfer in leg: %w", err)
 	}
 
 	if _, err := s.txExec(ctx, tx,
-		`UPDATE transactions SET transfer_pair_id=? WHERE id=?`, inID, outID); err != nil {
+		`UPDATE transactions SET transfer_pair_id=$1 WHERE id=$2 AND user_id=$3`, inID, outID, userID); err != nil {
 		return 0, 0, err
 	}
 
@@ -287,22 +339,22 @@ type TxFilter struct {
 	Limit      int
 }
 
-func (s *Store) ListTransactions(ctx context.Context, f TxFilter) ([]Transaction, error) {
+func (s *Store) ListTransactions(ctx context.Context, userID int64, f TxFilter) ([]Transaction, error) {
 	q := `SELECT id, date, account_id, category_id, transfer_account_id, transfer_pair_id,
 	             payee, notes, outflow_cents, inflow_cents, cleared, created_at
-	      FROM transactions WHERE 1=1`
-	args := []any{}
+	      FROM transactions WHERE user_id=$1`
+	args := []any{userID}
 	if f.AccountID != nil {
-		q += ` AND account_id=?`
 		args = append(args, *f.AccountID)
+		q += fmt.Sprintf(` AND account_id=$%d`, len(args))
 	}
 	if f.CategoryID != nil {
-		q += ` AND category_id=?`
 		args = append(args, *f.CategoryID)
+		q += fmt.Sprintf(` AND category_id=$%d`, len(args))
 	}
 	if f.Month != "" {
-		q += ` AND ` + s.dialect.MonthExpr("date") + ` = ?`
 		args = append(args, f.Month)
+		q += fmt.Sprintf(` AND %s = $%d`, monthExpr("date"), len(args))
 	}
 	q += ` ORDER BY date DESC, id DESC`
 	if f.Limit > 0 {

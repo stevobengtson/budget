@@ -4,14 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"os"
 	"strings"
 
 	"github.com/pressly/goose/v3"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-	_ "modernc.org/sqlite"
 )
 
 // OpenNoMigrate opens a database connection without applying migrations.
@@ -20,23 +18,18 @@ func OpenNoMigrate(dsn string) (*sql.DB, Dialect, error) {
 	return Open(dsn, false)
 }
 
-// configureGoose points goose at the embedded migrations FS and sets the
-// dialect. After this call the caller can invoke any goose function
-// (Up, Down, Status, Version, Reset, ...).
-func configureGoose(d Dialect) (fs.FS, error) {
-	gooseDialect := "sqlite3"
-	subdir := "migrations/sqlite"
-	if d == DialectPostgres {
-		gooseDialect = "postgres"
-		subdir = "migrations/postgres"
-	}
-	sub, err := fs.Sub(migrationsFS, subdir)
+// configureGoose points goose at the embedded Postgres migrations FS and sets
+// the dialect. After this call the caller can invoke any goose function
+// (Up, Down, Status, Version, Reset, ...). The Dialect argument is accepted for
+// signature stability; the app is Postgres-only.
+func configureGoose(_ Dialect) (fs.FS, error) {
+	sub, err := fs.Sub(migrationsFS, "migrations/postgres")
 	if err != nil {
 		return nil, fmt.Errorf("migrations subdir: %w", err)
 	}
 	goose.SetBaseFS(sub)
 	goose.SetLogger(goose.NopLogger())
-	if err := goose.SetDialect(gooseDialect); err != nil {
+	if err := goose.SetDialect("postgres"); err != nil {
 		return nil, fmt.Errorf("goose dialect: %w", err)
 	}
 	return sub, nil
@@ -112,10 +105,3 @@ func (stdoutLogger) Printf(format string, v ...any) {
 func (stdoutLogger) Println(v ...any)               { fmt.Println(v...) }
 func (stdoutLogger) Fatalf(format string, v ...any) { fmt.Printf(format, v...); os.Exit(1) }
 func (stdoutLogger) Fatal(v ...any)                 { fmt.Println(v...); os.Exit(1) }
-
-// silence linters about unused imports when bools are referenced from
-// other files only — Dialect/url/strings used via shared db.go.
-var (
-	_ = url.Parse
-	_ = strings.HasPrefix
-)

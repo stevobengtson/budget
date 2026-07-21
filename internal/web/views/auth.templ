@@ -1,0 +1,184 @@
+package views
+
+import "github.com/templui/templui/components/icon"
+
+// authInputClass is the shared input styling for the standalone auth pages.
+var authInputClass = "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+
+// authLayout is the card shell for the pre-auth pages (login/signup/forgot/etc).
+// The title is both the document title and the card heading.
+templ authLayout(title string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · Pigglet</title>
+			<script>
+				(function () {
+					var t = localStorage.getItem("theme") || "system";
+					if (t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+						document.documentElement.classList.add("dark");
+					}
+				})();
+			</script>
+			<link rel="stylesheet" href="/static/app.css"/>
+			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
+			<script>
+				function togglePw(btn) {
+					var i = btn.parentNode.querySelector("input");
+					if (!i) return;
+					i.type = i.type === "password" ? "text" : "password";
+					btn.querySelectorAll("[data-eye]").forEach(function (e) { e.classList.toggle("hidden"); });
+				}
+			</script>
+		</head>
+		<body class="min-h-screen flex items-center justify-center bg-background text-foreground px-4 py-8">
+			<main class="w-full max-w-md">
+				<div class="rounded-xl border border-border bg-card text-card-foreground p-6 shadow-sm sm:p-8">
+					<h1 class="text-2xl font-semibold tracking-tight">{ title }</h1>
+					<div class="mt-6">
+						{ children... }
+					</div>
+				</div>
+			</main>
+		</body>
+	</html>
+}
+
+templ formError(msg string) {
+	if msg != "" {
+		<div class="mb-4 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">{ msg }</div>
+	}
+}
+
+templ emailField(value string) {
+	<div class="space-y-1.5">
+		<label for="email" class="text-sm font-medium leading-none">Email</label>
+		<input id="email" name="email" type="email" value={ value } placeholder="m@example.com" autocomplete="email" required class={ authInputClass }/>
+	</div>
+}
+
+// passwordField renders a labelled password input with a show/hide toggle. Pass
+// minLen="" to omit the minlength constraint (login accepts any existing pw).
+templ passwordField(label, name, placeholder, autocomplete, minLen string) {
+	<div class="space-y-1.5">
+		<label for={ name } class="text-sm font-medium leading-none">{ label }</label>
+		<div class="relative">
+			<input
+				id={ name }
+				name={ name }
+				type="password"
+				placeholder={ placeholder }
+				autocomplete={ autocomplete }
+				required
+				if minLen != "" {
+					minlength={ minLen }
+				}
+				class={ authInputClass + " pr-10" }
+			/>
+			<button type="button" tabindex="-1" onclick="togglePw(this)" aria-label="Toggle password visibility" class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground">
+				<span data-eye>
+					@icon.Eye(icon.Props{Class: "size-4"})
+				</span>
+				<span data-eye class="hidden">
+					@icon.EyeOff(icon.Props{Class: "size-4"})
+				</span>
+			</button>
+		</div>
+	</div>
+}
+
+templ authButton(label string) {
+	<button type="submit" class="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">{ label }</button>
+}
+
+// authFooter renders a muted prompt followed by a "Sign In"/"Sign Up" link. An
+// empty prompt renders just the link.
+templ authFooter(prompt, href, linkText string) {
+	<p class="mt-6 text-center text-sm text-muted-foreground">
+		if prompt != "" {
+			{ prompt + " " }
+		}
+		<a href={ templ.SafeURL(href) } class="font-medium text-foreground underline underline-offset-4">{ linkText }</a>
+	</p>
+}
+
+templ LoginPage(email, errMsg string) {
+	@authLayout("Sign In") {
+		@formError(errMsg)
+		<form method="post" action="/login" class="space-y-4">
+			@emailField(email)
+			@passwordField("Password", "password", "Password", "current-password", "")
+			@authButton("Sign In")
+		</form>
+		<p class="mt-4 text-center text-sm">
+			<a href="/forgot" class="text-muted-foreground underline underline-offset-4 hover:text-foreground">Forgot password?</a>
+		</p>
+		@authFooter("Need to create an account?", "/signup", "Sign Up")
+	}
+}
+
+templ SignupPage(email, errMsg string) {
+	@authLayout("Sign Up") {
+		@formError(errMsg)
+		<form method="post" action="/signup" class="space-y-4">
+			@emailField(email)
+			@passwordField("Password", "password", "Password", "new-password", "8")
+			@authButton("Sign Up")
+		</form>
+		@authFooter("Already have an account?", "/login", "Sign In")
+	}
+}
+
+// MessagePage is the notice card (email verification sent, verified, reset done,
+// etc). signInPrompt is the muted text before the Sign In link ("" for none).
+templ MessagePage(heading, body, signInPrompt string) {
+	@authLayout(heading) {
+		<p class="text-sm text-muted-foreground">{ body }</p>
+		@authFooter(signInPrompt, "/login", "Sign In")
+	}
+}
+
+templ ForgotPage(errMsg string) {
+	@authLayout("Forgot Password") {
+		@formError(errMsg)
+		<form method="post" action="/forgot" class="space-y-4">
+			@emailField("")
+			@authButton("Send reset link")
+		</form>
+		@authFooter("Remember your password?", "/login", "Sign In")
+	}
+}
+
+templ ResetPage(token, errMsg string) {
+	@authLayout("Reset Password") {
+		@formError(errMsg)
+		<form method="post" action="/reset" class="space-y-4">
+			<input type="hidden" name="token" value={ token }/>
+			@passwordField("Password", "password", "New password", "new-password", "8")
+			@authButton("Reset Password")
+		</form>
+		@authFooter("Remember your password?", "/login", "Sign In")
+	}
+}
+
+// AccountPage renders inside the app shell (the user is authenticated): current
+// email, a change-password form, and a logout control.
+templ AccountPage(email, errMsg, okMsg string, collapsed bool) {
+	@Layout("Account", "account", collapsed) {
+		<div class="mx-auto w-full max-w-md">
+			<h1 class="mb-1 text-xl font-semibold">Account</h1>
+			<p class="mb-4 text-sm text-muted-foreground">Signed in as { email }</p>
+			@formError(errMsg)
+			if okMsg != "" {
+				<p class="mb-3 text-sm text-primary">{ okMsg }</p>
+			}
+			<form method="post" action="/account/password" class="space-y-4">
+				@passwordField("Current password", "current", "Current password", "current-password", "")
+				@passwordField("New password", "next", "New password", "new-password", "8")
+				<button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">Change password</button>
+			</form>
+		</div>
+	}
+}

@@ -6,7 +6,6 @@
     "goose@3.27.1",
     "air@1.65.3",
     "tailwindcss_4@4.3.0",
-    "sqlite@latest",
     "go-task@latest"
   ],
   "env": {

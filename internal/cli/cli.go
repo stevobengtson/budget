@@ -39,7 +39,7 @@ func (a *App) Root(use, short, long string) *cobra.Command {
 	root.PersistentFlags().StringVar(&a.cfgFile, "config", "",
 		"config file (default: ./budget.yaml or $XDG_CONFIG_HOME/budget/config.yaml)")
 	root.PersistentFlags().String("db", "",
-		"database DSN (SQLite path or postgres://...). Overrides config and env.")
+		"Postgres DSN (postgres://...). Overrides config and env.")
 	root.PersistentFlags().String("log-level", "",
 		"log level (debug|info|warn|error)")
 

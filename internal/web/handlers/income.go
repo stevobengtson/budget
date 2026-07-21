@@ -20,6 +20,7 @@ func (h *Handlers) BudgetIncomeNew(c *gin.Context) {
 // BudgetIncomeCreate inserts an income entry and returns its row + OOB banner.
 func (h *Handlers) BudgetIncomeCreate(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	name := strings.TrimSpace(c.PostForm("name"))
 	if name == "" {
@@ -31,19 +32,19 @@ func (h *Handlers) BudgetIncomeCreate(c *gin.Context) {
 		c.String(http.StatusBadRequest, "amount: %v", err)
 		return
 	}
-	max, err := h.store.MaxIncomeSortOrder(ctx, month)
+	max, err := h.store.MaxIncomeSortOrder(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	id, err := h.store.CreateIncome(ctx, store.Income{
+	id, err := h.store.CreateIncome(ctx, uid, store.Income{
 		Month: month, Name: name, AmountCents: cents, SortOrder: max + 1,
 	})
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	data, _, err := h.budgetData(ctx, month)
+	data, _, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -56,10 +57,11 @@ func (h *Handlers) BudgetIncomeCreate(c *gin.Context) {
 // edit submitted) and returns the refreshed row + OOB banner.
 func (h *Handlers) BudgetIncomeUpdate(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 
-	rows, err := h.store.ListIncomes(ctx, month)
+	rows, err := h.store.ListIncomes(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -91,11 +93,11 @@ func (h *Handlers) BudgetIncomeUpdate(c *gin.Context) {
 		}
 		cur.AmountCents = cents
 	}
-	if err := h.store.UpdateIncome(ctx, *cur); err != nil {
+	if err := h.store.UpdateIncome(ctx, uid, *cur); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	data, _, err := h.budgetData(ctx, month)
+	data, _, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -107,13 +109,14 @@ func (h *Handlers) BudgetIncomeUpdate(c *gin.Context) {
 // refreshes out of band.
 func (h *Handlers) BudgetIncomeDelete(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err := h.store.DeleteIncome(ctx, id); err != nil {
+	if err := h.store.DeleteIncome(ctx, uid, id); err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	data, _, err := h.budgetData(ctx, month)
+	data, _, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -127,15 +130,16 @@ func (h *Handlers) BudgetIncomeDelete(c *gin.Context) {
 // erroring.
 func (h *Handlers) BudgetIncomeCopyPrev(c *gin.Context) {
 	ctx := c.Request.Context()
+	uid := currentUserID(c)
 	month := monthOrNow(c)
 	prev := store.PrevMonth(month)
 
-	prevRows, err := h.store.ListIncomes(ctx, prev)
+	prevRows, err := h.store.ListIncomes(ctx, uid, prev)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	curRows, err := h.store.ListIncomes(ctx, month)
+	curRows, err := h.store.ListIncomes(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
@@ -148,20 +152,20 @@ func (h *Handlers) BudgetIncomeCopyPrev(c *gin.Context) {
 		if cur, ok := existing[r.Name]; ok {
 			cur.AmountCents = r.AmountCents
 			cur.SortOrder = r.SortOrder
-			if err := h.store.UpdateIncome(ctx, cur); err != nil {
+			if err := h.store.UpdateIncome(ctx, uid, cur); err != nil {
 				c.String(http.StatusInternalServerError, err.Error())
 				return
 			}
 			continue
 		}
-		if _, err := h.store.CreateIncome(ctx, store.Income{
+		if _, err := h.store.CreateIncome(ctx, uid, store.Income{
 			Month: month, Name: r.Name, AmountCents: r.AmountCents, SortOrder: r.SortOrder,
 		}); err != nil {
 			c.String(http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
-	data, _, err := h.budgetData(ctx, month)
+	data, _, err := h.budgetData(ctx, uid, month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return

@@ -42,12 +42,17 @@ type AccountWithBalance struct {
 	BalanceCents int64
 }
 
-func (s *Store) CreateAccount(ctx context.Context, a Account) (int64, error) {
+func (s *Store) CreateAccount(ctx context.Context, userID int64, a Account) (int64, error) {
+	if a.PaymentCategoryID != nil {
+		if err := s.requireCategory(ctx, userID, *a.PaymentCategoryID); err != nil {
+			return 0, err
+		}
+	}
 	id, err := s.insertReturningID(ctx,
-		`INSERT INTO accounts(name, type, starting_balance_cents, credit_limit_cents, apr_bps,
+		`INSERT INTO accounts(user_id, name, type, starting_balance_cents, credit_limit_cents, apr_bps,
 		                     monthly_payment_cents, include_in_paydown, payment_category_id)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.Name, string(a.Type), a.StartingBalanceCents,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		userID, a.Name, string(a.Type), a.StartingBalanceCents,
 		nullInt(a.CreditLimitCents), nullInt(a.AprBps),
 		nullInt(a.MonthlyPaymentCents), a.IncludeInPaydown, nullInt(a.PaymentCategoryID),
 	)
@@ -57,15 +62,20 @@ func (s *Store) CreateAccount(ctx context.Context, a Account) (int64, error) {
 	return id, nil
 }
 
-func (s *Store) UpdateAccount(ctx context.Context, a Account) error {
+func (s *Store) UpdateAccount(ctx context.Context, userID int64, a Account) error {
+	if a.PaymentCategoryID != nil {
+		if err := s.requireCategory(ctx, userID, *a.PaymentCategoryID); err != nil {
+			return err
+		}
+	}
 	_, err := s.run(ctx,
 		`UPDATE accounts
-		 SET name=?, type=?, starting_balance_cents=?, credit_limit_cents=?, apr_bps=?,
-		     monthly_payment_cents=?, include_in_paydown=?, payment_category_id=?
-		 WHERE id=?`,
+		 SET name=$1, type=$2, starting_balance_cents=$3, credit_limit_cents=$4, apr_bps=$5,
+		     monthly_payment_cents=$6, include_in_paydown=$7, payment_category_id=$8
+		 WHERE id=$9 AND user_id=$10`,
 		a.Name, string(a.Type), a.StartingBalanceCents,
 		nullInt(a.CreditLimitCents), nullInt(a.AprBps),
-		nullInt(a.MonthlyPaymentCents), a.IncludeInPaydown, nullInt(a.PaymentCategoryID), a.ID,
+		nullInt(a.MonthlyPaymentCents), a.IncludeInPaydown, nullInt(a.PaymentCategoryID), a.ID, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("update account: %w", err)
@@ -73,38 +83,39 @@ func (s *Store) UpdateAccount(ctx context.Context, a Account) error {
 	return nil
 }
 
-func (s *Store) ArchiveAccount(ctx context.Context, id int64) error {
-	_, err := s.run(ctx, `UPDATE accounts SET archived_at=CURRENT_TIMESTAMP WHERE id=?`, id)
+func (s *Store) ArchiveAccount(ctx context.Context, userID, id int64) error {
+	_, err := s.run(ctx, `UPDATE accounts SET archived_at=CURRENT_TIMESTAMP WHERE id=$1 AND user_id=$2`, id, userID)
 	return err
 }
 
-func (s *Store) UnarchiveAccount(ctx context.Context, id int64) error {
-	_, err := s.run(ctx, `UPDATE accounts SET archived_at=NULL WHERE id=?`, id)
+func (s *Store) UnarchiveAccount(ctx context.Context, userID, id int64) error {
+	_, err := s.run(ctx, `UPDATE accounts SET archived_at=NULL WHERE id=$1 AND user_id=$2`, id, userID)
 	return err
 }
 
-func (s *Store) DeleteAccount(ctx context.Context, id int64) error {
-	_, err := s.run(ctx, `DELETE FROM accounts WHERE id=?`, id)
+func (s *Store) DeleteAccount(ctx context.Context, userID, id int64) error {
+	_, err := s.run(ctx, `DELETE FROM accounts WHERE id=$1 AND user_id=$2`, id, userID)
 	return err
 }
 
 // ListAccounts returns accounts with their computed balance. If includeArchived
 // is false, archived accounts are filtered out.
-func (s *Store) ListAccounts(ctx context.Context, includeArchived bool) ([]AccountWithBalance, error) {
+func (s *Store) ListAccounts(ctx context.Context, userID int64, includeArchived bool) ([]AccountWithBalance, error) {
 	q := `
 SELECT a.id, a.name, a.type, a.starting_balance_cents, a.credit_limit_cents, a.apr_bps,
        a.monthly_payment_cents, a.include_in_paydown, a.payment_category_id,
        a.archived_at, a.created_at,
        a.starting_balance_cents
-         + COALESCE((SELECT SUM(inflow_cents)  FROM transactions t WHERE t.account_id=a.id), 0)
-         - COALESCE((SELECT SUM(outflow_cents) FROM transactions t WHERE t.account_id=a.id), 0) AS balance
-FROM accounts a`
+         + COALESCE((SELECT SUM(inflow_cents)  FROM transactions t WHERE t.account_id=a.id AND t.user_id=$1), 0)
+         - COALESCE((SELECT SUM(outflow_cents) FROM transactions t WHERE t.account_id=a.id AND t.user_id=$2), 0) AS balance
+FROM accounts a
+WHERE a.user_id=$3`
 	if !includeArchived {
-		q += ` WHERE a.archived_at IS NULL`
+		q += ` AND a.archived_at IS NULL`
 	}
 	q += ` ORDER BY a.archived_at IS NOT NULL, a.name`
 
-	rows, err := s.queryAll(ctx, q)
+	rows, err := s.queryAll(ctx, q, userID, userID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}
@@ -133,12 +144,12 @@ FROM accounts a`
 	return out, rows.Err()
 }
 
-func (s *Store) GetAccount(ctx context.Context, id int64) (Account, error) {
+func (s *Store) GetAccount(ctx context.Context, userID, id int64) (Account, error) {
 	row := s.queryOne(ctx,
 		`SELECT id, name, type, starting_balance_cents, credit_limit_cents, apr_bps,
 		        monthly_payment_cents, include_in_paydown, payment_category_id,
 		        archived_at, created_at
-		 FROM accounts WHERE id=?`, id)
+		 FROM accounts WHERE id=$1 AND user_id=$2`, id, userID)
 	var a Account
 	var typ string
 	var lim, apr, pay, payCat sql.NullInt64

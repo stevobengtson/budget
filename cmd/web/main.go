@@ -37,11 +37,7 @@ The db/migrate/seed/config admin commands are available as subcommands.`)
 		}
 		defer func() { _ = conn.Close() }()
 
-		sd := store.DialectSQLite
-		if dialect == db.DialectPostgres {
-			sd = store.DialectPostgres
-		}
-		s := store.NewWithDialect(conn, sd)
+		s := store.New(conn)
 
 		// Log the schema version the server actually booted against. db.Open ran
 		// migrations (shouldMigrate=true); printing the resolved dialect + version
@@ -54,7 +50,7 @@ The db/migrate/seed/config admin commands are available as subcommands.`)
 			fmt.Printf("budget web — schema dialect=%s version=%d\n", dialect, ver)
 		}
 
-		srv := web.NewServer(s)
+		srv := web.NewServer(s, cfg)
 		fmt.Printf("budget web — listening on http://localhost%s (db=%s)\n", a, cfg.DB.DSN)
 		return http.ListenAndServe(a, srv.Handler())
 	}

@@ -18,19 +18,25 @@ func PrevMonth(m string) string {
 }
 
 // SetAssigned upserts the assigned amount for (month, category).
-func (s *Store) SetAssigned(ctx context.Context, month string, categoryID, cents int64) error {
+func (s *Store) SetAssigned(ctx context.Context, userID int64, month string, categoryID, cents int64) error {
+	// The ON CONFLICT target is (month, category_id) only, so without this guard
+	// a caller could overwrite another user's assignment by passing that user's
+	// category id. Reject any category the acting user does not own.
+	if err := s.requireCategory(ctx, userID, categoryID); err != nil {
+		return err
+	}
 	_, err := s.run(ctx,
-		`INSERT INTO budgets(month, category_id, assigned_cents) VALUES (?, ?, ?)
+		`INSERT INTO budgets(user_id, month, category_id, assigned_cents) VALUES ($1, $2, $3, $4)
 		 ON CONFLICT(month, category_id) DO UPDATE SET assigned_cents=excluded.assigned_cents`,
-		month, categoryID, cents)
+		userID, month, categoryID, cents)
 	return err
 }
 
-func (s *Store) GetAssigned(ctx context.Context, month string, categoryID int64) (int64, error) {
+func (s *Store) GetAssigned(ctx context.Context, userID int64, month string, categoryID int64) (int64, error) {
 	var c int64
 	err := s.queryOne(ctx,
-		`SELECT COALESCE(assigned_cents, 0) FROM budgets WHERE month=? AND category_id=?`,
-		month, categoryID).Scan(&c)
+		`SELECT COALESCE(assigned_cents, 0) FROM budgets WHERE month=$1 AND category_id=$2 AND user_id=$3`,
+		month, categoryID, userID).Scan(&c)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, nil
@@ -58,18 +64,18 @@ type CategoryBudget struct {
 
 // MonthBudget computes assigned/spent/available for every active category in the month.
 // Available = (carryover from prior months, ≥0) + assigned − spent.
-func (s *Store) MonthBudget(ctx context.Context, month string) ([]CategoryBudget, error) {
-	q := fmt.Sprintf(`
+func (s *Store) MonthBudget(ctx context.Context, userID int64, month string) ([]CategoryBudget, error) {
+	q := `
 SELECT c.id, c.group_id, g.name, c.name, c.is_income, c.rollover_mode, c.goal_cents, c.goal_due_date,
        COALESCE(b.assigned_cents, 0)                                              AS assigned,
        COALESCE((SELECT SUM(t.outflow_cents) - SUM(t.inflow_cents) FROM transactions t
-                 WHERE t.category_id = c.id AND %s = ?), 0) AS spent
+                 WHERE t.category_id = c.id AND to_char(t.date, 'YYYY-MM') = $1 AND t.user_id = $2), 0) AS spent
 FROM categories c
-JOIN category_groups g ON g.id = c.group_id
-LEFT JOIN budgets b ON b.category_id = c.id AND b.month = ?
-WHERE c.archived_at IS NULL
-ORDER BY g.sort_order, g.name, c.sort_order, c.name`, s.dialect.MonthExpr("t.date"))
-	rows, err := s.queryAll(ctx, q, month, month)
+JOIN category_groups g ON g.id = c.group_id AND g.user_id = c.user_id
+LEFT JOIN budgets b ON b.category_id = c.id AND b.month = $3 AND b.user_id = $4
+WHERE c.archived_at IS NULL AND c.user_id = $5
+ORDER BY g.sort_order, g.name, c.sort_order, c.name`
+	rows, err := s.queryAll(ctx, q, month, userID, month, userID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("month budget: %w", err)
 	}
@@ -101,7 +107,7 @@ ORDER BY g.sort_order, g.name, c.sort_order, c.name`, s.dialect.MonthExpr("t.dat
 	// − lifetime_spent_through_month, clipped at zero between months for the
 	// previous-month carry rule.
 	for i := range out {
-		avail, err := s.categoryAvailable(ctx, out[i].CategoryID, out[i].RolloverMode, month)
+		avail, err := s.categoryAvailable(ctx, userID, out[i].CategoryID, out[i].RolloverMode, month)
 		if err != nil {
 			return nil, err
 		}
@@ -115,25 +121,25 @@ ORDER BY g.sort_order, g.name, c.sort_order, c.name`, s.dialect.MonthExpr("t.dat
 
 // categoryAvailable walks every prior month and applies the category's rollover
 // mode when carrying a running balance forward.
-func (s *Store) categoryAvailable(ctx context.Context, categoryID int64, mode string, month string) (int64, error) {
+func (s *Store) categoryAvailable(ctx context.Context, userID, categoryID int64, mode string, month string) (int64, error) {
 	// Find the earliest month that has either an assignment or a transaction.
 	var earliest string
-	q := fmt.Sprintf(`
+	q := `
 SELECT MIN(m) FROM (
-  SELECT month AS m FROM budgets WHERE category_id=?
+  SELECT month AS m FROM budgets WHERE category_id=$1 AND user_id=$2
   UNION
-  SELECT %s AS m FROM transactions WHERE category_id=?
-) AS sub`, s.dialect.MonthExpr("date"))
-	err := s.queryOne(ctx, q, categoryID, categoryID).Scan(&earliest)
+  SELECT to_char(date, 'YYYY-MM') AS m FROM transactions WHERE category_id=$3 AND user_id=$4
+) AS sub`
+	err := s.queryOne(ctx, q, categoryID, userID, categoryID, userID).Scan(&earliest)
 	if err != nil || earliest == "" {
 		// No data: available is just this month's assigned − spent (likely both 0).
-		return monthAssignedMinusSpent(ctx, s, categoryID, month)
+		return monthAssignedMinusSpent(ctx, s, userID, categoryID, month)
 	}
 
 	carry := int64(0)
 	cur := earliest
 	for {
-		delta, err := monthAssignedMinusSpent(ctx, s, categoryID, cur)
+		delta, err := monthAssignedMinusSpent(ctx, s, userID, categoryID, cur)
 		if err != nil {
 			return 0, err
 		}
@@ -166,18 +172,16 @@ SELECT MIN(m) FROM (
 	}
 }
 
-func monthAssignedMinusSpent(ctx context.Context, s *Store, categoryID int64, month string) (int64, error) {
+func monthAssignedMinusSpent(ctx context.Context, s *Store, userID, categoryID int64, month string) (int64, error) {
 	var assigned, spent int64
 	if err := s.queryOne(ctx,
-		`SELECT COALESCE((SELECT assigned_cents FROM budgets WHERE month=? AND category_id=?), 0)`,
-		month, categoryID).Scan(&assigned); err != nil {
+		`SELECT COALESCE((SELECT assigned_cents FROM budgets WHERE month=$1 AND category_id=$2 AND user_id=$3), 0)`,
+		month, categoryID, userID).Scan(&assigned); err != nil {
 		return 0, err
 	}
-	q := fmt.Sprintf(
-		`SELECT COALESCE(SUM(outflow_cents) - SUM(inflow_cents), 0)
-		 FROM transactions WHERE category_id=? AND %s=?`,
-		s.dialect.MonthExpr("date"))
-	if err := s.queryOne(ctx, q, categoryID, month).Scan(&spent); err != nil {
+	q := `SELECT COALESCE(SUM(outflow_cents) - SUM(inflow_cents), 0)
+		 FROM transactions WHERE category_id=$1 AND to_char(date, 'YYYY-MM')=$2 AND user_id=$3`
+	if err := s.queryOne(ctx, q, categoryID, month, userID).Scan(&spent); err != nil {
 		return 0, err
 	}
 	return assigned - spent, nil
@@ -240,30 +244,29 @@ type CreditActivity struct {
 // payment push "Owing" negative (double-counting against the paydown
 // projection). All other transfer inflows still count, so a regular
 // transfer-to-credit without that category still reduces Owing.
-func (s *Store) CreditCardActivityForMonth(ctx context.Context, month string) ([]CreditActivity, error) {
+func (s *Store) CreditCardActivityForMonth(ctx context.Context, userID int64, month string) ([]CreditActivity, error) {
 	// Transfers store their category on the outgoing leg only — the
 	// inflow row visible on the credit account has category_id = NULL but
 	// transfer_pair_id pointing back to the outflow leg. COALESCE the two
 	// so the filter sees the user-assigned category regardless of which
 	// leg we're scanning.
-	q := fmt.Sprintf(`
+	q := `
 SELECT a.id, a.name,
   COALESCE((SELECT SUM(t.outflow_cents) FROM transactions t
             WHERE t.account_id = a.id
-              AND %s = ?), 0) AS purchases,
+              AND to_char(t.date, 'YYYY-MM') = $1 AND t.user_id = $2), 0) AS purchases,
   COALESCE((SELECT SUM(t.inflow_cents) FROM transactions t
-            LEFT JOIN transactions tp ON tp.id = t.transfer_pair_id
+            LEFT JOIN transactions tp ON tp.id = t.transfer_pair_id AND tp.user_id = t.user_id
             WHERE t.account_id = a.id
               AND t.transfer_account_id IS NOT NULL
-              AND %s = ?
+              AND to_char(t.date, 'YYYY-MM') = $3 AND t.user_id = $4
               AND (a.payment_category_id IS NULL
                    OR COALESCE(t.category_id, tp.category_id) IS NULL
                    OR COALESCE(t.category_id, tp.category_id) <> a.payment_category_id)), 0) AS payments
 FROM accounts a
-WHERE a.type = 'credit' AND a.archived_at IS NULL
-ORDER BY a.name`,
-		s.dialect.MonthExpr("t.date"), s.dialect.MonthExpr("t.date"))
-	rows, err := s.queryAll(ctx, q, month, month)
+WHERE a.type = 'credit' AND a.archived_at IS NULL AND a.user_id = $5
+ORDER BY a.name`
+	rows, err := s.queryAll(ctx, q, month, userID, month, userID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("credit activity: %w", err)
 	}
@@ -283,16 +286,16 @@ ORDER BY a.name`,
 // ActualIncomeForMonth sums the net inflow into income-flagged categories
 // for the given YYYY-MM. Excludes transfers (inter-account moves aren't
 // real income).
-func (s *Store) ActualIncomeForMonth(ctx context.Context, month string) (int64, error) {
+func (s *Store) ActualIncomeForMonth(ctx context.Context, userID int64, month string) (int64, error) {
 	var v int64
-	q := fmt.Sprintf(`
+	q := `
 SELECT COALESCE(SUM(t.inflow_cents) - SUM(t.outflow_cents), 0)
 FROM transactions t
-JOIN categories c ON c.id = t.category_id
-WHERE c.is_income = ?
+JOIN categories c ON c.id = t.category_id AND c.user_id = t.user_id
+WHERE c.is_income = $1
   AND t.transfer_account_id IS NULL
-  AND %s = ?`, s.dialect.MonthExpr("t.date"))
-	err := s.queryOne(ctx, q, true, month).Scan(&v)
+  AND to_char(t.date, 'YYYY-MM') = $2 AND t.user_id = $3`
+	err := s.queryOne(ctx, q, true, month, userID).Scan(&v)
 	if err != nil {
 		return 0, err
 	}
@@ -302,15 +305,15 @@ WHERE c.is_income = ?
 // UncategorizedSpent sums net outflow (outflow − inflow) for the month across
 // transactions with no category, excluding transfers (inter-account moves
 // aren't spending). Used for the budget page's read-only Uncategorized row.
-func (s *Store) UncategorizedSpent(ctx context.Context, month string) (int64, error) {
+func (s *Store) UncategorizedSpent(ctx context.Context, userID int64, month string) (int64, error) {
 	var v int64
-	q := fmt.Sprintf(`
+	q := `
 SELECT COALESCE(SUM(outflow_cents) - SUM(inflow_cents), 0)
 FROM transactions
 WHERE category_id IS NULL
   AND transfer_account_id IS NULL
-  AND %s = ?`, s.dialect.MonthExpr("date"))
-	if err := s.queryOne(ctx, q, month).Scan(&v); err != nil {
+  AND to_char(date, 'YYYY-MM') = $1 AND user_id = $2`
+	if err := s.queryOne(ctx, q, month, userID).Scan(&v); err != nil {
 		return 0, err
 	}
 	return v, nil
@@ -354,7 +357,7 @@ type MonthPayment struct {
 //  3. fallback (the account's default monthly payment).
 //
 // If categoryID is nil, every month falls back.
-func (s *Store) PaymentScheduleForCategory(ctx context.Context, categoryID *int64, start time.Time, months int, fallbackCents int64) ([]MonthPayment, error) {
+func (s *Store) PaymentScheduleForCategory(ctx context.Context, userID int64, categoryID *int64, start time.Time, months int, fallbackCents int64) ([]MonthPayment, error) {
 	if months <= 0 {
 		return nil, nil
 	}
@@ -366,11 +369,10 @@ func (s *Store) PaymentScheduleForCategory(ctx context.Context, categoryID *int6
 
 		if categoryID != nil {
 			var spent int64
-			q := fmt.Sprintf(
-				`SELECT COALESCE(SUM(outflow_cents) - SUM(inflow_cents), 0)
+			q := `SELECT COALESCE(SUM(outflow_cents) - SUM(inflow_cents), 0)
 				 FROM transactions
-				 WHERE category_id = ? AND %s = ?`, s.dialect.MonthExpr("date"))
-			if err := s.queryOne(ctx, q, *categoryID, key).Scan(&spent); err != nil {
+				 WHERE category_id = $1 AND to_char(date, 'YYYY-MM') = $2 AND user_id = $3`
+			if err := s.queryOne(ctx, q, *categoryID, key, userID).Scan(&spent); err != nil {
 				return nil, err
 			}
 			if spent > 0 {
@@ -378,8 +380,8 @@ func (s *Store) PaymentScheduleForCategory(ctx context.Context, categoryID *int6
 			} else {
 				var assigned int64
 				if err := s.queryOne(ctx,
-					`SELECT COALESCE(assigned_cents, 0) FROM budgets WHERE month=? AND category_id=?`,
-					key, *categoryID).Scan(&assigned); err != nil && !errors.Is(err, sql.ErrNoRows) {
+					`SELECT COALESCE(assigned_cents, 0) FROM budgets WHERE month=$1 AND category_id=$2 AND user_id=$3`,
+					key, *categoryID, userID).Scan(&assigned); err != nil && !errors.Is(err, sql.ErrNoRows) {
 					return nil, err
 				}
 				if assigned > 0 {

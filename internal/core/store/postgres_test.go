@@ -2,60 +2,24 @@ package store
 
 import (
 	"context"
-	"database/sql"
-	"os"
 	"testing"
 	"time"
-
-	"github.com/sbengtson/budget/internal/core/db"
 )
 
-// Skip the test unless BUDGET_POSTGRES_URL is set, e.g.:
-//
-//	BUDGET_POSTGRES_URL=postgres://postgres:postgres@localhost:5432/budget_test
-//
-// The test wipes all known tables to give itself a clean slate.
-func newTestPostgresStore(t *testing.T) *Store {
+// newTestPostgresStore opens the shared Postgres test database (see
+// openTestDB), truncates + re-seeds it, and returns a store owned by a fresh
+// user. It is a thin alias over newTestStoreUser retained so the TestPostgres*
+// cases keep their descriptive names.
+func newTestPostgresStore(t *testing.T) (*Store, int64) {
 	t.Helper()
-	url := os.Getenv("BUDGET_POSTGRES_URL")
-	if url == "" {
-		t.Skip("BUDGET_POSTGRES_URL not set; skipping live Postgres test")
-	}
-	conn, dialect, err := db.Open(url, true)
-	if err != nil {
-		t.Fatalf("open postgres: %v", err)
-	}
-	t.Cleanup(func() { _ = conn.Close() })
-	if dialect != db.DialectPostgres {
-		t.Fatalf("expected postgres dialect, got %v", dialect)
-	}
-
-	// Wipe all tables (cascading delete via TRUNCATE).
-	for _, table := range []string{"transactions", "budgets", "categories", "category_groups", "incomes", "accounts"} {
-		if _, err := conn.Exec("TRUNCATE TABLE " + table + " RESTART IDENTITY CASCADE"); err != nil {
-			t.Fatalf("truncate %s: %v", table, err)
-		}
-	}
-
-	// Re-seed Income system category that migration 00005 created.
-	var gid int64
-	if err := conn.QueryRow(
-		`INSERT INTO category_groups(name, sort_order) VALUES ('Income', -100) RETURNING id`).Scan(&gid); err != nil {
-		t.Fatalf("seed income group: %v", err)
-	}
-	if _, err := conn.Exec(
-		`INSERT INTO categories(group_id, name, is_income, sort_order) VALUES ($1, 'Income', TRUE, 0)`, gid); err != nil {
-		t.Fatalf("seed income category: %v", err)
-	}
-
-	return NewWithDialect(conn, DialectPostgres)
+	return newTestStoreUser(t)
 }
 
 func TestPostgresAccountsCRUDAndBalance(t *testing.T) {
-	s := newTestPostgresStore(t)
+	s, uid := newTestPostgresStore(t)
 	ctx := context.Background()
 
-	id, err := s.CreateAccount(ctx, Account{
+	id, err := s.CreateAccount(ctx, uid, Account{
 		Name: "Checking", Type: TypeChecking, StartingBalanceCents: 100_000,
 	})
 	if err != nil {
@@ -67,7 +31,7 @@ func TestPostgresAccountsCRUDAndBalance(t *testing.T) {
 
 	limit := int64(500_000)
 	apr := int64(1999)
-	visaID, err := s.CreateAccount(ctx, Account{
+	visaID, err := s.CreateAccount(ctx, uid, Account{
 		Name: "Visa", Type: TypeCredit,
 		CreditLimitCents: &limit, AprBps: &apr,
 	})
@@ -75,7 +39,7 @@ func TestPostgresAccountsCRUDAndBalance(t *testing.T) {
 		t.Fatalf("create visa: %v", err)
 	}
 
-	accs, err := s.ListAccounts(ctx, false)
+	accs, err := s.ListAccounts(ctx, uid, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,26 +57,26 @@ func TestPostgresAccountsCRUDAndBalance(t *testing.T) {
 }
 
 func TestPostgresMonthBudgetAndStrftime(t *testing.T) {
-	s := newTestPostgresStore(t)
+	s, uid := newTestPostgresStore(t)
 	ctx := context.Background()
 
-	chk, _ := s.CreateAccount(ctx, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
-	gid, _ := s.CreateGroup(ctx, "Monthly", 0)
-	groc, _ := s.CreateCategory(ctx, Category{GroupID: gid, Name: "Groceries"})
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	gid, _ := s.CreateGroup(ctx, uid, "Monthly", 0)
+	groc, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Groceries"})
 
 	now := time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC)
 	month := MonthKey(now)
 
-	if _, err := s.CreateTransaction(ctx, Transaction{
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
 		Date: now, AccountID: chk, CategoryID: &groc, OutflowCents: 8_000,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetAssigned(ctx, month, groc, 20_000); err != nil {
+	if err := s.SetAssigned(ctx, uid, month, groc, 20_000); err != nil {
 		t.Fatal(err)
 	}
 
-	rows, err := s.MonthBudget(ctx, month)
+	rows, err := s.MonthBudget(ctx, uid, month)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,5 +92,32 @@ func TestPostgresMonthBudgetAndStrftime(t *testing.T) {
 	}
 }
 
-// Make sure the package doesn't pull a sql.Conn that breaks unrelated tests.
-var _ = sql.ErrNoRows
+// TestPostgresSeedNewUser exercises the second-user registration path on real
+// Postgres. SeedNewUser inserts is_income=TRUE; an earlier version bound the
+// integer literal 1, which SQLite accepts but Postgres rejects for a BOOLEAN
+// column — so this bug was invisible to the SQLite tests.
+func TestPostgresSeedNewUser(t *testing.T) {
+	s, _ := newTestPostgresStore(t) // helper already created the owner
+	ctx := context.Background()
+
+	uid2, err := s.CreateUser(ctx, "second@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SeedNewUser(ctx, uid2); err != nil {
+		t.Fatalf("SeedNewUser on postgres: %v", err)
+	}
+	cats, err := s.ListCategories(ctx, uid2, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	income := 0
+	for _, c := range cats {
+		if c.IsIncome {
+			income++
+		}
+	}
+	if income != 1 {
+		t.Fatalf("second user income categories = %d, want 1", income)
+	}
+}
