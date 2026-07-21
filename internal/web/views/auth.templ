@@ -173,14 +173,17 @@ templ ResetPage(token, errMsg string) {
 // AccountData is the settings page view model: the current profile plus the
 // active tab and per-section status messages.
 type AccountData struct {
-	Name        string
-	Email       string
-	ActiveTab   string // "account" | "security"
-	Collapsed   bool
-	ProfileErr  string
-	ProfileOK   string
-	PasswordErr string
-	PasswordOK  string
+	Name          string
+	Email         string
+	AvatarVersion int64 // >0 renders the stored image; 0 renders the monogram
+	ActiveTab     string // "account" | "security"
+	Collapsed     bool
+	AvatarErr     string
+	AvatarOK      string
+	ProfileErr    string
+	ProfileOK     string
+	PasswordErr   string
+	PasswordOK    string
 }
 
 templ AccountPage(d AccountData) {
@@ -214,35 +217,51 @@ templ AccountPage(d AccountData) {
 templ accountProfileSection(d AccountData) {
 	<section class="space-y-2">
 		<h2 class="text-sm font-semibold">User profile</h2>
-		<form method="post" action="/account/profile" class="overflow-hidden rounded-xl border bg-card">
+		<div class="overflow-hidden rounded-xl border bg-card">
 			<div class="space-y-4 p-4 sm:p-6">
 				<div class="space-y-1.5">
 					<label class="text-sm font-medium leading-none">Avatar</label>
 					<div class="flex items-center gap-3">
-						@userAvatar(d.Name, "size-14 rounded-lg text-lg")
-						@button.Button(button.Props{
-							Type:       button.TypeButton,
-							Variant:    button.VariantOutline,
-							Size:       button.SizeSm,
-							Disabled:   true,
-							Attributes: templ.Attributes{"title": "Avatar upload coming soon"},
-						}) {
-							Change avatar
+						@userAvatar(d.Name, d.AvatarVersion, "size-14 rounded-lg text-lg")
+						<form method="post" action="/account/avatar" enctype="multipart/form-data">
+							<label class="inline-flex h-8 cursor-pointer items-center rounded-full border border-input bg-background px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
+								Change avatar
+								<input
+									type="file"
+									name="avatar"
+									accept="image/png,image/jpeg,image/gif,image/webp"
+									class="sr-only"
+									onchange="this.form.submit()"
+								/>
+							</label>
+						</form>
+						if d.AvatarVersion > 0 {
+							<form method="post" action="/account/avatar/remove">
+								@button.Button(button.Props{
+									Type:    button.TypeSubmit,
+									Variant: button.VariantGhost,
+									Size:    button.SizeSm,
+									Class:   "text-muted-foreground hover:text-destructive",
+								}) {
+									Remove
+								}
+							</form>
 						}
 					</div>
+					@settingsMessages(d.AvatarErr, d.AvatarOK)
 				</div>
-				<div class="space-y-1.5">
+				<form id="profile-form" method="post" action="/account/profile" class="space-y-1.5">
 					<label for="profile-name" class="text-sm font-medium leading-none">Name</label>
 					@input.Input(input.Props{ID: "profile-name", Name: "name", Value: d.Name, Attributes: templ.Attributes{"required": true, "autocomplete": "name"}})
-				</div>
-				@settingsMessages(d.ProfileErr, d.ProfileOK)
+					@settingsMessages(d.ProfileErr, d.ProfileOK)
+				</form>
 			</div>
 			<div class="flex items-center border-t bg-muted/30 px-4 py-3 sm:px-6">
-				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm}) {
+				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm, Form: "profile-form"}) {
 					Save changes
 				}
 			</div>
-		</form>
+		</div>
 	</section>
 }
 

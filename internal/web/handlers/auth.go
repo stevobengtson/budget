@@ -2,14 +2,19 @@ package handlers
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/sbengtson/budget/internal/core/auth"
+	"github.com/sbengtson/budget/internal/core/avatar"
 	"github.com/sbengtson/budget/internal/web/views"
 )
+
+// maxAvatarBytes caps an uploaded avatar before it's decoded, to bound memory.
+const maxAvatarBytes = 10 << 20 // 10 MiB
 
 func (h *Handlers) LoginForm(c *gin.Context) { render(c, http.StatusOK, views.LoginPage("", "")) }
 
@@ -115,11 +120,88 @@ func (h *Handlers) AccountPage(c *gin.Context) {
 func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountData {
 	u, _ := h.store.GetUserByID(c.Request.Context(), currentUserID(c))
 	return views.AccountData{
-		Name:      u.Name,
-		Email:     u.Email,
-		ActiveTab: activeTab,
-		Collapsed: sidebarCollapsed(c),
+		Name:          u.Name,
+		Email:         u.Email,
+		AvatarVersion: u.AvatarVersion(),
+		ActiveTab:     activeTab,
+		Collapsed:     sidebarCollapsed(c),
 	}
+}
+
+// UpdateAvatar accepts a multipart image upload, normalizes it (square 256px
+// PNG), stores it, and re-renders the Account tab.
+func (h *Handlers) UpdateAvatar(c *gin.Context) {
+	uid := currentUserID(c)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAvatarBytes+1024)
+
+	fail := func(status int, msg string) {
+		d := h.accountData(c, "account")
+		d.AvatarErr = msg
+		render(c, status, views.AccountPage(d))
+	}
+
+	file, _, err := c.Request.FormFile("avatar")
+	if err != nil {
+		fail(http.StatusBadRequest, "Choose an image to upload.")
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxAvatarBytes+1))
+	if err != nil {
+		fail(http.StatusBadRequest, "Could not read the uploaded file.")
+		return
+	}
+	if len(data) > maxAvatarBytes {
+		fail(http.StatusRequestEntityTooLarge, "Image is too large (max 10 MB).")
+		return
+	}
+
+	png, err := avatar.Process(data)
+	if err != nil {
+		fail(http.StatusBadRequest, "That file isn't a supported image (PNG, JPEG, GIF, or WEBP).")
+		return
+	}
+	if err := h.store.SetUserAvatar(c.Request.Context(), uid, png); err != nil {
+		fail(http.StatusInternalServerError, "Could not save your avatar.")
+		return
+	}
+
+	// Reflect the new avatar in this render's sidebar (requireAuth set the
+	// context version from the pre-upload user).
+	u, _ := h.store.GetUserByID(c.Request.Context(), uid)
+	c.Request = c.Request.WithContext(views.WithUserAvatarVersion(c.Request.Context(), u.AvatarVersion()))
+	d := h.accountData(c, "account")
+	d.AvatarOK = "Avatar updated."
+	render(c, http.StatusOK, views.AccountPage(d))
+}
+
+// RemoveAvatar clears the user's custom avatar, reverting to the monogram.
+func (h *Handlers) RemoveAvatar(c *gin.Context) {
+	uid := currentUserID(c)
+	if err := h.store.RemoveUserAvatar(c.Request.Context(), uid); err != nil {
+		d := h.accountData(c, "account")
+		d.AvatarErr = "Could not remove your avatar."
+		render(c, http.StatusInternalServerError, views.AccountPage(d))
+		return
+	}
+	// Drop the avatar from this render's sidebar too (back to the monogram).
+	c.Request = c.Request.WithContext(views.WithUserAvatarVersion(c.Request.Context(), 0))
+	d := h.accountData(c, "account")
+	d.AvatarOK = "Avatar removed."
+	render(c, http.StatusOK, views.AccountPage(d))
+}
+
+// ServeAvatar streams the current user's stored avatar PNG. The URL carries a
+// ?v=<updated_at> cache-buster, so a long private cache is safe.
+func (h *Handlers) ServeAvatar(c *gin.Context) {
+	data, err := h.store.GetUserAvatar(c.Request.Context(), currentUserID(c))
+	if err != nil || len(data) == 0 {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	c.Header("Cache-Control", "private, max-age=86400")
+	c.Data(http.StatusOK, "image/png", data)
 }
 
 // UpdateProfile saves the user's display name from the Account tab.

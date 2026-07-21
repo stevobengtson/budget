@@ -13,8 +13,18 @@ type User struct {
 	Name            string
 	PasswordHash    string
 	EmailVerifiedAt *time.Time
+	AvatarUpdatedAt *time.Time // nil when the user has no custom avatar
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+}
+
+// AvatarVersion returns a cache-busting version for the user's avatar URL — the
+// avatar's last-updated unix time, or 0 when there's no custom avatar.
+func (u User) AvatarVersion() int64 {
+	if u.AvatarUpdatedAt == nil {
+		return 0
+	}
+	return u.AvatarUpdatedAt.Unix()
 }
 
 func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (int64, error) {
@@ -43,24 +53,53 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	return s.scanUser(s.queryOne(ctx,
-		`SELECT id, email, name, password_hash, email_verified_at, created_at, updated_at
+		`SELECT id, email, name, password_hash, email_verified_at, avatar_updated_at, created_at, updated_at
 		 FROM users WHERE email = $1`, email))
 }
 
 func (s *Store) GetUserByID(ctx context.Context, id int64) (User, error) {
 	return s.scanUser(s.queryOne(ctx,
-		`SELECT id, email, name, password_hash, email_verified_at, created_at, updated_at
+		`SELECT id, email, name, password_hash, email_verified_at, avatar_updated_at, created_at, updated_at
 		 FROM users WHERE id = $1`, id))
 }
 
 func (s *Store) scanUser(row *sql.Row) (User, error) {
 	var u User
-	var verified nullTime
-	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &verified, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	var verified, avatarUpdated nullTime
+	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &verified, &avatarUpdated, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		return User{}, err
 	}
 	u.EmailVerifiedAt = verified.Ptr()
+	u.AvatarUpdatedAt = avatarUpdated.Ptr()
 	return u, nil
+}
+
+// SetUserAvatar stores the (already-processed) avatar PNG for the user and bumps
+// its timestamp so the served URL's cache-busting version changes.
+func (s *Store) SetUserAvatar(ctx context.Context, userID int64, png []byte) error {
+	_, err := s.run(ctx,
+		`UPDATE users SET avatar = $1, avatar_updated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = $2`, png, userID)
+	return err
+}
+
+// RemoveUserAvatar clears the user's custom avatar (both the blob and its
+// timestamp, so AvatarVersion drops to 0 and the monogram is shown again).
+func (s *Store) RemoveUserAvatar(ctx context.Context, userID int64) error {
+	_, err := s.run(ctx,
+		`UPDATE users SET avatar = NULL, avatar_updated_at = NULL, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = $1`, userID)
+	return err
+}
+
+// GetUserAvatar returns the stored avatar PNG bytes, or (nil, nil) when the user
+// has no custom avatar.
+func (s *Store) GetUserAvatar(ctx context.Context, userID int64) ([]byte, error) {
+	var data []byte
+	if err := s.queryOne(ctx, `SELECT avatar FROM users WHERE id = $1`, userID).Scan(&data); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 func (s *Store) SetEmailVerified(ctx context.Context, userID int64) error {

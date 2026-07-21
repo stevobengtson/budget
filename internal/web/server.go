@@ -110,6 +110,9 @@ func (s *Server) routes(cfg config.Config) {
 
 	app.GET("/account", hs.AccountPage)
 	app.POST("/account/profile", hs.UpdateProfile)
+	app.POST("/account/avatar", hs.UpdateAvatar)
+	app.POST("/account/avatar/remove", hs.RemoveAvatar)
+	app.GET("/account/avatar", hs.ServeAvatar)
 	app.POST("/account/password", hs.ChangePassword)
 
 	app.GET("/budget", hs.BudgetIndex)

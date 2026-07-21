@@ -32,6 +32,7 @@ func requireAuth(svc *auth.Service) gin.HandlerFunc {
 		// can render the sidebar user menu without every page threading it through.
 		ctx := views.WithUserEmail(c.Request.Context(), user.Email)
 		ctx = views.WithUserName(ctx, user.Name)
+		ctx = views.WithUserAvatarVersion(ctx, user.AvatarVersion())
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}

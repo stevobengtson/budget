@@ -1,8 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"image"
+	"image/png"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -154,6 +158,108 @@ func TestChangePassword(t *testing.T) {
 	if ok, _ := auth.VerifyPassword(u.PasswordHash, "newpassword"); !ok {
 		t.Fatal("password hash was not updated to the new password")
 	}
+}
+
+func TestAvatarUploadAndServe(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := newTestHandlers(t)
+
+	ctx := context.Background()
+	hash, _ := auth.HashPassword("password1")
+	uid, err := h.store.CreateUser(ctx, "acc@example.com", hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set("userID", uid); c.Set("userEmail", "acc@example.com") })
+	r.POST("/account/avatar", h.UpdateAvatar)
+	r.POST("/account/avatar/remove", h.RemoveAvatar)
+	r.GET("/account/avatar", h.ServeAvatar)
+
+	// Before any upload, serving 404s.
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/account/avatar", nil))
+	if w.Code != http.StatusNotFound {
+		t.Errorf("serve before upload: got %d, want 404", w.Code)
+	}
+
+	// Upload a small PNG.
+	body, contentType := multipartImage(t, "avatar.png", tinyPNG(t))
+	w = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/account/avatar", body)
+	req.Header.Set("Content-Type", contentType)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Avatar updated") {
+		t.Fatalf("upload: %d %s", w.Code, w.Body.String())
+	}
+
+	// It's stored and served as a PNG.
+	if data, _ := h.store.GetUserAvatar(ctx, uid); len(data) == 0 {
+		t.Fatal("avatar not stored")
+	}
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/account/avatar", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("serve: got %d, want 200", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "image/png" {
+		t.Errorf("Content-Type = %q, want image/png", ct)
+	}
+
+	// A non-image upload is rejected.
+	body, contentType = multipartImage(t, "notes.txt", []byte("not an image"))
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/account/avatar", body)
+	req.Header.Set("Content-Type", contentType)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("non-image upload: got %d, want 400", w.Code)
+	}
+
+	// Removing the avatar clears it and reverts to the monogram (version 0).
+	w = postForm(t, r, "/account/avatar/remove", url.Values{})
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Avatar removed") {
+		t.Fatalf("remove: %d %s", w.Code, w.Body.String())
+	}
+	if data, _ := h.store.GetUserAvatar(ctx, uid); len(data) != 0 {
+		t.Error("avatar still stored after remove")
+	}
+	if u, _ := h.store.GetUserByID(ctx, uid); u.AvatarVersion() != 0 {
+		t.Errorf("AvatarVersion after remove = %d, want 0", u.AvatarVersion())
+	}
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/account/avatar", nil))
+	if w.Code != http.StatusNotFound {
+		t.Errorf("serve after remove: got %d, want 404", w.Code)
+	}
+}
+
+// tinyPNG returns a 4×4 PNG for upload tests.
+func tinyPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// multipartImage builds a multipart body with one "avatar" file part.
+func multipartImage(t *testing.T, filename string, data []byte) (*bytes.Buffer, string) {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("avatar", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fw.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	_ = mw.Close()
+	return &buf, mw.FormDataContentType()
 }
 
 func TestUpdateProfile(t *testing.T) {

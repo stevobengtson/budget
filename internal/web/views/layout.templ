@@ -1,6 +1,7 @@
 package views
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/templui/templui/components/checkbox"
@@ -150,7 +151,7 @@ templ userMenu() {
 		@dropdown.Trigger(dropdown.TriggerProps{
 			Class: "flex h-12 w-full items-center gap-2 rounded-md px-1.5 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
 		}) {
-			@userAvatar(UserNameFromContext(ctx), "size-8 rounded-lg text-xs")
+			@userAvatar(UserNameFromContext(ctx), UserAvatarVersionFromContext(ctx), "size-8 rounded-lg text-xs")
 			<div class="grid min-w-0 flex-1 text-left leading-tight group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">
 				<span class="truncate font-medium">{ UserNameFromContext(ctx) }</span>
 				<span class="truncate text-xs text-muted-foreground">{ UserEmailFromContext(ctx) }</span>
@@ -159,7 +160,7 @@ templ userMenu() {
 		}
 		@dropdown.Content(dropdown.ContentProps{Class: "w-64", Placement: dropdown.PlacementTopStart}) {
 			<div class="flex items-center gap-2 px-2 py-1.5 text-sm">
-				@userAvatar(UserNameFromContext(ctx), "size-8 rounded-lg text-xs")
+				@userAvatar(UserNameFromContext(ctx), UserAvatarVersionFromContext(ctx), "size-8 rounded-lg text-xs")
 				<div class="grid min-w-0 flex-1 text-left leading-tight">
 					<span class="truncate font-medium">{ UserNameFromContext(ctx) }</span>
 					<span class="truncate text-xs text-muted-foreground">{ UserEmailFromContext(ctx) }</span>
@@ -199,13 +200,21 @@ templ userMenu() {
 	}
 }
 
-// userAvatar renders a simple monogram avatar (the user's initials on a muted
-// rounded square) as the default until stored avatars exist. class sets the size
-// and any radius/text-size overrides.
-templ userAvatar(name string, class string) {
-	<span class={ "inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-lg bg-muted font-medium text-foreground " + class }>
-		{ userInitials(name) }
-	</span>
+// userAvatar renders the user's profile picture: the stored image when
+// avatarVersion > 0 (cache-busted by the version), otherwise a monogram of their
+// initials on a muted rounded square. class sets the size and radius/text-size.
+templ userAvatar(name string, avatarVersion int64, class string) {
+	if avatarVersion > 0 {
+		<img
+			src={ fmt.Sprintf("/account/avatar?v=%d", avatarVersion) }
+			alt="Avatar"
+			class={ "shrink-0 overflow-hidden rounded-lg object-cover " + class }
+		/>
+	} else {
+		<span class={ "inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-lg bg-muted font-medium text-foreground " + class }>
+			{ userInitials(name) }
+		</span>
+	}
 }
 
 // userInitials derives up to two uppercase initials from a display name (first
