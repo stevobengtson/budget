@@ -32,3 +32,21 @@ func sidebarCollapsed(c *gin.Context) bool {
 	v, err := c.Cookie("sidebar_state")
 	return err == nil && v == "false"
 }
+
+// incomeCollapsed reports whether the budget's Income section should render
+// collapsed, from the budget_income_collapsed cookie ("true" = collapsed) that
+// income-collapse.js writes on manual toggle. Absent cookie defaults to
+// expanded. Transient expansions (Add Income, copy-from-prev) deliberately do
+// not touch this cookie, so they don't change the remembered state.
+func incomeCollapsed(c *gin.Context) bool {
+	v, err := c.Cookie("budget_income_collapsed")
+	return err == nil && v == "true"
+}
+
+// creditCollapsed reports whether the budget's Credit section should render
+// collapsed, from the budget_credit_collapsed cookie ("true" = collapsed).
+// Absent cookie defaults to expanded.
+func creditCollapsed(c *gin.Context) bool {
+	v, err := c.Cookie("budget_credit_collapsed")
+	return err == nil && v == "true"
+}

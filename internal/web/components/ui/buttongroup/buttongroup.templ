@@ -1,0 +1,58 @@
+// Package buttongroup is a segmented single-select control: a horizontal row of
+// attached buttons backed by real radio inputs, so exactly one option is
+// selected and its value posts natively with the surrounding form. Selection
+// state is pure CSS (the `has-[:checked]` variant on each label) — no
+// JavaScript — which keeps it drop-in for server-rendered + HTMX pages and
+// makes it a candidate to upstream into templui (which lacks a ButtonGroup /
+// ToggleGroup today). Modeled on shadcn's ButtonGroup/ToggleGroup look.
+package buttongroup
+
+// Option is one selectable segment. A Disabled option renders muted and can't
+// be chosen (its radio is disabled), e.g. to lock out an invalid choice.
+type Option struct {
+	Value    string
+	Label    string
+	Disabled bool
+}
+
+// Props configures a ButtonGroup. Name is the shared radio group name (what
+// posts); Value is the initially-selected option value.
+type Props struct {
+	ID         string
+	Name       string
+	Value      string
+	Options    []Option
+	Class      string
+	Attributes templ.Attributes
+}
+
+templ ButtonGroup(p Props) {
+	<div
+		role="radiogroup"
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		class={ "inline-flex items-center gap-1 rounded-md bg-muted p-1 text-muted-foreground " + p.Class }
+		{ p.Attributes... }
+	>
+		for _, o := range p.Options {
+			{{ cls := "relative inline-flex flex-1 select-none items-center justify-center rounded-sm px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors has-checked:bg-background has-checked:text-foreground has-checked:shadow-sm has-focus-visible:ring-2 has-focus-visible:ring-ring" }}
+			if o.Disabled {
+				{{ cls += " cursor-not-allowed opacity-40" }}
+			} else {
+				{{ cls += " cursor-pointer hover:text-foreground" }}
+			}
+			<label class={ cls }>
+				<input
+					type="radio"
+					name={ p.Name }
+					value={ o.Value }
+					checked?={ o.Value == p.Value }
+					disabled?={ o.Disabled }
+					class="sr-only"
+				/>
+				{ o.Label }
+			</label>
+		}
+	</div>
+}

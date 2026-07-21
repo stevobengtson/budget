@@ -2,6 +2,8 @@ package views
 
 import (
 	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/templui/templui/components/icon"
 	"github.com/templui/templui/components/table"
 )
 
@@ -13,9 +15,24 @@ import (
 templ BudgetCreditSection(d BudgetData) {
 	if len(d.CreditRows) > 0 {
 		<tbody id="budget-credit-head">
-			@table.Row(table.RowProps{Class: "bg-muted hover:bg-muted"}) {
+			@table.Row(table.RowProps{Class: "bg-muted hover:bg-muted", Attributes: templ.Attributes{"id": "credit-header"}}) {
 				@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
-					<span class="px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credit</span>
+					<div class="flex items-center gap-2">
+						<button
+							type="button"
+							class="flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:text-foreground"
+							data-collapse="credit"
+							title="Collapse or expand credit"
+							aria-label="Toggle credit section"
+						>
+							@icon.ChevronRight(icon.Props{Class: "js-credit-caret size-3.5 text-muted-foreground transition-transform"})
+							<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credit</span>
+						</button>
+						{{ owing := creditOwingTotal(d.CreditRows) }}
+						<span class={ "js-credit-total-header ml-auto text-sm font-semibold tabular-nums " + owingColor(owing) }>
+							{ money.Format(owing) }
+						</span>
+					</div>
 				}
 			}
 			@subHeaderRow("Account", "Purchases", "Payments", "Owing")
@@ -46,5 +63,27 @@ templ BudgetCreditSection(d BudgetData) {
 				}
 			}
 		</tbody>
+	}
+}
+
+// creditOwingTotal sums the month's per-card owing so the collapsed Credit header
+// can show a single "owing" figure.
+func creditOwingTotal(rows []store.CreditActivity) (total int64) {
+	for _, r := range rows {
+		total += r.OwingCents
+	}
+	return
+}
+
+// owingColor tints an owing figure like the per-card Owing cells: positive (you
+// owe) red, negative (overpaid/credit) emerald, zero muted.
+func owingColor(v int64) string {
+	switch {
+	case v > 0:
+		return "text-red-500"
+	case v < 0:
+		return "text-emerald-500"
+	default:
+		return "text-muted-foreground"
 	}
 }

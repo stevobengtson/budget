@@ -41,7 +41,38 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 		return
 	}
 	_ = rows
+	setCollapseState(c, &data)
 	render(c, http.StatusOK, views.BudgetPage(data, collapsed))
+}
+
+// setCollapseState fills the per-section collapse flags on data from their
+// cookies, so a full render (page or #budget-region swap) reflects the user's
+// remembered collapse choices. Transient expansions override an individual flag
+// after calling this (e.g. copy-from-prev sets IncomeCollapsed=false).
+func setCollapseState(c *gin.Context, data *views.BudgetData) {
+	data.IncomeCollapsed = incomeCollapsed(c)
+	data.CreditCollapsed = creditCollapsed(c)
+	collapsed := collapsedGroupSet(c)
+	for i := range data.Groups {
+		data.Groups[i].Collapsed = collapsed[data.Groups[i].ID]
+	}
+}
+
+// collapsedGroupSet parses the budget_groups_collapsed cookie (a comma-separated
+// list of collapsed group ids, written by section-collapse.js) into a set. A
+// single cookie holds all groups so the count scales as groups come and go.
+func collapsedGroupSet(c *gin.Context) map[int64]bool {
+	set := map[int64]bool{}
+	v, err := c.Cookie("budget_groups_collapsed")
+	if err != nil || v == "" {
+		return set
+	}
+	for _, s := range strings.Split(v, ",") {
+		if id, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64); err == nil {
+			set[id] = true
+		}
+	}
+	return set
 }
 
 // budgetData loads everything needed to render the budget page for the
@@ -488,6 +519,7 @@ func (h *Handlers) BudgetGroupDelete(c *gin.Context) {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
+	setCollapseState(c, &data)
 	render(c, http.StatusOK, views.BudgetRegion(data))
 }
 
@@ -573,6 +605,7 @@ func (h *Handlers) BudgetCategoryArchive(c *gin.Context) {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
+	setCollapseState(c, &data)
 	render(c, http.StatusOK, views.BudgetRegion(data))
 }
 

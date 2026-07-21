@@ -6,6 +6,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/templui/templui/components/icon"
 	"github.com/templui/templui/components/table"
 )
 
@@ -30,39 +31,54 @@ templ BudgetIncomeSection(d BudgetData) {
 // incomeHeaderRow is the muted "Income" section header, mirroring a category
 // group header. It carries the section's copy-from-prev and add-income controls.
 templ incomeHeaderRow(d BudgetData) {
-	@table.Row(table.RowProps{Class: "bg-muted hover:bg-muted"}) {
+	@table.Row(table.RowProps{Class: "bg-muted hover:bg-muted", Attributes: templ.Attributes{"id": "income-header"}}) {
 		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
 			<div class="flex items-center gap-2">
-				<span class="px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Income</span>
-				@button.Button(button.Props{
-					Type:    "button",
-					Variant: button.VariantGhost,
-					Size:    button.SizeSm,
-					Class:   "ml-auto text-muted-foreground hover:text-foreground",
-					Attributes: templ.Attributes{
-						"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
-						"hx-target":  "#budget-region",
-						"hx-swap":    "outerHTML",
-						"hx-confirm": "Copy all entries from the previous month into this one?",
-						"title":      "Copy every entry from the previous month",
-					},
-				}) {
-					← copy from prev
-				}
-				@button.Button(button.Props{
-					Type:    "button",
-					Variant: button.VariantOutline,
-					Size:    button.SizeSm,
-					Class:   "text-muted-foreground hover:text-foreground",
-					Attributes: templ.Attributes{
-						"hx-get":    "/budget/income/new?month=" + d.Month,
-						"hx-target": "#income-rows",
-						"hx-swap":   "beforeend",
-						"title":     "Add income",
-					},
-				}) {
-					Add Income
-				}
+				<button
+					type="button"
+					class="flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:text-foreground"
+					data-collapse="income"
+					title="Collapse or expand income"
+					aria-label="Toggle income section"
+				>
+					@icon.ChevronRight(icon.Props{Class: "js-income-caret size-3.5 text-muted-foreground transition-transform"})
+					<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Income</span>
+				</button>
+				<div class="ml-auto flex items-center gap-2">
+					<span class="js-income-total-header text-sm font-semibold tabular-nums text-emerald-500">
+						{ money.Format(incomeTotal(d.IncomeRows)) }
+					</span>
+					@button.Button(button.Props{
+						Type:    "button",
+						Variant: button.VariantGhost,
+						Size:    button.SizeSm,
+						Class:   "text-muted-foreground hover:text-foreground",
+						Attributes: templ.Attributes{
+							"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
+							"hx-target":  "#budget-region",
+							"hx-swap":    "outerHTML",
+							"hx-confirm": "Copy all entries from the previous month into this one?",
+							"title":      "Copy every entry from the previous month",
+						},
+					}) {
+						← copy from prev
+					}
+					@button.Button(button.Props{
+						Type:    "button",
+						Variant: button.VariantOutline,
+						Size:    button.SizeSm,
+						Class:   "text-muted-foreground hover:text-foreground",
+						Attributes: templ.Attributes{
+							"hx-get":     "/budget/income/new?month=" + d.Month,
+							"hx-target":  "#income-rows",
+							"hx-swap":    "beforeend",
+							"title":      "Add income",
+							"hx-on:click": "document.getElementById('budget-table').classList.remove('income-collapsed')",
+						},
+					}) {
+						Add Income
+					}
+				</div>
 			</div>
 		}
 	}
@@ -83,7 +99,7 @@ templ IncomeTotalsRow(d BudgetData, oob bool) {
 			Total income
 		}
 		@table.Cell() {
-			<div class="flex items-center justify-end px-2 py-1 text-sm font-semibold tabular-nums text-emerald-500">
+			<div class="js-income-total-value flex items-center justify-end px-2 py-1 text-sm font-semibold tabular-nums text-emerald-500">
 				{ money.Format(incomeTotal(d.IncomeRows)) }
 			</div>
 		}

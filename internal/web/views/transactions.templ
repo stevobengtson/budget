@@ -9,6 +9,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/monthselector"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/sbengtson/budget/internal/web/components/ui/buttongroup"
 	"github.com/templui/templui/components/datepicker"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/dropdown"
@@ -254,6 +255,13 @@ templ TransactionForm(d TxFormData) {
 				}
 			}
 			<div class="grid gap-3">
+				@buttongroup.ButtonGroup(buttongroup.Props{
+					ID:      "tx-type",
+					Name:    "tx_type",
+					Value:   txTypeOrDefault(d.TxType),
+					Class:   "w-full",
+					Options: txTypeOptions(d),
+				})
 				@formRow("tx-date", "Date") {
 					@datepicker.DatePicker(datepicker.Props{
 						ID:          "tx-date",
@@ -265,6 +273,14 @@ templ TransactionForm(d TxFormData) {
 				@formRow("tx-account", "Account") {
 					@SelectField(SelectFieldProps{ID: "tx-account", Name: "account_id", Required: true}, accountOptions(d.Accounts, d.AccountID))
 				}
+				<div class="tx-transfer-field">
+					@formRow("tx-transfer", "Transfer to") {
+						@SelectField(SelectFieldProps{ID: "tx-transfer", Name: "transfer_to", Placeholder: "(none)"}, transferOptions(d.Accounts, d.TransferAccountID))
+					}
+				</div>
+				@formRow("tx-amount", "Amount") {
+					@input.Input(input.Props{ID: "tx-amount", Name: "amount", Value: d.Amount, Placeholder: "0.00", Class: "tabular-nums"})
+				}
 				@formRow("tx-category", "Category") {
 					@SelectField(SelectFieldProps{ID: "tx-category", Name: "category_id", Placeholder: "(none)"}, categoryOptions(d.Categories, d.CategoryID))
 				}
@@ -273,17 +289,6 @@ templ TransactionForm(d TxFormData) {
 				}
 				@formRow("tx-notes", "Notes") {
 					@input.Input(input.Props{ID: "tx-notes", Name: "notes", Value: d.Notes})
-				}
-				<div class="grid grid-cols-2 gap-3">
-					@formRow("tx-outflow", "Outflow") {
-						@input.Input(input.Props{ID: "tx-outflow", Name: "outflow", Value: d.Outflow, Placeholder: "0.00", Class: "tabular-nums"})
-					}
-					@formRow("tx-inflow", "Inflow") {
-						@input.Input(input.Props{ID: "tx-inflow", Name: "inflow", Value: d.Inflow, Placeholder: "0.00", Class: "tabular-nums"})
-					}
-				</div>
-				@formRow("tx-transfer", "Transfer to") {
-					@SelectField(SelectFieldProps{ID: "tx-transfer", Name: "transfer_to", Placeholder: "(none)"}, transferOptions(d.Accounts, d.TransferAccountID))
 				}
 			</div>
 			@dialog.Footer() {
@@ -316,14 +321,14 @@ templ formRow(id, text string) {
 type TxFormData struct {
 	Editing           bool
 	ID                int64
+	TxType            string // "expense" | "income" | "transfer" (default expense)
 	Date              string // YYYY-MM-DD
 	AccountID         int64
 	CategoryID        *int64
 	TransferAccountID *int64
 	Payee             string
 	Notes             string
-	Outflow           string
-	Inflow            string
+	Amount            string
 	Accounts          []store.AccountWithBalance
 	Categories        []store.Category
 }
@@ -409,6 +414,30 @@ func txMonthHref(d TransactionsData, month string) string {
 		q += fmt.Sprintf("&account=%d", *d.FilterAccount)
 	}
 	return q
+}
+
+// txTypeOrDefault returns the transaction type for the form, defaulting to
+// "expense" (the most common entry) when unset.
+func txTypeOrDefault(t string) string {
+	if t == "" {
+		return "expense"
+	}
+	return t
+}
+
+// txTypeOptions builds the type selector. New transactions allow any type, but
+// editing can't convert between a transfer and a regular transaction (the user
+// deletes and recreates instead), so the invalid types are disabled: editing a
+// transfer locks out Expense/Income; editing a regular transaction locks out
+// Transfer. Expense↔Income stays allowed either way.
+func txTypeOptions(d TxFormData) []buttongroup.Option {
+	lockPlain := d.Editing && d.TxType == "transfer"
+	lockTransfer := d.Editing && d.TxType != "transfer"
+	return []buttongroup.Option{
+		{Value: "expense", Label: "Expense", Disabled: lockPlain},
+		{Value: "income", Label: "Income", Disabled: lockPlain},
+		{Value: "transfer", Label: "Transfer", Disabled: lockTransfer},
+	}
 }
 
 // txDate parses a "YYYY-MM-DD" form value into a time.Time for the date picker.

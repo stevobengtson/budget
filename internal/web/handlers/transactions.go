@@ -96,6 +96,7 @@ func (h *Handlers) TransactionsNew(c *gin.Context) {
 	accts, _ := h.store.ListAccounts(c.Request.Context(), uid, false)
 	cats, _ := h.store.ListCategories(c.Request.Context(), uid, false)
 	d := views.TxFormData{
+		TxType:     "expense",
 		Date:       time.Now().Format("2006-01-02"),
 		Accounts:   accts,
 		Categories: cats,
@@ -138,14 +139,37 @@ func (h *Handlers) TransactionsEdit(c *gin.Context) {
 	accts, _ := h.store.ListAccounts(ctx, uid, true)
 	cats, _ := h.store.ListCategories(ctx, uid, true)
 	d := views.TxFormData{
-		Editing:           true,
-		ID:                t.ID,
-		Date:              t.Date.Format("2006-01-02"),
-		AccountID:         t.AccountID,
-		CategoryID:        t.CategoryID,
-		TransferAccountID: t.TransferAccountID,
-		Accounts:          accts,
-		Categories:        cats,
+		Editing:    true,
+		ID:         t.ID,
+		Date:       t.Date.Format("2006-01-02"),
+		AccountID:  t.AccountID,
+		CategoryID: t.CategoryID,
+		Accounts:   accts,
+		Categories: cats,
+	}
+	// Map the stored legs onto the single (type, amount) the form uses. Transfers
+	// are always shown from the source's perspective — Account = "from",
+	// Transfer to = "to", amount = the outflow — so editing the inflow
+	// (destination) leg is normalized to keep the amount an outflow.
+	switch {
+	case t.TransferAccountID != nil:
+		d.TxType = "transfer"
+		if t.OutflowCents > 0 {
+			d.TransferAccountID = t.TransferAccountID
+			d.Amount = money.Format(t.OutflowCents)
+		} else {
+			src := *t.TransferAccountID
+			dst := t.AccountID
+			d.AccountID = src
+			d.TransferAccountID = &dst
+			d.Amount = money.Format(t.InflowCents)
+		}
+	case t.InflowCents > 0:
+		d.TxType = "income"
+		d.Amount = money.Format(t.InflowCents)
+	default:
+		d.TxType = "expense"
+		d.Amount = money.Format(t.OutflowCents)
 	}
 	// A transfer's category lives on the outflow (spending) leg. When editing
 	// the inflow leg, surface the pair's category so it's visible and editable.
@@ -159,12 +183,6 @@ func (h *Handlers) TransactionsEdit(c *gin.Context) {
 	}
 	if t.Notes != nil {
 		d.Notes = *t.Notes
-	}
-	if t.OutflowCents > 0 {
-		d.Outflow = money.Format(t.OutflowCents)
-	}
-	if t.InflowCents > 0 {
-		d.Inflow = money.Format(t.InflowCents)
 	}
 	render(c, http.StatusOK, views.TransactionForm(d))
 }
@@ -237,18 +255,32 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 			catPtr = &cid
 		}
 	}
-	var transferTo *int64
-	if v := c.PostForm("transfer_to"); v != "" {
-		if tid, err := strconv.ParseInt(v, 10, 64); err == nil {
-			transferTo = &tid
-		}
+
+	// The form posts a single amount plus a type; income routes it to inflow,
+	// expense and transfer to outflow (a transfer is an outflow from the chosen
+	// account to the destination). transfer_to is only read for the transfer
+	// type, so a stale hidden value on an expense/income is ignored.
+	txType := c.PostForm("tx_type")
+	if txType == "" {
+		txType = "expense"
+	}
+	var amount int64
+	if v := c.PostForm("amount"); v != "" {
+		amount, _ = money.Parse(v)
 	}
 	var outCents, inCents int64
-	if v := c.PostForm("outflow"); v != "" {
-		outCents, _ = money.Parse(v)
+	if txType == "income" {
+		inCents = amount
+	} else {
+		outCents = amount
 	}
-	if v := c.PostForm("inflow"); v != "" {
-		inCents, _ = money.Parse(v)
+	var transferTo *int64
+	if txType == "transfer" {
+		if v := c.PostForm("transfer_to"); v != "" {
+			if tid, err := strconv.ParseInt(v, 10, 64); err == nil {
+				transferTo = &tid
+			}
+		}
 	}
 
 	payee := c.PostForm("payee")
@@ -261,18 +293,24 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 		notesPtr = &notes
 	}
 
-	// Editing an existing transfer leg: update both legs in place rather than
-	// deleting and recreating, so ids and the pair linkage survive.
+	// Editing can't convert between a transfer and a regular transaction — the
+	// user must delete and recreate. Enforce it server-side (the form also
+	// disables the mismatched type buttons). An existing transfer leg is then
+	// updated in place so its ids and pair linkage survive.
 	if id != 0 {
 		existing, err := h.store.GetTransaction(ctx, uid, id)
 		if err != nil {
 			return err
 		}
-		if existing.TransferPairID != nil {
+		wasTransfer := existing.TransferPairID != nil
+		if wasTransfer != (txType == "transfer") {
+			return errInvalid("to switch between a transfer and a regular transaction, delete this one and create a new one")
+		}
+		if wasTransfer {
 			if transferTo == nil {
 				return errInvalid("transfer requires a destination account")
 			}
-			if outCents+inCents <= 0 {
+			if amount <= 0 {
 				return errInvalid("transfer amount required")
 			}
 			return h.store.UpdateTransfer(ctx, uid, id, store.TransferLegEdit{
@@ -283,17 +321,14 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 		}
 	}
 
+	// Creating a transfer: the amount is an outflow from the chosen account to
+	// the destination (the new single-amount form never posts the inflow leg).
 	if transferTo != nil {
-		amount := outCents + inCents
 		if amount <= 0 {
 			return errInvalid("transfer amount required")
 		}
-		fromID, toID := acctID, *transferTo
-		if outCents == 0 {
-			fromID, toID = *transferTo, acctID
-		}
 		_, _, err := h.store.CreateTransfer(ctx, uid, store.TransferInput{
-			Date: t, FromAccountID: fromID, ToAccountID: toID,
+			Date: t, FromAccountID: acctID, ToAccountID: *transferTo,
 			AmountCents: amount, CategoryID: catPtr, Notes: notesPtr,
 		})
 		return err

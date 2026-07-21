@@ -103,6 +103,38 @@
   @media (prefers-reduced-motion: reduce) {
     .animate-sheet-in { animation: none; }
   }
+
+  /* Income section collapse. income-collapse.js toggles .income-collapsed on
+     #budget-table (server-rendered from the budget_income_collapsed cookie, so
+     no load flash). Collapsed hides everything in the income body except its
+     header row and hides the separate totals row; the header's inline total is
+     shown only when collapsed, and the disclosure caret points down when open. */
+  #budget-table.income-collapsed #income-rows > tr:not(#income-header) { display: none; }
+  #budget-table.income-collapsed #income-totals-body { display: none; }
+  #budget-table:not(.income-collapsed) .js-income-total-header { display: none; }
+  #budget-table:not(.income-collapsed) .js-income-caret { transform: rotate(90deg); }
+
+  /* Credit section collapse — same scheme as income. Collapsed keeps only the
+     Credit header row (hiding the sub-header) and hides the card rows; the
+     header's owing total shows only when collapsed. */
+  #budget-table.credit-collapsed #budget-credit-head > tr:not(#credit-header) { display: none; }
+  #budget-table.credit-collapsed #budget-credit-body { display: none; }
+  #budget-table:not(.credit-collapsed) .js-credit-total-header { display: none; }
+  #budget-table:not(.credit-collapsed) .js-credit-caret { transform: rotate(90deg); }
+
+  /* Expense group collapse — per-group: the class lives on the group's own
+     <tbody>, so each collapses independently. Collapsed hides every row but the
+     header (data-group-head); the header's available total shows only when
+     collapsed, and the caret points down when expanded. */
+  #budget-table tbody.group-collapsed > tr:not([data-group-head]) { display: none; }
+  #budget-table tbody:not(.group-collapsed) .js-group-total-header { display: none; }
+  #budget-table tbody:not(.group-collapsed) .js-group-caret { transform: rotate(90deg); }
+
+  /* Transaction form: the "Transfer to" destination shows only when the
+     Transfer type is selected (the amount then posts as an outflow from the
+     chosen account). Driven purely by the radio's :checked state — no JS. */
+  .tx-transfer-field { display: none; }
+  #tx-form-inner:has(input[name="tx_type"][value="transfer"]:checked) .tx-transfer-field { display: block; }
 }
 
 @keyframes sheet-in {

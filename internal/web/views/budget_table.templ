@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/signedmoney"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
 	"github.com/templui/templui/components/icon"
@@ -12,7 +13,14 @@ import (
 
 templ BudgetTable(d BudgetData) {
 	<div class="overflow-hidden rounded-xl border bg-card shadow-xs">
-		@table.Table(table.Props{ID: "budget-table", Class: "js-group-sort", Attributes: templ.Attributes{"data-month": d.Month}}) {
+		{{ tableClass := "js-group-sort" }}
+		if d.IncomeCollapsed {
+			{{ tableClass += " income-collapsed" }}
+		}
+		if d.CreditCollapsed {
+			{{ tableClass += " credit-collapsed" }}
+		}
+		@table.Table(table.Props{ID: "budget-table", Class: tableClass, Attributes: templ.Attributes{"data-month": d.Month}}) {
 		@BudgetIncomeSection(d)
 		@BudgetCreditSection(d)
 		<tbody id="budget-expenses-head">
@@ -88,7 +96,11 @@ templ subHeaderRow(labels ...string) {
 }
 
 templ BudgetGroupTbody(month string, g BudgetGroup) {
-	<tbody id={ fmt.Sprintf("group-%d", g.ID) } data-group data-group-id={ fmt.Sprintf("%d", g.ID) }>
+	{{ tbodyClass := "" }}
+	if g.Collapsed {
+		{{ tbodyClass = "group-collapsed" }}
+	}
+	<tbody id={ fmt.Sprintf("group-%d", g.ID) } class={ tbodyClass } data-group data-group-id={ fmt.Sprintf("%d", g.ID) }>
 		@BudgetGroupHeader(month, g)
 		for _, r := range g.Rows {
 			@BudgetRow(month, r)
@@ -119,6 +131,15 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 				>
 					@icon.GripVertical(icon.Props{Class: "size-4"})
 				</span>
+				<button
+					type="button"
+					class="inline-flex items-center rounded-md hover:text-foreground"
+					data-collapse-group={ fmt.Sprintf("%d", g.ID) }
+					title="Collapse or expand group"
+					aria-label="Toggle group"
+				>
+					@icon.ChevronRight(icon.Props{Class: "js-group-caret size-3.5 text-muted-foreground transition-transform"})
+				</button>
 				<form
 					hx-put={ fmt.Sprintf("/budget/group/%d?month=%s", g.ID, month) }
 					hx-target={ fmt.Sprintf("#group-head-%d", g.ID) }
@@ -140,37 +161,47 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 						class="js-name-input hidden h-7 w-56 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					/>
 				</form>
-				@button.Button(button.Props{
-					Type:    "button",
-					Variant: button.VariantOutline,
-					Size:    button.SizeSm,
-					Class:   "ml-auto text-muted-foreground hover:text-foreground",
-					Attributes: templ.Attributes{
-						"hx-get":    fmt.Sprintf("/budget/group/%d/category/new?month=%s", g.ID, month),
-						"hx-target": fmt.Sprintf("#group-%d", g.ID),
-						"hx-swap":   "beforeend",
-						"title":     "Add category",
-					},
-				}) {
-					Add Category
-				}
-				if len(g.Rows) == 0 {
+				<div class="ml-auto flex items-center gap-2">
+					{{ avail := groupAvailableTotal(g.Rows) }}
+					<span class="js-group-total-header flex items-baseline gap-1">
+						<span class="text-xs font-normal text-muted-foreground">avail</span>
+						<span class={ "js-group-total-value text-sm font-semibold tabular-nums " + availColorClass(avail) }>
+							{ money.Format(avail) }
+						</span>
+					</span>
 					@button.Button(button.Props{
 						Type:    "button",
-						Variant: button.VariantGhost,
+						Variant: button.VariantOutline,
 						Size:    button.SizeSm,
-						Class:   "text-muted-foreground hover:text-destructive",
+						Class:   "text-muted-foreground hover:text-foreground",
 						Attributes: templ.Attributes{
-							"hx-post":    fmt.Sprintf("/budget/group/%d/delete?month=%s", g.ID, month),
-							"hx-target":  "#budget-region",
-							"hx-swap":    "outerHTML",
-							"hx-confirm": "Delete this empty group?",
-							"title":      "Delete empty group",
+							"hx-get":      fmt.Sprintf("/budget/group/%d/category/new?month=%s", g.ID, month),
+							"hx-target":   fmt.Sprintf("#group-%d", g.ID),
+							"hx-swap":     "beforeend",
+							"title":       "Add category",
+							"hx-on:click": fmt.Sprintf("document.getElementById('group-%d').classList.remove('group-collapsed')", g.ID),
 						},
 					}) {
-						@icon.X(icon.Props{Class: "size-4"})
+						Add Category
 					}
-				}
+					if len(g.Rows) == 0 {
+						@button.Button(button.Props{
+							Type:    "button",
+							Variant: button.VariantGhost,
+							Size:    button.SizeSm,
+							Class:   "text-muted-foreground hover:text-destructive",
+							Attributes: templ.Attributes{
+								"hx-post":    fmt.Sprintf("/budget/group/%d/delete?month=%s", g.ID, month),
+								"hx-target":  "#budget-region",
+								"hx-swap":    "outerHTML",
+								"hx-confirm": "Delete this empty group?",
+								"title":      "Delete empty group",
+							},
+						}) {
+							@icon.X(icon.Props{Class: "size-4"})
+						}
+					}
+				</div>
 			</div>
 		}
 	}
@@ -272,4 +303,27 @@ func budgetTotals(groups []BudgetGroup) (assigned, spent, available int64) {
 		}
 	}
 	return
+}
+
+// groupAvailableTotal sums a group's category Available so a collapsed group
+// header can show one "avail" figure.
+func groupAvailableTotal(rows []store.CategoryBudget) (total int64) {
+	for _, r := range rows {
+		total += r.AvailableCents
+	}
+	return
+}
+
+// availColorClass tints an Available figure the same way the signedmoney
+// component tints the Available column: positive emerald, negative destructive,
+// zero muted. section-collapse.js mirrors this when it re-sums on collapse.
+func availColorClass(cents int64) string {
+	switch {
+	case cents > 0:
+		return "text-emerald-600 dark:text-emerald-400"
+	case cents < 0:
+		return "text-destructive"
+	default:
+		return "text-muted-foreground"
+	}
 }

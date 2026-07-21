@@ -213,9 +213,10 @@ func TestTransactionDeleteEmitsAccountsChanged(t *testing.T) {
 	}
 
 	form := url.Values{
+		"tx_type":    {"expense"},
 		"account_id": {strconv.FormatInt(acctID, 10)},
 		"date":       {"2026-07-14"},
-		"outflow":    {"10.00"},
+		"amount":     {"10.00"},
 	}
 	createResp, err := client.PostForm(ts.URL+"/transactions", form)
 	if err != nil {
@@ -247,6 +248,117 @@ func TestTransactionDeleteEmitsAccountsChanged(t *testing.T) {
 	if body := readAll(t, resp); body != "" {
 		t.Errorf("delete body = %q, want empty", body)
 	}
+}
+
+func TestTransactionCreateByType(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	a, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+	b, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Savings", Type: store.TypeChecking})
+
+	post := func(form url.Values) {
+		t.Helper()
+		resp, err := client.PostForm(ts.URL+"/transactions", form)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("create status = %d, want 200", resp.StatusCode)
+		}
+	}
+
+	// Expense: single amount routes to outflow.
+	post(url.Values{
+		"tx_type": {"expense"}, "account_id": {strconv.FormatInt(a, 10)},
+		"date": {"2026-07-10"}, "amount": {"25.00"},
+	})
+	// Income: single amount routes to inflow.
+	post(url.Values{
+		"tx_type": {"income"}, "account_id": {strconv.FormatInt(a, 10)},
+		"date": {"2026-07-11"}, "amount": {"40.00"},
+	})
+	// Transfer: outflow from a into b.
+	post(url.Values{
+		"tx_type": {"transfer"}, "account_id": {strconv.FormatInt(a, 10)},
+		"transfer_to": {strconv.FormatInt(b, 10)}, "date": {"2026-07-12"}, "amount": {"15.00"},
+	})
+
+	aRows, _ := s.ListTransactions(ctx, uid, store.TxFilter{AccountID: &a})
+	var exp, inc, xfer *store.Transaction
+	for i := range aRows {
+		r := &aRows[i]
+		switch {
+		case r.TransferAccountID != nil:
+			xfer = r
+		case r.InflowCents == 4000 && r.OutflowCents == 0:
+			inc = r
+		case r.OutflowCents == 2500 && r.InflowCents == 0:
+			exp = r
+		}
+	}
+	if exp == nil {
+		t.Error("expense: want a row with outflow 2500, inflow 0")
+	}
+	if inc == nil {
+		t.Error("income: want a row with inflow 4000, outflow 0")
+	}
+	if xfer == nil || xfer.OutflowCents != 1500 || xfer.TransferAccountID == nil || *xfer.TransferAccountID != b {
+		t.Errorf("transfer: want a→b outflow leg of 1500, got %+v", xfer)
+	}
+
+	// The transfer's other leg posts an inflow into b.
+	bRows, _ := s.ListTransactions(ctx, uid, store.TxFilter{AccountID: &b})
+	if len(bRows) != 1 || bRows[0].InflowCents != 1500 || bRows[0].TransferAccountID == nil || *bRows[0].TransferAccountID != a {
+		t.Errorf("transfer dest leg: want inflow 1500 from a, got %+v", bRows)
+	}
+}
+
+func TestTransactionEditTypeLock(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	a, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+	b, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Savings", Type: store.TypeChecking})
+
+	// A plain expense can't be turned into a transfer on edit.
+	expID, _ := s.CreateTransaction(ctx, uid, store.Transaction{
+		Date: time.Now(), AccountID: a, OutflowCents: 2500,
+	})
+	resp := putForm(t, client, ts.URL+"/transactions/"+strconv.FormatInt(expID, 10), url.Values{
+		"tx_type": {"transfer"}, "account_id": {strconv.FormatInt(a, 10)},
+		"transfer_to": {strconv.FormatInt(b, 10)}, "date": {"2026-07-10"}, "amount": {"25.00"},
+	})
+	if resp != http.StatusBadRequest {
+		t.Errorf("expense→transfer: status = %d, want 400", resp)
+	}
+
+	// A transfer can't be turned into a plain expense on edit.
+	legID, _, _ := s.CreateTransfer(ctx, uid, store.TransferInput{
+		Date: time.Now(), FromAccountID: a, ToAccountID: b, AmountCents: 1500,
+	})
+	resp = putForm(t, client, ts.URL+"/transactions/"+strconv.FormatInt(legID, 10), url.Values{
+		"tx_type": {"expense"}, "account_id": {strconv.FormatInt(a, 10)},
+		"date": {"2026-07-10"}, "amount": {"15.00"},
+	})
+	if resp != http.StatusBadRequest {
+		t.Errorf("transfer→expense: status = %d, want 400", resp)
+	}
+}
+
+func putForm(t *testing.T, client *http.Client, url string, form url.Values) int {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodPut, url, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode
 }
 
 func TestBudgetSetRolloverMode(t *testing.T) {
@@ -363,6 +475,96 @@ func TestBudgetCategoriesReorder(t *testing.T) {
 	}
 	if groupOf(b) != g1 {
 		t.Errorf("B group = %d, want %d (G1)", groupOf(b), g1)
+	}
+}
+
+func TestIncomeCollapseRendering(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, _ := serveAuthed(t, s)
+	u, _ := url.Parse(ts.URL)
+
+	// Without the cookie, the income section renders expanded.
+	resp0, err := client.Get(ts.URL + "/budget?month=2026-07")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := readAll(t, resp0); strings.Contains(body, "js-group-sort income-collapsed") {
+		t.Error("default page should render income expanded")
+	}
+
+	// budget_income_collapsed=true renders the table with the collapse class, so
+	// the section is collapsed on load with no flash.
+	client.Jar.SetCookies(u, []*http.Cookie{{Name: "budget_income_collapsed", Value: "true", Path: "/"}})
+	resp1, err := client.Get(ts.URL + "/budget?month=2026-07")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := readAll(t, resp1); !strings.Contains(body, "js-group-sort income-collapsed") {
+		t.Error("collapsed cookie should render income-collapsed on the table")
+	}
+
+	// copy-from-prev expands transiently even with the collapsed cookie set: the
+	// rendered region carries no collapse class (and the cookie is left as-is).
+	resp2, err := client.PostForm(ts.URL+"/budget/income/copy-prev?month=2026-07", url.Values{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Match on the table's class list ("js-group-sort ...") — the literal
+	// "income-collapsed" also appears in Add Income's hx-on:click, so a bare
+	// substring check would be a false positive.
+	if body := readAll(t, resp2); strings.Contains(body, "js-group-sort income-collapsed") {
+		t.Error("copy-from-prev should force-expand income, not render it collapsed")
+	}
+}
+
+func TestCreditCollapseRendering(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, _ := serveAuthed(t, s)
+	u, _ := url.Parse(ts.URL)
+
+	// The credit collapse class is driven by its own cookie, independently of
+	// income and of whether there's credit activity to show.
+	client.Jar.SetCookies(u, []*http.Cookie{{Name: "budget_credit_collapsed", Value: "true", Path: "/"}})
+	resp, err := client.Get(ts.URL + "/budget?month=2026-07")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := readAll(t, resp)
+	if !strings.Contains(body, "js-group-sort credit-collapsed") {
+		t.Error("collapsed credit cookie should render credit-collapsed on the table")
+	}
+	if strings.Contains(body, "js-group-sort income-collapsed") {
+		t.Error("credit cookie should not collapse income")
+	}
+}
+
+func TestGroupCollapseRendering(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	u, _ := url.Parse(ts.URL)
+
+	g1, _ := s.CreateGroup(ctx, uid, "G1", 1)
+	g2, _ := s.CreateGroup(ctx, uid, "G2", 2)
+
+	// The single budget_groups_collapsed cookie lists collapsed group ids; only
+	// g1 is collapsed here.
+	client.Jar.SetCookies(u, []*http.Cookie{{
+		Name: "budget_groups_collapsed", Value: strconv.FormatInt(g1, 10), Path: "/",
+	}})
+	resp, err := client.Get(ts.URL + "/budget?month=2026-07")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := readAll(t, resp)
+
+	g1Collapsed := `id="group-` + strconv.FormatInt(g1, 10) + `" class="group-collapsed"`
+	g2Expanded := `id="group-` + strconv.FormatInt(g2, 10) + `" class=""`
+	if !strings.Contains(body, g1Collapsed) {
+		t.Errorf("group %d should render with the group-collapsed class", g1)
+	}
+	if !strings.Contains(body, g2Expanded) {
+		t.Errorf("group %d should render expanded (empty class)", g2)
 	}
 }
 

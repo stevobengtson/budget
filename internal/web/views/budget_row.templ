@@ -28,6 +28,7 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 	if !r.IsIncome {
 		{{ attrs["data-category"] = "" }}
 		{{ attrs["data-category-id"] = fmt.Sprintf("%d", r.CategoryID) }}
+		{{ attrs["data-available"] = fmt.Sprintf("%d", r.AvailableCents) }}
 	}
 	@table.Row(table.RowProps{Attributes: attrs}) {
 		@table.Cell(table.CellProps{Class: "pl-6"}) {

@@ -170,5 +170,10 @@ func (h *Handlers) BudgetIncomeCopyPrev(c *gin.Context) {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Keep the remembered collapse state for other sections, but expand Income so
+	// the copied entries are visible. This leaves the budget_income_collapsed
+	// cookie untouched — the expansion is transient and not remembered.
+	setCollapseState(c, &data)
+	data.IncomeCollapsed = false
 	render(c, http.StatusOK, views.BudgetRegion(data))
 }

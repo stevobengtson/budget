@@ -27,6 +27,13 @@ type BudgetData struct {
 	IncomeRows         []store.Income
 	Accounts           []store.AccountWithBalance
 	UncategorizedSpent int64
+	// IncomeCollapsed renders the Income section collapsed (header + total only).
+	// Sourced from the budget_income_collapsed cookie for normal renders; forced
+	// false by copy-from-prev so that action expands without persisting.
+	IncomeCollapsed bool
+	// CreditCollapsed renders the Credit section collapsed (header + total owing
+	// only), from the budget_credit_collapsed cookie.
+	CreditCollapsed bool
 }
 
 // BudgetGroup is one category group plus its month rows, for rendering a
@@ -36,6 +43,9 @@ type BudgetGroup struct {
 	ID   int64
 	Name string
 	Rows []store.CategoryBudget
+	// Collapsed hides the group's category rows (header + available total only),
+	// from the budget_groups_collapsed cookie.
+	Collapsed bool
 }
 
 func BudgetPage(d BudgetData, collapsed bool) templ.Component {
@@ -113,7 +123,7 @@ func BudgetMonthSelector(d BudgetData) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(formatMonth(d.Month))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_page.templ`, Line: 41, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_page.templ`, Line: 51, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
