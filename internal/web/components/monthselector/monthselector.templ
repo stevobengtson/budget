@@ -4,15 +4,18 @@ import (
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
 )
 
-templ MonthSelector(prevMonth string, currentMonth string, nextMonth string) {
+// MonthSelector renders prev / today / next navigation. atCurrent reports that
+// the viewed month is already the current month, so the "today" button is
+// disabled — clicking it would just reload the same page.
+templ MonthSelector(prevMonth string, currentMonth string, nextMonth string, atCurrent bool) {
   <div class="flex items-center gap-2">
-    @button.Button(button.Props{Href: prevMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
+    @button.Button(button.Props{Href: prevMonth, Variant: button.VariantOutline, Size: button.SizeIcon, Class: "text-lg", Attributes: templ.Attributes{"aria-label": "Previous month"}}) {
       ‹
     }
-    @button.Button(button.Props{Href: currentMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
+    @button.Button(button.Props{Href: currentMonth, Variant: button.VariantOutline, Size: button.SizeDefault, Disabled: atCurrent}) {
       today
     }
-    @button.Button(button.Props{Href: nextMonth, Variant: button.VariantOutline, Size: button.SizeSm}) {
+    @button.Button(button.Props{Href: nextMonth, Variant: button.VariantOutline, Size: button.SizeIcon, Class: "text-lg", Attributes: templ.Attributes{"aria-label": "Next month"}}) {
       ›
     }
   </div>

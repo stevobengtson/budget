@@ -88,6 +88,17 @@ func newTestStore(t *testing.T) *Store {
 // migration-seeded rows (previously NULL-owner), for exercising the
 // user-scoped store methods. ClaimOrphanData hands the seeded Income
 // category/group to this user so ListCategories(uid) still surfaces it.
+func TestUserNameDefaults(t *testing.T) {
+	s, uid := newTestStoreUser(t)
+	u, err := s.GetUserByID(context.Background(), uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Name != "User Name" {
+		t.Errorf("default name = %q, want %q", u.Name, "User Name")
+	}
+}
+
 func newTestStoreUser(t *testing.T) (*Store, int64) {
 	t.Helper()
 	s := newTestStore(t)

@@ -128,7 +128,7 @@ func TransactionsBody(d TransactionsData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth), d.FilterMonth == d.Today).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

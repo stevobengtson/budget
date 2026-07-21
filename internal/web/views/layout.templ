@@ -1,6 +1,8 @@
 package views
 
 import (
+	"strings"
+
 	"github.com/templui/templui/components/checkbox"
 	"github.com/templui/templui/components/collapsible"
 	"github.com/templui/templui/components/datepicker"
@@ -13,6 +15,7 @@ import (
 	"github.com/templui/templui/components/sheet"
   "github.com/templui/templui/components/skeleton"
 	"github.com/templui/templui/components/sidebar"
+	"github.com/templui/templui/components/tabs"
 	"github.com/templui/templui/components/tooltip"
 )
 
@@ -51,6 +54,7 @@ templ Layout(title string, active string, collapsed bool) {
 			@sidebar.Script()
 			@sheet.Script()
 			@tooltip.Script()
+			@tabs.Script()
 			<script src="/static/collapsible-persist.js"></script>
 			<script src="/static/section-collapse.js"></script>
 			<script src="/static/theme-toggle.js"></script>
@@ -64,6 +68,7 @@ templ Layout(title string, active string, collapsed bool) {
 templ appSidebar(collapsed bool, active string) {
   @sidebar.Layout() {
     @sidebar.Sidebar(sidebar.Props{
+      Variant: sidebar.VariantInset,
       Collapsible: sidebar.CollapsibleIcon,
       Collapsed: collapsed,
       Attributes: templ.Attributes{
@@ -111,9 +116,9 @@ templ appSidebar(collapsed bool, active string) {
       }
     }
     @sidebar.Inset() {
-      <main id="main" class="min-h-svh bg-muted/40 dark:bg-background mx-auto w-full max-w-screen-2xl px-3 py-4 sm:px-4 sm:py-6">
+      <div id="main" class="mx-auto w-full max-w-screen-2xl px-4 py-4 sm:px-6 sm:py-6">
         { children... }
-      </main>
+      </div>
       <div id="modal" class="modal-mount"></div>
       <div id="flash"></div>
     }
@@ -143,15 +148,24 @@ templ navItem(slug string, label string, ic templ.Component, active string) {
 templ userMenu() {
 	@dropdown.Dropdown() {
 		@dropdown.Trigger(dropdown.TriggerProps{
-			Class: "flex h-9 w-full items-center justify-between gap-2 rounded-md px-2 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+			Class: "flex h-12 w-full items-center gap-2 rounded-md px-1.5 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
 		}) {
-			<span class="flex min-w-0 items-center gap-2">
-				@icon.User(icon.Props{Class: "size-4 shrink-0"})
-				<span class="truncate group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">{ UserEmailFromContext(ctx) }</span>
-			</span>
+			@userAvatar(UserNameFromContext(ctx), "size-8 rounded-lg text-xs")
+			<div class="grid min-w-0 flex-1 text-left leading-tight group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">
+				<span class="truncate font-medium">{ UserNameFromContext(ctx) }</span>
+				<span class="truncate text-xs text-muted-foreground">{ UserEmailFromContext(ctx) }</span>
+			</div>
 			@icon.ChevronsUpDown(icon.Props{Class: "size-4 shrink-0 text-muted-foreground group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
 		}
-		@dropdown.Content(dropdown.ContentProps{Class: "w-56", Placement: dropdown.PlacementTopStart}) {
+		@dropdown.Content(dropdown.ContentProps{Class: "w-64", Placement: dropdown.PlacementTopStart}) {
+			<div class="flex items-center gap-2 px-2 py-1.5 text-sm">
+				@userAvatar(UserNameFromContext(ctx), "size-8 rounded-lg text-xs")
+				<div class="grid min-w-0 flex-1 text-left leading-tight">
+					<span class="truncate font-medium">{ UserNameFromContext(ctx) }</span>
+					<span class="truncate text-xs text-muted-foreground">{ UserEmailFromContext(ctx) }</span>
+				</div>
+			</div>
+			@dropdown.Separator()
 			@dropdown.Sub() {
 				@dropdown.SubTrigger() {
 					<span class="flex items-center gap-2">
@@ -183,6 +197,30 @@ templ userMenu() {
 			}
 		}
 	}
+}
+
+// userAvatar renders a simple monogram avatar (the user's initials on a muted
+// rounded square) as the default until stored avatars exist. class sets the size
+// and any radius/text-size overrides.
+templ userAvatar(name string, class string) {
+	<span class={ "inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-lg bg-muted font-medium text-foreground " + class }>
+		{ userInitials(name) }
+	</span>
+}
+
+// userInitials derives up to two uppercase initials from a display name (first
+// letter of the first and last words), falling back to "U".
+func userInitials(name string) string {
+	fields := strings.Fields(name)
+	if len(fields) == 0 {
+		return "U"
+	}
+	first := []rune(fields[0])
+	if len(fields) == 1 {
+		return strings.ToUpper(string(first[0]))
+	}
+	last := []rune(fields[len(fields)-1])
+	return strings.ToUpper(string(first[0]) + string(last[0]))
 }
 
 // themeOption is one row of the Theme submenu. It stays open on click

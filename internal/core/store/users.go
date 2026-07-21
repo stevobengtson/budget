@@ -10,6 +10,7 @@ import (
 type User struct {
 	ID              int64
 	Email           string
+	Name            string
 	PasswordHash    string
 	EmailVerifiedAt *time.Time
 	CreatedAt       time.Time
@@ -25,6 +26,13 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (int
 	return id, nil
 }
 
+// UpdateUserName sets the user's display name.
+func (s *Store) UpdateUserName(ctx context.Context, userID int64, name string) error {
+	_, err := s.run(ctx,
+		`UPDATE users SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, name, userID)
+	return err
+}
+
 func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	var n int
 	if err := s.queryOne(ctx, `SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
@@ -35,20 +43,20 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	return s.scanUser(s.queryOne(ctx,
-		`SELECT id, email, password_hash, email_verified_at, created_at, updated_at
+		`SELECT id, email, name, password_hash, email_verified_at, created_at, updated_at
 		 FROM users WHERE email = $1`, email))
 }
 
 func (s *Store) GetUserByID(ctx context.Context, id int64) (User, error) {
 	return s.scanUser(s.queryOne(ctx,
-		`SELECT id, email, password_hash, email_verified_at, created_at, updated_at
+		`SELECT id, email, name, password_hash, email_verified_at, created_at, updated_at
 		 FROM users WHERE id = $1`, id))
 }
 
 func (s *Store) scanUser(row *sql.Row) (User, error) {
 	var u User
 	var verified nullTime
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &verified, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &verified, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		return User{}, err
 	}
 	u.EmailVerifiedAt = verified.Ptr()

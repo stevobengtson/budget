@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -106,25 +107,60 @@ func (h *Handlers) Logout(c *gin.Context) {
 }
 
 func (h *Handlers) AccountPage(c *gin.Context) {
-	email, _ := c.Get("userEmail")
-	render(c, http.StatusOK, views.AccountPage(toString(email), "", "", sidebarCollapsed(c)))
+	render(c, http.StatusOK, views.AccountPage(h.accountData(c, "account")))
+}
+
+// accountData builds the settings view model for the given active tab, loading
+// the current user so name/email are fresh (e.g. right after a profile save).
+func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountData {
+	u, _ := h.store.GetUserByID(c.Request.Context(), currentUserID(c))
+	return views.AccountData{
+		Name:      u.Name,
+		Email:     u.Email,
+		ActiveTab: activeTab,
+		Collapsed: sidebarCollapsed(c),
+	}
+}
+
+// UpdateProfile saves the user's display name from the Account tab.
+func (h *Handlers) UpdateProfile(c *gin.Context) {
+	uid := currentUserID(c)
+	name := strings.TrimSpace(c.PostForm("name"))
+	if name == "" {
+		d := h.accountData(c, "account")
+		d.ProfileErr = "Name can't be empty."
+		render(c, http.StatusBadRequest, views.AccountPage(d))
+		return
+	}
+	if err := h.store.UpdateUserName(c.Request.Context(), uid, name); err != nil {
+		d := h.accountData(c, "account")
+		d.ProfileErr = "Could not save your profile."
+		render(c, http.StatusInternalServerError, views.AccountPage(d))
+		return
+	}
+	// Reflect the new name in this render's sidebar (requireAuth set the context
+	// from the pre-update user).
+	c.Request = c.Request.WithContext(views.WithUserName(c.Request.Context(), name))
+	d := h.accountData(c, "account")
+	d.ProfileOK = "Profile updated."
+	render(c, http.StatusOK, views.AccountPage(d))
 }
 
 func (h *Handlers) ChangePassword(c *gin.Context) {
-	emailVal, _ := c.Get("userEmail")
-	email := toString(emailVal)
 	uid := currentUserID(c)
 	cur := c.PostForm("current")
 	next := c.PostForm("next")
+	d := h.accountData(c, "security")
 	if len(next) < 8 {
-		render(c, http.StatusBadRequest, views.AccountPage(email, "New password must be at least 8 characters.", "", sidebarCollapsed(c)))
+		d.PasswordErr = "New password must be at least 8 characters."
+		render(c, http.StatusBadRequest, views.AccountPage(d))
 		return
 	}
 	if err := h.auth.ChangePassword(c.Request.Context(), uid, cur, next); err != nil {
-		render(c, http.StatusBadRequest, views.AccountPage(email, "Current password is incorrect.", "", sidebarCollapsed(c)))
+		d.PasswordErr = "Current password is incorrect."
+		render(c, http.StatusBadRequest, views.AccountPage(d))
 		return
 	}
-	render(c, http.StatusOK, views.AccountPage(email, "", "Password changed.", sidebarCollapsed(c)))
+	d.PasswordOK = "Password changed."
+	render(c, http.StatusOK, views.AccountPage(d))
 }
-
-func toString(v any) string { s, _ := v.(string); return s }

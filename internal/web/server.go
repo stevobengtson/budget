@@ -109,6 +109,7 @@ func (s *Server) routes(cfg config.Config) {
 	app.GET("/", func(c *gin.Context) { c.Redirect(http.StatusSeeOther, "/budget") })
 
 	app.GET("/account", hs.AccountPage)
+	app.POST("/account/profile", hs.UpdateProfile)
 	app.POST("/account/password", hs.ChangePassword)
 
 	app.GET("/budget", hs.BudgetIndex)

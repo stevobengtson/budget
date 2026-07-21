@@ -133,7 +133,7 @@ func BudgetMonthSelector(d BudgetData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = monthselector.MonthSelector(bgMonthHref(d.PrevMonth), bgMonthHref(nowMonth()), bgMonthHref(d.NextMonth)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = monthselector.MonthSelector(bgMonthHref(d.PrevMonth), bgMonthHref(nowMonth()), bgMonthHref(d.NextMonth), d.Month == nowMonth()).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

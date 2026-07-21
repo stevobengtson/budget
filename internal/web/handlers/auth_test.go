@@ -155,3 +155,37 @@ func TestChangePassword(t *testing.T) {
 		t.Fatal("password hash was not updated to the new password")
 	}
 }
+
+func TestUpdateProfile(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := newTestHandlers(t)
+
+	ctx := context.Background()
+	hash, _ := auth.HashPassword("password1")
+	uid, err := h.store.CreateUser(ctx, "acc@example.com", hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set("userID", uid); c.Set("userEmail", "acc@example.com") })
+	r.POST("/account/profile", h.UpdateProfile)
+
+	// A valid name is saved.
+	w := postForm(t, r, "/account/profile", url.Values{"name": {"Ada Lovelace"}})
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Profile updated") {
+		t.Fatalf("update profile: %d %s", w.Code, w.Body.String())
+	}
+	if u, _ := h.store.GetUserByID(ctx, uid); u.Name != "Ada Lovelace" {
+		t.Errorf("saved name = %q, want %q", u.Name, "Ada Lovelace")
+	}
+
+	// An empty name is rejected and the stored name is unchanged.
+	w = postForm(t, r, "/account/profile", url.Values{"name": {"   "}})
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("empty name: got %d, want 400", w.Code)
+	}
+	if u, _ := h.store.GetUserByID(ctx, uid); u.Name != "Ada Lovelace" {
+		t.Errorf("name changed on rejected update = %q", u.Name)
+	}
+}

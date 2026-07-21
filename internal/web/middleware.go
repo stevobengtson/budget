@@ -28,9 +28,11 @@ func requireAuth(svc *auth.Service) gin.HandlerFunc {
 		}
 		c.Set("userID", user.ID)
 		c.Set("userEmail", user.Email)
-		// Also stash the email on the request context so the shared layout can
-		// render the sidebar user menu without every page threading it through.
-		c.Request = c.Request.WithContext(views.WithUserEmail(c.Request.Context(), user.Email))
+		// Also stash the name + email on the request context so the shared layout
+		// can render the sidebar user menu without every page threading it through.
+		ctx := views.WithUserEmail(c.Request.Context(), user.Email)
+		ctx = views.WithUserName(ctx, user.Name)
+		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
 }

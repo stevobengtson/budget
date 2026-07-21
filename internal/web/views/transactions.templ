@@ -45,7 +45,7 @@ templ TransactionsBody(d TransactionsData) {
 	<div class="grid grid-cols-3 items-center gap-4 pb-2">
 		<h1 class="text-2xl font-semibold tracking-tight">{ txMonthLabel(d.FilterMonth) }</h1>
 		<div class="flex justify-center">
-			@monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth))
+			@monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth), d.FilterMonth == d.Today)
 		</div>
 		<div class="flex justify-end">
 			@button.Button(button.Props{

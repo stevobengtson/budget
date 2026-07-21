@@ -1,6 +1,11 @@
 package views
 
-import "github.com/templui/templui/components/icon"
+import (
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/templui/templui/components/icon"
+	"github.com/templui/templui/components/input"
+	"github.com/templui/templui/components/tabs"
+)
 
 // authInputClass is the shared input styling for the standalone auth pages.
 var authInputClass = "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -165,20 +170,107 @@ templ ResetPage(token, errMsg string) {
 
 // AccountPage renders inside the app shell (the user is authenticated): current
 // email, a change-password form, and a logout control.
-templ AccountPage(email, errMsg, okMsg string, collapsed bool) {
-	@Layout("Account", "account", collapsed) {
-		<div class="mx-auto w-full max-w-md">
-			<h1 class="mb-1 text-xl font-semibold">Account</h1>
-			<p class="mb-4 text-sm text-muted-foreground">Signed in as { email }</p>
-			@formError(errMsg)
-			if okMsg != "" {
-				<p class="mb-3 text-sm text-primary">{ okMsg }</p>
+// AccountData is the settings page view model: the current profile plus the
+// active tab and per-section status messages.
+type AccountData struct {
+	Name        string
+	Email       string
+	ActiveTab   string // "account" | "security"
+	Collapsed   bool
+	ProfileErr  string
+	ProfileOK   string
+	PasswordErr string
+	PasswordOK  string
+}
+
+templ AccountPage(d AccountData) {
+	@Layout("Account", "account", d.Collapsed) {
+		<div class="mx-auto w-full max-w-2xl space-y-6">
+			<h1 class="text-2xl font-semibold tracking-tight">Settings</h1>
+			@tabs.Tabs() {
+				@tabs.List() {
+					@tabs.Trigger(tabs.TriggerProps{Value: "account", IsActive: d.ActiveTab != "security"}) {
+						@icon.User(icon.Props{Class: "size-4"})
+						Account
+					}
+					@tabs.Trigger(tabs.TriggerProps{Value: "security", IsActive: d.ActiveTab == "security"}) {
+						@icon.Shield(icon.Props{Class: "size-4"})
+						Security
+					}
+				}
+				@tabs.Content(tabs.ContentProps{Value: "account", IsActive: d.ActiveTab != "security", Class: "mt-6"}) {
+					@accountProfileSection(d)
+				}
+				@tabs.Content(tabs.ContentProps{Value: "security", IsActive: d.ActiveTab == "security", Class: "mt-6"}) {
+					@accountSecuritySection(d)
+				}
 			}
-			<form method="post" action="/account/password" class="space-y-4">
-				@passwordField("Current password", "current", "Current password", "current-password", "")
-				@passwordField("New password", "next", "New password", "new-password", "8")
-				<button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">Change password</button>
-			</form>
 		</div>
+	}
+}
+
+// accountProfileSection is the Account tab's "User profile" card: avatar
+// (monogram, upload not wired yet) and the editable display name.
+templ accountProfileSection(d AccountData) {
+	<section class="space-y-2">
+		<h2 class="text-sm font-semibold">User profile</h2>
+		<form method="post" action="/account/profile" class="overflow-hidden rounded-xl border bg-card">
+			<div class="space-y-4 p-4 sm:p-6">
+				<div class="space-y-1.5">
+					<label class="text-sm font-medium leading-none">Avatar</label>
+					<div class="flex items-center gap-3">
+						@userAvatar(d.Name, "size-14 rounded-lg text-lg")
+						@button.Button(button.Props{
+							Type:       button.TypeButton,
+							Variant:    button.VariantOutline,
+							Size:       button.SizeSm,
+							Disabled:   true,
+							Attributes: templ.Attributes{"title": "Avatar upload coming soon"},
+						}) {
+							Change avatar
+						}
+					</div>
+				</div>
+				<div class="space-y-1.5">
+					<label for="profile-name" class="text-sm font-medium leading-none">Name</label>
+					@input.Input(input.Props{ID: "profile-name", Name: "name", Value: d.Name, Attributes: templ.Attributes{"required": true, "autocomplete": "name"}})
+				</div>
+				@settingsMessages(d.ProfileErr, d.ProfileOK)
+			</div>
+			<div class="flex items-center border-t bg-muted/30 px-4 py-3 sm:px-6">
+				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm}) {
+					Save changes
+				}
+			</div>
+		</form>
+	</section>
+}
+
+// accountSecuritySection is the Security tab's "Change password" card.
+templ accountSecuritySection(d AccountData) {
+	<section class="space-y-2">
+		<h2 class="text-sm font-semibold">Change password</h2>
+		<form method="post" action="/account/password" class="overflow-hidden rounded-xl border bg-card">
+			<div class="space-y-4 p-4 sm:p-6">
+				@passwordField("Current password", "current", "Enter your current password", "current-password", "")
+				@passwordField("New password", "next", "New password", "new-password", "8")
+				@settingsMessages(d.PasswordErr, d.PasswordOK)
+			</div>
+			<div class="flex items-center border-t bg-muted/30 px-4 py-3 sm:px-6">
+				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm}) {
+					Update password
+				}
+			</div>
+		</form>
+	</section>
+}
+
+// settingsMessages renders an inline error or success line for a settings card.
+templ settingsMessages(errMsg, okMsg string) {
+	if errMsg != "" {
+		<p class="text-sm text-destructive">{ errMsg }</p>
+	}
+	if okMsg != "" {
+		<p class="text-sm text-primary">{ okMsg }</p>
 	}
 }

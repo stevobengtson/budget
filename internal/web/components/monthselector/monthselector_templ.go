@@ -12,7 +12,10 @@ import (
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
 )
 
-func MonthSelector(prevMonth string, currentMonth string, nextMonth string) templ.Component {
+// MonthSelector renders prev / today / next navigation. atCurrent reports that
+// the viewed month is already the current month, so the "today" button is
+// disabled — clicking it would just reload the same page.
+func MonthSelector(prevMonth string, currentMonth string, nextMonth string, atCurrent bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -55,7 +58,7 @@ func MonthSelector(prevMonth string, currentMonth string, nextMonth string) temp
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = button.Button(button.Props{Href: prevMonth, Variant: button.VariantOutline, Size: button.SizeSm}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = button.Button(button.Props{Href: prevMonth, Variant: button.VariantOutline, Size: button.SizeIcon, Class: "text-lg", Attributes: templ.Attributes{"aria-label": "Previous month"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -77,7 +80,7 @@ func MonthSelector(prevMonth string, currentMonth string, nextMonth string) temp
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = button.Button(button.Props{Href: currentMonth, Variant: button.VariantOutline, Size: button.SizeSm}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = button.Button(button.Props{Href: currentMonth, Variant: button.VariantOutline, Size: button.SizeDefault, Disabled: atCurrent}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var3), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -99,7 +102,7 @@ func MonthSelector(prevMonth string, currentMonth string, nextMonth string) temp
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = button.Button(button.Props{Href: nextMonth, Variant: button.VariantOutline, Size: button.SizeSm}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = button.Button(button.Props{Href: nextMonth, Variant: button.VariantOutline, Size: button.SizeIcon, Class: "text-lg", Attributes: templ.Attributes{"aria-label": "Next month"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
