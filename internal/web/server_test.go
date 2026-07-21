@@ -282,6 +282,90 @@ func TestBudgetSetRolloverMode(t *testing.T) {
 	}
 }
 
+func TestBudgetGroupsReorder(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+
+	ctx := context.Background()
+	a, _ := s.CreateGroup(ctx, uid, "Alpha", 1)
+	b, _ := s.CreateGroup(ctx, uid, "Bravo", 2)
+	c, _ := s.CreateGroup(ctx, uid, "Charlie", 3)
+
+	ids := strconv.FormatInt(c, 10) + "," + strconv.FormatInt(a, 10) + "," + strconv.FormatInt(b, 10)
+	resp, err := client.PostForm(ts.URL+"/budget/groups/reorder", url.Values{"ids": {ids}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", resp.StatusCode)
+	}
+
+	groups, _ := s.ListGroups(ctx, uid)
+	var names []string
+	for _, g := range groups {
+		if g.Name == "Income" {
+			continue
+		}
+		names = append(names, g.Name)
+	}
+	if got, want := strings.Join(names, ","), "Charlie,Alpha,Bravo"; got != want {
+		t.Errorf("group order = %q, want %q", got, want)
+	}
+
+	// A non-numeric id is rejected.
+	bad, _ := client.PostForm(ts.URL+"/budget/groups/reorder", url.Values{"ids": {"1,x,2"}})
+	defer func() { _ = bad.Body.Close() }()
+	if bad.StatusCode != http.StatusBadRequest {
+		t.Errorf("bad id status = %d, want 400", bad.StatusCode)
+	}
+}
+
+func TestBudgetCategoriesReorder(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	g1, _ := s.CreateGroup(ctx, uid, "G1", 1)
+	g2, _ := s.CreateGroup(ctx, uid, "G2", 2)
+	a, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: g1, Name: "A", SortOrder: 0})
+	b, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: g1, Name: "B", SortOrder: 1})
+
+	// Drag A from G1 into G2: destination G2=[A], source G1=[B].
+	form := url.Values{
+		"month":  {"2026-07"},
+		"groups": {strconv.FormatInt(g2, 10) + "|" + strconv.FormatInt(g1, 10)},
+		"cats":   {strconv.FormatInt(a, 10) + "|" + strconv.FormatInt(b, 10)},
+	}
+	resp, err := client.PostForm(ts.URL+"/budget/categories/reorder", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	// The affected group headers come back as OOB swaps.
+	if body := readAll(t, resp); !strings.Contains(body, "group-head-"+strconv.FormatInt(g2, 10)) {
+		t.Errorf("response missing OOB header for destination group %d", g2)
+	}
+
+	cats, _ := s.ListCategories(ctx, uid, false)
+	groupOf := func(id int64) int64 {
+		for _, c := range cats {
+			if c.ID == id {
+				return c.GroupID
+			}
+		}
+		return -1
+	}
+	if groupOf(a) != g2 {
+		t.Errorf("A group = %d, want %d (G2)", groupOf(a), g2)
+	}
+	if groupOf(b) != g1 {
+		t.Errorf("B group = %d, want %d (G1)", groupOf(b), g1)
+	}
+}
+
 // findCatMode returns the rollover mode of the category with the given ID, or
 // "" if not found. ListCategories includes the seeded system Income category,
 // so the created category is located by ID rather than slice index.

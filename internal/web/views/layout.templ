@@ -35,8 +35,11 @@ templ Layout(title string, active string, collapsed bool) {
 			<link rel="stylesheet" href="/static/app.css"/>
 			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
 			<script src="/static/htmx.min.js"></script>
+			<script src="/static/sortable.min.js"></script>
 			<script src="/static/inline-edit.js"></script>
 			<script src="/static/name-edit.js"></script>
+			<script src="/static/group-sort.js"></script>
+			<script src="/static/category-sort.js"></script>
 			@input.Script()
 			@checkbox.Script()
 			@dialog.Script()

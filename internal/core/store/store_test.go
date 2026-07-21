@@ -909,6 +909,13 @@ func TestMaxSortOrderHelpers(t *testing.T) {
 	} else if g != 9 {
 		t.Errorf("max group sort = %d, want 9", g)
 	}
+	// MinGroupSortOrder keys off the seed "Income" group at -100, so prepend
+	// helpers (min-1) land a new group above every existing group.
+	if g, err := s.MinGroupSortOrder(ctx, uid); err != nil {
+		t.Fatalf("min group: %v", err)
+	} else if g != -100 {
+		t.Errorf("min group sort = %d, want -100", g)
+	}
 
 	gid, err := s.CreateGroup(ctx, uid, "Home", 0)
 	if err != nil {
@@ -947,6 +954,99 @@ func TestMaxSortOrderHelpers(t *testing.T) {
 	if v, _ := s.MaxIncomeSortOrder(ctx, uid, month); v != 8 {
 		t.Errorf("income sort = %d, want 8", v)
 	}
+}
+
+func TestReorderGroups(t *testing.T) {
+	s, uid := newTestStoreUser(t)
+	ctx := context.Background()
+
+	a, err := s.CreateGroup(ctx, uid, "Alpha", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.CreateGroup(ctx, uid, "Bravo", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cID, err := s.CreateGroup(ctx, uid, "Charlie", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Reorder to Charlie, Alpha, Bravo.
+	if err := s.ReorderGroups(ctx, uid, []int64{cID, a, b}); err != nil {
+		t.Fatalf("reorder: %v", err)
+	}
+
+	groups, err := s.ListGroups(ctx, uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The seed "Income" group sits at sort_order -100 and always sorts first;
+	// drop it so we compare just the reordered user groups.
+	var names []string
+	for _, g := range groups {
+		if g.Name == "Income" {
+			continue
+		}
+		names = append(names, g.Name)
+	}
+	if got, want := strings.Join(names, ","), "Charlie,Alpha,Bravo"; got != want {
+		t.Errorf("group order = %q, want %q", got, want)
+	}
+}
+
+func TestReorderCategories(t *testing.T) {
+	s, uid := newTestStoreUser(t)
+	ctx := context.Background()
+
+	g1, _ := s.CreateGroup(ctx, uid, "G1", 1)
+	g2, _ := s.CreateGroup(ctx, uid, "G2", 2)
+	a, _ := s.CreateCategory(ctx, uid, Category{GroupID: g1, Name: "A", SortOrder: 0})
+	b, _ := s.CreateCategory(ctx, uid, Category{GroupID: g1, Name: "B", SortOrder: 1})
+	c, _ := s.CreateCategory(ctx, uid, Category{GroupID: g1, Name: "C", SortOrder: 2})
+
+	// Within-group reorder: C, A, B.
+	if err := s.ReorderCategories(ctx, uid, g1, []int64{c, a, b}); err != nil {
+		t.Fatalf("within-group: %v", err)
+	}
+	if got := catNamesInGroup(t, s, uid, g1); got != "C,A,B" {
+		t.Errorf("g1 order = %q, want %q", got, "C,A,B")
+	}
+
+	// Cross-group move: A goes to G2. Destination gains A, source keeps C, B.
+	if err := s.ReorderCategories(ctx, uid, g2, []int64{a}); err != nil {
+		t.Fatalf("dest: %v", err)
+	}
+	if err := s.ReorderCategories(ctx, uid, g1, []int64{c, b}); err != nil {
+		t.Fatalf("src: %v", err)
+	}
+	if got := catNamesInGroup(t, s, uid, g1); got != "C,B" {
+		t.Errorf("g1 after move = %q, want %q", got, "C,B")
+	}
+	if got := catNamesInGroup(t, s, uid, g2); got != "A" {
+		t.Errorf("g2 after move = %q, want %q", got, "A")
+	}
+
+	// A group the user doesn't own is rejected.
+	if err := s.ReorderCategories(ctx, uid, 999999, []int64{a}); err == nil {
+		t.Error("reorder into foreign group: want error, got nil")
+	}
+}
+
+func catNamesInGroup(t *testing.T, s *Store, uid, gid int64) string {
+	t.Helper()
+	cats, err := s.ListCategories(context.Background(), uid, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, c := range cats {
+		if c.GroupID == gid && !c.IsIncome {
+			names = append(names, c.Name)
+		}
+	}
+	return strings.Join(names, ",")
 }
 
 func TestDeleteGroup(t *testing.T) {

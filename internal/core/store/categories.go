@@ -114,6 +114,62 @@ func (s *Store) MaxGroupSortOrder(ctx context.Context, userID int64) (int64, err
 	return max, err
 }
 
+// MinGroupSortOrder returns the smallest sort_order among category groups, or 0
+// if there are none. Callers subtract 1 to prepend a new group at the top.
+func (s *Store) MinGroupSortOrder(ctx context.Context, userID int64) (int64, error) {
+	var min int64
+	err := s.queryOne(ctx,
+		`SELECT COALESCE(MIN(sort_order), 0) FROM category_groups WHERE user_id=$1`, userID).Scan(&min)
+	return min, err
+}
+
+// ReorderGroups persists a new top-to-bottom ordering of the user's category
+// groups by setting each group's sort_order to its index in ids. Groups absent
+// from ids (e.g. the system Income group, which the budget table hides) keep
+// their existing sort_order. It runs in one transaction so the order applies
+// atomically, and each UPDATE is scoped to the user so an id owned by someone
+// else is a silent no-op.
+func (s *Store) ReorderGroups(ctx context.Context, userID int64, ids []int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for i, id := range ids {
+		if _, err := s.txExec(ctx, tx,
+			`UPDATE category_groups SET sort_order=$1 WHERE id=$2 AND user_id=$3`, int64(i), id, userID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// ReorderCategories persists a group's category order (and, for a cross-group
+// drag, the move) by setting each listed category's group_id to groupID and its
+// sort_order to its index in catIDs. The destination group is passed once with
+// its full new membership; a cross-group move is two calls (destination gains
+// the moved category, source loses it). It validates the target group is the
+// user's, runs in one transaction, and scopes each UPDATE to the user so a
+// foreign category id is a silent no-op.
+func (s *Store) ReorderCategories(ctx context.Context, userID, groupID int64, catIDs []int64) error {
+	if err := s.requireGroup(ctx, userID, groupID); err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for i, id := range catIDs {
+		if _, err := s.txExec(ctx, tx,
+			`UPDATE categories SET group_id=$1, sort_order=$2 WHERE id=$3 AND user_id=$4`,
+			groupID, int64(i), id, userID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // MaxCategorySortOrder returns the largest sort_order among categories in a
 // group, or 0 if the group has none. Callers add 1 to append.
 func (s *Store) MaxCategorySortOrder(ctx context.Context, userID, groupID int64) (int64, error) {

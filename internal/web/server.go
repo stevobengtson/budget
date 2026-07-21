@@ -118,6 +118,8 @@ func (s *Server) routes(cfg config.Config) {
 	app.GET("/budget/goal/:catID/edit", hs.BudgetGoalEdit)
 	app.GET("/budget/group/new", hs.BudgetGroupNew)
 	app.POST("/budget/group", hs.BudgetGroupCreate)
+	app.POST("/budget/groups/reorder", hs.BudgetGroupsReorder)
+	app.POST("/budget/categories/reorder", hs.BudgetCategoriesReorder)
 	app.PUT("/budget/group/:gid", hs.BudgetGroupRename)
 	app.POST("/budget/group/:gid/delete", hs.BudgetGroupDelete)
 	app.GET("/budget/group/:gid/category/new", hs.BudgetCategoryNew)

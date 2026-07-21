@@ -25,28 +25,41 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
+	if !r.IsIncome {
+		{{ attrs["data-category"] = "" }}
+		{{ attrs["data-category-id"] = fmt.Sprintf("%d", r.CategoryID) }}
+	}
 	@table.Row(table.RowProps{Attributes: attrs}) {
 		@table.Cell(table.CellProps{Class: "pl-6"}) {
 			if r.IsIncome {
 				{ r.CategoryName }
 			} else {
-				<form
-					hx-put={ fmt.Sprintf("/budget/category/%d?month=%s", r.CategoryID, month) }
-					hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
-					hx-swap="outerHTML"
-					class="flex items-center"
-				>
-					<button type="button" class="js-name-display cursor-text rounded-md px-1 py-0.5 text-sm ring-1 ring-transparent hover:ring-border" title="Click to rename">
-						{ r.CategoryName }
-					</button>
-					<input
-						type="text"
-						name="name"
-						value={ r.CategoryName }
-						autocomplete="off"
-						class="js-name-input hidden h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					/>
-				</form>
+				<div class="flex items-center gap-1">
+					<span
+						class="js-category-handle inline-flex cursor-grab touch-none items-center text-muted-foreground/40 hover:text-foreground"
+						title="Drag to reorder category"
+						aria-hidden="true"
+					>
+						@icon.GripVertical(icon.Props{Class: "size-3.5"})
+					</span>
+					<form
+						hx-put={ fmt.Sprintf("/budget/category/%d?month=%s", r.CategoryID, month) }
+						hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
+						hx-swap="outerHTML"
+						class="flex items-center"
+					>
+						<button type="button" class="js-name-display cursor-text rounded-md px-1 py-0.5 text-sm ring-1 ring-transparent hover:ring-border" title="Click to rename">
+							{ r.CategoryName }
+						</button>
+						<input
+							type="text"
+							name="name"
+							value={ r.CategoryName }
+							autocomplete="off"
+							class="js-name-input hidden h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						/>
+					</form>
+				</div>
 			}
 		}
 		@table.Cell() {
@@ -112,6 +125,31 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 templ BudgetAssignResult(month string, edited store.CategoryBudget, d BudgetData) {
 	@BudgetRow(month, edited)
 	@BudgetSummary(d, true)
+}
+
+// BudgetCategoriesReorderResult refreshes the affected group headers out of band
+// after a category drag. The drag-sort JS already moved the rows in the DOM; the
+// only stale bit is each affected group's "delete empty group" control, which
+// depends on whether the group now has categories. Groups come from BudgetData
+// (buildGroups keeps emptied groups, with their name), so an emptied source
+// group still renders its name and regains the delete control.
+templ BudgetCategoriesReorderResult(d BudgetData, affected []int64) {
+	for _, gid := range affected {
+		if g, ok := findGroup(d.Groups, gid); ok {
+			<template>
+				@budgetGroupHeader(d.Month, g, true)
+			</template>
+		}
+	}
+}
+
+func findGroup(groups []BudgetGroup, gid int64) (BudgetGroup, bool) {
+	for _, g := range groups {
+		if g.ID == gid {
+			return g, true
+		}
+	}
+	return BudgetGroup{}, false
 }
 
 // rowMenu renders the per-category three-dot actions menu: rollover toggles,

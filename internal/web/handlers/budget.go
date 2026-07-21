@@ -309,7 +309,8 @@ func (h *Handlers) BudgetGroupNew(c *gin.Context) {
 	render(c, http.StatusOK, views.BudgetGroupNewRow())
 }
 
-// BudgetGroupCreate creates a group at the end and returns its real <tbody>.
+// BudgetGroupCreate creates a group at the top (so it lands next to the Add
+// Group button and survives a reload there) and returns its real <tbody>.
 func (h *Handlers) BudgetGroupCreate(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid := currentUserID(c)
@@ -319,17 +320,105 @@ func (h *Handlers) BudgetGroupCreate(c *gin.Context) {
 		c.String(http.StatusBadRequest, "name required")
 		return
 	}
-	max, err := h.store.MaxGroupSortOrder(ctx, uid)
+	min, err := h.store.MinGroupSortOrder(ctx, uid)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	id, err := h.store.CreateGroup(ctx, uid, name, max+1)
+	id, err := h.store.CreateGroup(ctx, uid, name, min-1)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 	render(c, http.StatusOK, views.BudgetGroupTbody(month, views.BudgetGroup{ID: id, Name: name}))
+}
+
+// BudgetGroupsReorder persists a new top-to-bottom group order. The drag-sort
+// JS already moved the tbodies in the DOM, so it posts the group ids in their
+// new order as a comma-separated "ids" field and we just persist — nothing
+// money-related changed, so there's nothing to swap back (204).
+func (h *Handlers) BudgetGroupsReorder(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	var ids []int64
+	for _, s := range strings.Split(c.PostForm("ids"), ",") {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			c.String(http.StatusBadRequest, "bad group id %q", s)
+			return
+		}
+		ids = append(ids, id)
+	}
+	if err := h.store.ReorderGroups(ctx, uid, ids); err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// BudgetCategoriesReorder persists a category drag. The JS already moved the row
+// in the DOM and posts the new membership of each affected group: "groups" is a
+// pipe-separated list of group ids and "cats" a matching pipe-separated list of
+// comma-separated category ids (destination first, then the source group on a
+// cross-group move). We persist each group's order, then refresh the affected
+// group headers out of band so the "delete empty group" control matches the new
+// membership (nothing money-related changes, so totals stay put).
+func (h *Handlers) BudgetCategoriesReorder(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	month := monthOrNow(c)
+
+	groups := strings.Split(c.PostForm("groups"), "|")
+	cats := strings.Split(c.PostForm("cats"), "|")
+	if len(groups) != len(cats) {
+		c.String(http.StatusBadRequest, "groups/cats length mismatch")
+		return
+	}
+	affected := make([]int64, 0, len(groups))
+	for i, gs := range groups {
+		gid, err := strconv.ParseInt(gs, 10, 64)
+		if err != nil {
+			c.String(http.StatusBadRequest, "bad group id %q", gs)
+			return
+		}
+		var catIDs []int64
+		for _, cs := range splitNonEmpty(cats[i], ",") {
+			id, err := strconv.ParseInt(cs, 10, 64)
+			if err != nil {
+				c.String(http.StatusBadRequest, "bad category id %q", cs)
+				return
+			}
+			catIDs = append(catIDs, id)
+		}
+		if err := h.store.ReorderCategories(ctx, uid, gid, catIDs); err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+		affected = append(affected, gid)
+	}
+
+	data, _, err := h.budgetData(ctx, uid, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetCategoriesReorderResult(data, affected))
+}
+
+// splitNonEmpty splits s on sep and drops empty fields (so an empty destination
+// group list, e.g. after dragging the last category out, yields no ids).
+func splitNonEmpty(s, sep string) []string {
+	var out []string
+	for _, p := range strings.Split(s, sep) {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // BudgetGroupRename updates a group's name and returns the refreshed header row.

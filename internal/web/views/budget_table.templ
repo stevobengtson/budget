@@ -12,7 +12,7 @@ import (
 
 templ BudgetTable(d BudgetData) {
 	<div class="overflow-hidden rounded-xl border bg-card shadow-xs">
-		@table.Table() {
+		@table.Table(table.Props{ID: "budget-table", Class: "js-group-sort", Attributes: templ.Attributes{"data-month": d.Month}}) {
 		@BudgetIncomeSection(d)
 		@BudgetCreditSection(d)
 		<tbody id="budget-expenses-head">
@@ -27,8 +27,8 @@ templ BudgetTable(d BudgetData) {
 							Class:   "ml-auto text-muted-foreground hover:text-foreground",
 							Attributes: templ.Attributes{
 								"hx-get":    "/budget/group/new",
-								"hx-target": "#budget-totals-body",
-								"hx-swap":   "beforebegin",
+								"hx-target": "#budget-expenses-head",
+								"hx-swap":   "afterend",
 								"title":     "Add category group",
 							},
 						}) {
@@ -88,7 +88,7 @@ templ subHeaderRow(labels ...string) {
 }
 
 templ BudgetGroupTbody(month string, g BudgetGroup) {
-	<tbody id={ fmt.Sprintf("group-%d", g.ID) }>
+	<tbody id={ fmt.Sprintf("group-%d", g.ID) } data-group data-group-id={ fmt.Sprintf("%d", g.ID) }>
 		@BudgetGroupHeader(month, g)
 		for _, r := range g.Rows {
 			@BudgetRow(month, r)
@@ -112,6 +112,13 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 	@table.Row(table.RowProps{Class: "bg-muted/20 hover:bg-muted/20", Attributes: attrs}) {
 		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
 			<div class="flex items-center gap-2">
+				<span
+					class="js-group-handle inline-flex cursor-grab touch-none items-center text-muted-foreground/50 hover:text-foreground"
+					title="Drag to reorder group"
+					aria-hidden="true"
+				>
+					@icon.GripVertical(icon.Props{Class: "size-4"})
+				</span>
 				<form
 					hx-put={ fmt.Sprintf("/budget/group/%d?month=%s", g.ID, month) }
 					hx-target={ fmt.Sprintf("#group-head-%d", g.ID) }
@@ -191,8 +198,8 @@ templ BudgetGroupNewRow() {
 }
 
 // BudgetSummary is the footer "where you are" block, living inside the table's
-// #budget-totals-body tbody so it stays in the column grid and Add Group can
-// still insert new groups before it. An assignment or income change refreshes it
+// #budget-totals-body tbody so it stays in the column grid. An assignment or
+// income change refreshes it
 // via an out-of-band swap of the whole tbody (oob=true); the tbody is wrapped in
 // a <template> so htmx's OOB swap survives the browser's table-parsing rules.
 templ BudgetSummary(d BudgetData, oob bool) {

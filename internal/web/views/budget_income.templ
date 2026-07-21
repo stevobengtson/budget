@@ -145,15 +145,30 @@ templ IncomeRow(month string, r store.Income) {
 	}
 }
 
-// IncomeNewRow is the transient add-income row (multi-field -> explicit Save,
-// like the goal editor, not blur-save).
+// IncomeNewRow is the transient add-income row. Its fields sit in the same
+// columns as a saved IncomeRow (source, amount, then the actions column) so the
+// editor lines up with existing rows. The controls live in separate cells but
+// belong to one form via the HTML5 form="" attribute — a single <form> can't
+// legally wrap multiple <td>s. Multi-field -> explicit Save (like the goal
+// editor, not blur-save).
 templ IncomeNewRow(month string) {
 	@table.Row(table.RowProps{Attributes: templ.Attributes{"data-newrow": ""}}) {
-		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 pl-6"}}) {
-			<form hx-post={ "/budget/income?month=" + month } hx-target="closest tr" hx-swap="outerHTML" class="flex flex-wrap items-end gap-3">
+		@table.Cell(table.CellProps{Class: "pl-6 font-medium"}) {
+			<form id="income-new-form" hx-post={ "/budget/income?month=" + month } hx-target="closest tr" hx-swap="outerHTML" class="flex items-center">
 				<input type="text" name="name" autofocus placeholder="Source" autocomplete="off" class="h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
-				<input type="text" name="amount" placeholder="0.00" inputmode="decimal" autocomplete="off" class="h-8 w-32 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
-				@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
+			</form>
+		}
+		@table.Cell() {
+			<div class="flex items-center justify-end">
+				<input type="text" form="income-new-form" name="amount" placeholder="0.00" inputmode="decimal" autocomplete="off" class="h-8 w-28 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+			</div>
+		}
+		@table.Cell()
+		@table.Cell()
+		@table.Cell()
+		@table.Cell(table.CellProps{Class: "text-right"}) {
+			<div class="flex items-center justify-end gap-2">
+				@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Attributes: templ.Attributes{"form": "income-new-form"}}) {
 					save
 				}
 				@button.Button(button.Props{
@@ -164,7 +179,7 @@ templ IncomeNewRow(month string) {
 				}) {
 					cancel
 				}
-			</form>
+			</div>
 		}
 	}
 }
