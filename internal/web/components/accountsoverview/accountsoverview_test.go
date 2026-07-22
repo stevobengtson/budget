@@ -88,6 +88,25 @@ func TestAccountsOverviewRenders(t *testing.T) {
 	}
 }
 
+func TestAccountsOverviewEmptyState(t *testing.T) {
+	var buf bytes.Buffer
+	if err := AccountsOverview(nil, "2026-07").Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "No accounts yet") {
+		t.Error("empty overview should show the no-accounts message")
+	}
+	// The Add Account button remains the call to action.
+	if !strings.Contains(out, "Add Account") {
+		t.Error("empty overview should still offer Add Account")
+	}
+	// Net worth is hidden until there's at least one account.
+	if strings.Contains(out, "Est. Net Worth") {
+		t.Error("empty overview should not show the net-worth line")
+	}
+}
+
 func TestTxHref(t *testing.T) {
 	if got := txHref(3, "2026-07"); got != "/transactions?month=2026-07&account=3" {
 		t.Errorf("with month = %q", got)

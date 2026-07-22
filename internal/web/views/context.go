@@ -8,6 +8,7 @@ const (
 	userEmailKey ctxKey = iota
 	userNameKey
 	userAvatarVersionKey
+	enabledAddOnsKey
 )
 
 // WithUserEmail returns ctx carrying the authenticated user's email so the shared
@@ -47,4 +48,23 @@ func WithUserAvatarVersion(ctx context.Context, version int64) context.Context {
 func UserAvatarVersionFromContext(ctx context.Context) int64 {
 	v, _ := ctx.Value(userAvatarVersionKey).(int64)
 	return v
+}
+
+// WithEnabledAddOns returns ctx carrying the slugs of the add-ons the user has
+// enabled, so the shared layout can gate add-on-owned navigation. Set by the
+// requireAuth middleware alongside the other user fields.
+func WithEnabledAddOns(ctx context.Context, slugs []string) context.Context {
+	return context.WithValue(ctx, enabledAddOnsKey, slugs)
+}
+
+// AddOnEnabled reports whether the given add-on slug is in the enabled set on
+// ctx (set by WithEnabledAddOns). False when absent.
+func AddOnEnabled(ctx context.Context, slug string) bool {
+	slugs, _ := ctx.Value(enabledAddOnsKey).([]string)
+	for _, s := range slugs {
+		if s == slug {
+			return true
+		}
+	}
+	return false
 }

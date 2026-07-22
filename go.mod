@@ -9,6 +9,7 @@ require (
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	github.com/stripe/stripe-go/v86 v86.1.1
 	github.com/templui/templui v1.12.1
 	golang.org/x/crypto v0.54.0
 	golang.org/x/image v0.44.0

@@ -1,9 +1,14 @@
 package views
 
 import (
+	"fmt"
+
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
 	"github.com/templui/templui/components/icon"
 	"github.com/templui/templui/components/input"
+	switchcomp "github.com/templui/templui/components/switch"
 	"github.com/templui/templui/components/tabs"
 )
 
@@ -175,9 +180,10 @@ templ ResetPage(token, errMsg string) {
 type AccountData struct {
 	Name          string
 	Email         string
-	PendingEmail  string // a not-yet-confirmed email change, "" when none
-	AvatarVersion int64  // >0 renders the stored image; 0 renders the monogram
-	ActiveTab     string // "account" | "security"
+	PendingEmail  string       // a not-yet-confirmed email change, "" when none
+	AvatarVersion int64        // >0 renders the stored image; 0 renders the monogram
+	AddOns        []store.AddOn // the add-on catalog with this user's enabled state
+	ActiveTab     string       // "account" | "security" | "addons"
 	Collapsed     bool
 	AvatarErr     string
 	AvatarOK      string
@@ -187,6 +193,8 @@ type AccountData struct {
 	EmailOK       string
 	PasswordErr   string
 	PasswordOK    string
+	AddOnErr      string
+	AddOnOK       string
 }
 
 templ AccountPage(d AccountData) {
@@ -203,8 +211,12 @@ templ AccountPage(d AccountData) {
 						@icon.Shield(icon.Props{Class: "size-4"})
 						Security
 					}
+					@tabs.Trigger(tabs.TriggerProps{Value: "addons", IsActive: d.ActiveTab == "addons"}) {
+						@icon.Blocks(icon.Props{Class: "size-4"})
+						Add-ons
+					}
 				}
-				@tabs.Content(tabs.ContentProps{Value: "account", IsActive: d.ActiveTab != "security", Class: "mt-6"}) {
+				@tabs.Content(tabs.ContentProps{Value: "account", IsActive: d.ActiveTab != "security" && d.ActiveTab != "addons", Class: "mt-6"}) {
 					<div class="space-y-6">
 						@accountProfileSection(d)
 						@accountEmailSection(d)
@@ -212,6 +224,9 @@ templ AccountPage(d AccountData) {
 				}
 				@tabs.Content(tabs.ContentProps{Value: "security", IsActive: d.ActiveTab == "security", Class: "mt-6"}) {
 					@accountSecuritySection(d)
+				}
+				@tabs.Content(tabs.ContentProps{Value: "addons", IsActive: d.ActiveTab == "addons", Class: "mt-6"}) {
+					@accountAddOnsSection(d)
 				}
 			}
 		</div>
@@ -320,6 +335,57 @@ templ accountSecuritySection(d AccountData) {
 			</div>
 		</form>
 	</section>
+}
+
+// accountAddOnsSection is the Add-ons tab: the feature catalog, each with a
+// switch that turns it on or off for this user. Toggling submits the row's form
+// (a full-page POST), so the sidebar nav reflects the change on re-render.
+templ accountAddOnsSection(d AccountData) {
+	<section class="space-y-2">
+		<h2 class="text-sm font-semibold">Add-ons</h2>
+		<p class="text-sm text-muted-foreground">Turn on only the features you need. Enable more any time.</p>
+		@settingsMessages(d.AddOnErr, d.AddOnOK)
+		<div class="divide-y overflow-hidden rounded-xl border bg-card">
+			for _, a := range d.AddOns {
+				@addOnRow(a)
+			}
+		</div>
+	</section>
+}
+
+// addOnRow renders one catalog add-on: name, price, description, and the enable
+// switch. The switch posts enabled=on when checked, nothing when unchecked; the
+// handler reads that as on/off.
+templ addOnRow(a store.AddOn) {
+	<div class="flex items-start justify-between gap-4 p-4 sm:p-6">
+		<div class="min-w-0 space-y-1">
+			<div class="flex items-center gap-2">
+				<span class="text-sm font-medium">{ a.Name }</span>
+				<span class="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">{ addOnPrice(a.PriceCents) }</span>
+			</div>
+			<p class="text-sm text-muted-foreground">{ a.Description }</p>
+		</div>
+		<form method="post" action={ addOnAction(a.Slug) } class="shrink-0 pt-0.5">
+			@switchcomp.Switch(switchcomp.Props{
+				Name:       "enabled",
+				Checked:    a.Enabled,
+				Attributes: templ.Attributes{"onchange": "this.form.submit()", "aria-label": "Toggle " + a.Name},
+			})
+		</form>
+	</div>
+}
+
+// addOnPrice renders an add-on's monthly price, or "Free" when it's zero.
+func addOnPrice(cents int64) string {
+	if cents == 0 {
+		return "Free"
+	}
+	return money.Format(cents) + "/mo"
+}
+
+// addOnAction builds the toggle endpoint for an add-on slug.
+func addOnAction(slug string) templ.SafeURL {
+	return templ.SafeURL(fmt.Sprintf("/account/addons/%s", slug))
 }
 
 // settingsMessages renders an inline error or success line for a settings card.

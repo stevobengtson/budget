@@ -10,6 +10,7 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/avatar"
+	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/views"
 )
 
@@ -121,14 +122,50 @@ func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountDa
 	uid := currentUserID(c)
 	u, _ := h.store.GetUserByID(c.Request.Context(), uid)
 	pending, _ := h.store.GetPendingEmail(c.Request.Context(), uid)
+	addOns, _ := h.store.ListAddOnsForUser(c.Request.Context(), uid)
 	return views.AccountData{
 		Name:          u.Name,
 		Email:         u.Email,
 		PendingEmail:  pending,
 		AvatarVersion: u.AvatarVersion(),
+		AddOns:        addOns,
 		ActiveTab:     activeTab,
 		Collapsed:     sidebarCollapsed(c),
 	}
+}
+
+// ToggleAddOn enables or disables an add-on for the current user from the
+// Add-ons tab. The switch submits its enclosing form on change; a checked
+// switch posts enabled=on, an unchecked one posts nothing.
+func (h *Handlers) ToggleAddOn(c *gin.Context) {
+	uid := currentUserID(c)
+	slug := c.Param("slug")
+	enabled := c.PostForm("enabled") == "on"
+
+	if err := h.store.SetAddOnEnabled(c.Request.Context(), uid, slug, enabled); err != nil {
+		d := h.accountData(c, "addons")
+		if errors.Is(err, store.ErrAddOnNotFound) {
+			d.AddOnErr = "That add-on doesn't exist."
+			render(c, http.StatusNotFound, views.AccountPage(d))
+			return
+		}
+		d.AddOnErr = "Could not update the add-on."
+		render(c, http.StatusInternalServerError, views.AccountPage(d))
+		return
+	}
+
+	// Refresh the enabled set on this render's context so the sidebar nav reflects
+	// the toggle immediately (requireAuth set it from the pre-toggle state).
+	slugs, _ := h.store.EnabledAddOnSlugs(c.Request.Context(), uid)
+	c.Request = c.Request.WithContext(views.WithEnabledAddOns(c.Request.Context(), slugs))
+
+	d := h.accountData(c, "addons")
+	if enabled {
+		d.AddOnOK = "Add-on enabled."
+	} else {
+		d.AddOnOK = "Add-on disabled."
+	}
+	render(c, http.StatusOK, views.AccountPage(d))
 }
 
 // RequestEmailChange starts a verified email change from the Account tab: it

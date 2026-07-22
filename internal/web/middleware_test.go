@@ -14,10 +14,11 @@ import (
 
 func TestRequireAuthRedirectsAnonymous(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	svc := auth.NewService(store.New(openTestDB(t)), mail.NewConsole(), "http://x", auth.Config{})
+	st := store.New(openTestDB(t))
+	svc := auth.NewService(st, mail.NewConsole(), "http://x", auth.Config{})
 
 	r := gin.New()
-	r.GET("/p", requireAuth(svc), func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+	r.GET("/p", requireAuth(svc, st), func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/p", nil)

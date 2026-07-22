@@ -117,9 +117,19 @@ func TestMigrateAuthRoundTrip(t *testing.T) {
 		t.Fatalf("seed incomes: %v", err)
 	}
 
-	// 00008 (user name), 00009 (user avatar), and 00010 (email change) sit on top
-	// of the auth migration; peel them off first (10 -> 9 -> 8 -> 7) so 00007 is
-	// the current head for the roundtrip below.
+	// 00008 (user name), 00009 (user avatar), 00010 (email change), 00011
+	// (add-ons), 00012 (subscriptions), and 00013 (billing exempt) sit on top of
+	// the auth migration; peel them off first (13 -> ... -> 7) so 00007 is the
+	// current head for the roundtrip below.
+	if err := MigrateDown(conn, dialect); err != nil {
+		t.Fatalf("migrate down 00013: %v", err)
+	}
+	if err := MigrateDown(conn, dialect); err != nil {
+		t.Fatalf("migrate down 00012: %v", err)
+	}
+	if err := MigrateDown(conn, dialect); err != nil {
+		t.Fatalf("migrate down 00011: %v", err)
+	}
 	if err := MigrateDown(conn, dialect); err != nil {
 		t.Fatalf("migrate down 00010: %v", err)
 	}

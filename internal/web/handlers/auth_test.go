@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/sbengtson/budget/internal/core/auth"
+	"github.com/sbengtson/budget/internal/core/billing"
 	"github.com/sbengtson/budget/internal/core/db"
 	"github.com/sbengtson/budget/internal/core/mail"
 	"github.com/sbengtson/budget/internal/core/store"
@@ -80,7 +81,8 @@ func newTestHandlers(t *testing.T) *Handlers {
 	t.Helper()
 	st := store.New(openTestDB(t))
 	svc := auth.NewService(st, mail.NewConsole(), "http://localhost:8080", auth.Config{})
-	return New(st, svc, false, 3600)
+	bill := billing.NewService(st, "", "", "http://localhost:8080", "")
+	return New(st, svc, bill, false, 3600)
 }
 
 func postForm(t *testing.T, r http.Handler, path string, form url.Values) *httptest.ResponseRecorder {
@@ -276,7 +278,8 @@ func TestEmailChangeFlow(t *testing.T) {
 	st := store.New(openTestDB(t))
 	mailer := &captureMailer{}
 	svc := auth.NewService(st, mailer, "http://localhost:8080", auth.Config{})
-	h := New(st, svc, false, 3600)
+	bill := billing.NewService(st, "", "", "http://localhost:8080", "")
+	h := New(st, svc, bill, false, 3600)
 
 	ctx := context.Background()
 	hash, _ := auth.HashPassword("password1")

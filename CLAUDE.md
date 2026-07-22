@@ -59,8 +59,7 @@ The Tailwind entry point and theme tokens live in
 Web listen address comes from `--addr`, else config `web.addr` (default `:8080`).
 
 **DB DSN for the web binary:** the Postgres DSN comes from the `--db` flag, else
-`BUDGET_DB_DSN`, else `budget.yaml`'s `db.dsn` (checked-in value:
-`postgres://postgres:postgres@127.0.0.1:5432/budget?sslmode=disable`), else the
+`BUDGET_DB_DSN`, else `budget.yaml`'s `db.dsn` (not checked-in), else the
 built-in local default (same URL). Because `budget.yaml` points at the **real dev
 database**, running `go run ./cmd/web` from the repo root migrates and mutates it.
 For any throwaway/smoke run, pass `--db postgres://.../<scratch_db>` so you don't

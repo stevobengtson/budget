@@ -94,6 +94,14 @@ func serveAuthed(t *testing.T, s *store.Store) (*httptest.Server, *http.Client, 
 	if err != nil {
 		t.Fatal(err)
 	}
+	return serveAuthedCfg(t, s, cfg)
+}
+
+// serveAuthedCfg is serveAuthed with a caller-supplied config, used by the
+// billing tests to enable Stripe (base price + webhook secret) so the
+// subscription gate is live.
+func serveAuthedCfg(t *testing.T, s *store.Store, cfg config.Config) (*httptest.Server, *http.Client, int64) {
+	t.Helper()
 	srv := NewServer(s, cfg)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
@@ -142,7 +150,12 @@ func TestRedirectRoot(t *testing.T) {
 }
 
 func TestPagesRender200(t *testing.T) {
-	ts, client, _ := newTestServer(t)
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	// /paydown is gated behind its add-on; enable it so the page actually renders.
+	if err := s.SetAddOnEnabled(context.Background(), uid, "paydown", true); err != nil {
+		t.Fatal(err)
+	}
 	for _, path := range []string{"/budget", "/transactions?account=1", "/paydown"} {
 		resp, err := client.Get(ts.URL + path)
 		if err != nil {
@@ -157,13 +170,51 @@ func TestPagesRender200(t *testing.T) {
 }
 
 func TestBudgetTabAppearsInLayout(t *testing.T) {
-	ts, client, _ := newTestServer(t)
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	// Paydown is an opt-in add-on; enable it so its nav item renders.
+	if err := s.SetAddOnEnabled(context.Background(), uid, "paydown", true); err != nil {
+		t.Fatal(err)
+	}
 	resp, _ := client.Get(ts.URL + "/budget")
 	body := readAll(t, resp)
 	for _, marker := range []string{"Budget", "Paydown", `data-tui-sidebar-active="true"`} {
 		if !strings.Contains(body, marker) {
 			t.Errorf("missing %q in layout", marker)
 		}
+	}
+}
+
+// TestPaydownAddOnGating verifies the Paydown add-on gates both its nav item and
+// its route: hidden and redirected when disabled, shown and served when enabled.
+func TestPaydownAddOnGating(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	client.CheckRedirect = func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }
+
+	// Disabled by default: no nav item, and /paydown redirects to /budget.
+	resp, _ := client.Get(ts.URL + "/budget")
+	if body := readAll(t, resp); strings.Contains(body, "Paydown") {
+		t.Error("Paydown nav item shown while add-on disabled")
+	}
+	resp, _ = client.Get(ts.URL + "/paydown")
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/budget" {
+		t.Fatalf("disabled /paydown = %d %q, want 303 /budget", resp.StatusCode, resp.Header.Get("Location"))
+	}
+
+	// Enabled: nav item appears and /paydown serves 200.
+	if err := s.SetAddOnEnabled(context.Background(), uid, "paydown", true); err != nil {
+		t.Fatal(err)
+	}
+	resp, _ = client.Get(ts.URL + "/budget")
+	if body := readAll(t, resp); !strings.Contains(body, "Paydown") {
+		t.Error("Paydown nav item missing while add-on enabled")
+	}
+	resp, _ = client.Get(ts.URL + "/paydown")
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("enabled /paydown = %d, want 200", resp.StatusCode)
 	}
 }
 
@@ -178,7 +229,9 @@ func TestAccountsOverviewPartialRenders(t *testing.T) {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 	body := readAll(t, resp)
-	for _, marker := range []string{`id="accounts-overview"`, "Est. Net Worth"} {
+	// The seeded user has no accounts, so the fragment shows the empty state (no
+	// net-worth line until an account exists).
+	for _, marker := range []string{`id="accounts-overview"`, "No accounts yet"} {
 		if !strings.Contains(body, marker) {
 			t.Errorf("overview fragment missing %q", marker)
 		}

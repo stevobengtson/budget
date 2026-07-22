@@ -41,6 +41,16 @@ type Config struct {
 		TokenTTL     time.Duration `mapstructure:"token_ttl"`
 		CookieSecure bool          `mapstructure:"cookie_secure"`
 	} `mapstructure:"auth"`
+	Stripe struct {
+		SecretKey      string `mapstructure:"secret_key"`
+		PublishableKey string `mapstructure:"publishable_key"`
+		WebhookSecret  string `mapstructure:"webhook_secret"`
+		// PriceIDs holds the Stripe Price IDs the app subscribes customers to.
+		// Base is the core $4.99/mo plan; add-on price IDs will join here later.
+		PriceIDs struct {
+			Base string `mapstructure:"base"`
+		} `mapstructure:"price_ids"`
+	} `mapstructure:"stripe"`
 	Log struct {
 		Level string `mapstructure:"level"`
 	} `mapstructure:"log"`
@@ -60,6 +70,10 @@ func Load(v *viper.Viper) (Config, error) {
 	v.SetDefault("auth.session_ttl", "720h")
 	v.SetDefault("auth.token_ttl", "1h")
 	v.SetDefault("auth.cookie_secure", false)
+	v.SetDefault("stripe.secret_key", "")
+	v.SetDefault("stripe.publishable_key", "")
+	v.SetDefault("stripe.webhook_secret", "")
+	v.SetDefault("stripe.price_ids.base", "")
 	v.SetDefault("log.level", "info")
 
 	v.SetEnvPrefix("BUDGET")

@@ -1,0 +1,204 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/templui/templui/components/icon"
+)
+
+// BillingData is the billing page view model, derived from the user's current
+// Stripe subscription (a synced projection in the store).
+type BillingData struct {
+	Collapsed         bool
+	Configured        bool   // billing is set up in this environment
+	Standalone        bool   // render the sidebar-less paywall (locked-out states)
+	State             string // "none" | "trialing" | "active" | "past_due" | "ended"
+	TrialDaysLeft     int
+	TrialEnd          string // formatted date, "" when not trialing
+	RenewalDate       string // formatted date, "" when not active
+	CancelAtPeriodEnd bool
+}
+
+templ BillingPage(d BillingData) {
+	if d.Standalone {
+		@billingStandalone(d)
+	} else {
+		@Layout("Billing", "billing", d.Collapsed) {
+			<div class="mx-auto w-full max-w-2xl space-y-6">
+				<h1 class="text-2xl font-semibold tracking-tight">Billing</h1>
+				if !d.Configured {
+					<div class="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+						Billing isn't configured in this environment.
+					</div>
+				} else if d.State == "exempt" {
+					@billingExemptCard()
+				} else {
+					@billingCard(d)
+				}
+			</div>
+		}
+	}
+}
+
+// billingStandalone is the sidebar-less paywall a locked-out user sees (never
+// subscribed, or trial ended). It reuses the auth pages' centered-card shell so
+// it matches sign in / sign up, and offers a log-out escape.
+templ billingStandalone(d BillingData) {
+	if d.State == "ended" {
+		@authLayout("Your trial has ended") {
+			<p class="text-sm text-muted-foreground">Subscribe to keep using Pigglet — $4.99 per month, in your local currency.</p>
+			<div class="mt-6">
+				<form method="post" action="/billing/checkout">
+					@authButton("Subscribe")
+				</form>
+			</div>
+			@billingLogoutFooter()
+		}
+	} else {
+		@authLayout("Start your free trial") {
+			<p class="text-sm text-muted-foreground">Get 35 days of Pigglet free — no credit card required. It's $4.99 per month after that, in your local currency.</p>
+			<div class="mt-6">
+				<form method="post" action="/billing/checkout">
+					@authButton("Start free trial")
+				</form>
+			</div>
+			@billingLogoutFooter()
+		}
+	}
+}
+
+// billingLogoutFooter is the escape hatch on the standalone paywall: a plain
+// form POST to /logout (the standalone shell doesn't load htmx).
+templ billingLogoutFooter() {
+	<form method="post" action="/logout" class="mt-6 text-center">
+		<button type="submit" class="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Log out</button>
+	</form>
+}
+
+// billingCard renders the status + the one call-to-action appropriate to the
+// subscription state.
+templ billingCard(d BillingData) {
+	<section class="overflow-hidden rounded-xl border bg-card">
+		<div class="space-y-4 p-6">
+			<div class="flex items-start justify-between gap-4">
+				<div class="space-y-1">
+					<h2 class="text-sm font-semibold">Pigglet</h2>
+					<p class="text-sm text-muted-foreground">$4.99 per month, in your local currency.</p>
+				</div>
+				@billingStatusBadge(d.State)
+			</div>
+			@billingStatusLine(d)
+		</div>
+		<div class="flex items-center gap-3 border-t bg-muted/30 px-6 py-4">
+			@billingActions(d)
+		</div>
+	</section>
+}
+
+// billingExemptCard is shown for complimentary (billing_exempt) accounts: full
+// access, no subscription, no call to action.
+templ billingExemptCard() {
+	<section class="overflow-hidden rounded-xl border bg-card p-6">
+		<div class="flex items-start gap-3">
+			@icon.BadgeCheck(icon.Props{Class: "size-5 shrink-0 text-primary"})
+			<div class="space-y-1">
+				<h2 class="text-sm font-semibold">Complimentary access</h2>
+				<p class="text-sm text-muted-foreground">You have full access to Pigglet at no charge — no subscription required.</p>
+			</div>
+		</div>
+	</section>
+}
+
+// billingStatusLine is the human sentence describing where the user stands.
+templ billingStatusLine(d BillingData) {
+	switch d.State {
+		case "trialing":
+			<p class="text-sm">
+				Your free trial is active — <span class="font-medium">{ fmt.Sprintf("%d days left", d.TrialDaysLeft) }</span>
+				if d.TrialEnd != "" {
+					{ fmt.Sprintf(" (ends %s)", d.TrialEnd) }
+				}
+				. Add a payment method to keep access when the trial ends.
+			</p>
+		case "active":
+			if d.CancelAtPeriodEnd {
+				<p class="text-sm">Your subscription is set to cancel{ renewalSuffix(d.RenewalDate) }. You'll keep access until then.</p>
+			} else {
+				<p class="text-sm">You're subscribed{ renewalSuffix(d.RenewalDate) }.</p>
+			}
+		case "past_due":
+			<p class="text-sm text-destructive">Your last payment failed. Update your payment method to keep access.</p>
+		case "ended":
+			<p class="text-sm">Your trial has ended. Subscribe to continue using Pigglet.</p>
+		default:
+			<p class="text-sm">Start your { fmt.Sprintf("%d-day", 35) } free trial — no card required.</p>
+	}
+}
+
+// billingActions renders the primary action button(s) for the state. Plain form
+// POSTs (full navigation) so the redirect to Stripe works without JS.
+templ billingActions(d BillingData) {
+	switch d.State {
+		case "none":
+			<form method="post" action="/billing/checkout">
+				@button.Button(button.Props{Type: button.TypeSubmit}) {
+					Start free trial
+				}
+			</form>
+		case "ended":
+			<form method="post" action="/billing/checkout">
+				@button.Button(button.Props{Type: button.TypeSubmit}) {
+					Subscribe
+				}
+			</form>
+			@manageButton("View billing history")
+		default:
+			// trialing / active / past_due — manage via the Stripe portal.
+			<form method="post" action="/billing/portal">
+				@button.Button(button.Props{Type: button.TypeSubmit}) {
+					Manage billing
+				}
+			</form>
+	}
+}
+
+// manageButton is a secondary link to the Stripe Customer Portal.
+templ manageButton(label string) {
+	<form method="post" action="/billing/portal">
+		@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline}) {
+			{ label }
+		}
+	</form>
+}
+
+// billingStatusBadge is a small colored pill for the subscription state.
+templ billingStatusBadge(state string) {
+	switch state {
+		case "trialing":
+			@billingBadge("Trial", "border-primary/40 text-primary", icon.Clock(icon.Props{Class: "size-3"}))
+		case "active":
+			@billingBadge("Active", "border-primary/40 text-primary", icon.Check(icon.Props{Class: "size-3"}))
+		case "past_due":
+			@billingBadge("Past due", "border-destructive/40 text-destructive", icon.TriangleAlert(icon.Props{Class: "size-3"}))
+		case "ended":
+			@billingBadge("Ended", "border-border text-muted-foreground", icon.CircleX(icon.Props{Class: "size-3"}))
+		default:
+			@billingBadge("Not started", "border-border text-muted-foreground", icon.Circle(icon.Props{Class: "size-3"}))
+	}
+}
+
+templ billingBadge(label, classes string, ic templ.Component) {
+	<span class={ "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium " + classes }>
+		@ic
+		{ label }
+	</span>
+}
+
+// renewalSuffix appends " on <date>" when a date is known, else "".
+func renewalSuffix(date string) string {
+	if date == "" {
+		return ""
+	}
+	return " on " + date
+}

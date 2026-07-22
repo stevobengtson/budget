@@ -86,7 +86,9 @@ templ appSidebar(collapsed bool, active string) {
         @sidebar.Group() {
           @sidebar.Menu() {
             @navItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-4"}), active)
-            @navItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-4"}), active)
+            if AddOnEnabled(ctx, "paydown") {
+              @navItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-4"}), active)
+            }
           }
         }
         @sidebar.Separator(sidebar.SeparatorProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
@@ -184,6 +186,12 @@ templ userMenu() {
 				<span class="flex items-center gap-2">
 					@icon.Settings(icon.Props{Class: "size-4"})
 					Settings
+				</span>
+			}
+			@dropdown.Item(dropdown.ItemProps{Href: "/billing"}) {
+				<span class="flex items-center gap-2">
+					@icon.CreditCard(icon.Props{Class: "size-4"})
+					Billing
 				</span>
 			}
 			@dropdown.Separator()

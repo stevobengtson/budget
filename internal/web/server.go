@@ -12,6 +12,7 @@ import (
 	templuicomponents "github.com/templui/templui/components"
 
 	"github.com/sbengtson/budget/internal/core/auth"
+	"github.com/sbengtson/budget/internal/core/billing"
 	"github.com/sbengtson/budget/internal/core/config"
 	"github.com/sbengtson/budget/internal/core/mail"
 	"github.com/sbengtson/budget/internal/core/store"
@@ -23,13 +24,14 @@ var staticFS embed.FS
 
 // Server holds shared state across handlers.
 type Server struct {
-	store  *store.Store
-	engine *gin.Engine
-	auth   *auth.Service
+	store   *store.Store
+	engine  *gin.Engine
+	auth    *auth.Service
+	billing *billing.Service
 }
 
-// NewServer constructs a Gin router wired to the store, building the mailer and
-// auth service from config.
+// NewServer constructs a Gin router wired to the store, building the mailer,
+// auth service, and billing (Stripe) service from config.
 func NewServer(s *store.Store, cfg config.Config) *Server {
 	gin.SetMode(cfg.Web.Level)
 	r := gin.New()
@@ -39,8 +41,9 @@ func NewServer(s *store.Store, cfg config.Config) *Server {
 		SessionTTL: cfg.Auth.SessionTTL,
 		TokenTTL:   cfg.Auth.TokenTTL,
 	})
+	billingSvc := billing.NewService(s, cfg.Stripe.SecretKey, cfg.Stripe.PriceIDs.Base, cfg.Web.BaseURL, cfg.Stripe.WebhookSecret)
 
-	srv := &Server{store: s, engine: r, auth: authSvc}
+	srv := &Server{store: s, engine: r, auth: authSvc, billing: billingSvc}
 
 	staticSub, _ := fs.Sub(staticFS, "static")
 	r.StaticFS("/static", http.FS(staticSub))
@@ -88,7 +91,7 @@ func newMailer(cfg config.Config) mail.Mailer {
 }
 
 func (s *Server) routes(cfg config.Config) {
-	hs := handlers.New(s.store, s.auth, cfg.Auth.CookieSecure, int(cfg.Auth.SessionTTL.Seconds()))
+	hs := handlers.New(s.store, s.auth, s.billing, cfg.Auth.CookieSecure, int(cfg.Auth.SessionTTL.Seconds()))
 
 	// Public auth routes (no session required).
 	s.engine.GET("/login", hs.LoginForm)
@@ -105,12 +108,15 @@ func (s *Server) routes(cfg config.Config) {
 	s.engine.POST("/reset", hs.Reset)
 	s.engine.POST("/logout", hs.Logout)
 
+	// Stripe webhooks: public (no session), authenticated by the Stripe signature.
+	s.engine.POST("/webhooks/stripe", hs.StripeWebhook)
+
 	// Authenticated app. Everything below requires a valid session.
 	app := s.engine.Group("/")
-	app.Use(requireAuth(s.auth))
+	app.Use(requireAuth(s.auth, s.store))
 
-	app.GET("/", func(c *gin.Context) { c.Redirect(http.StatusSeeOther, "/budget") })
-
+	// Account + billing stay reachable even when a subscription has lapsed, so a
+	// locked-out user can still manage their account and subscribe.
 	app.GET("/account", hs.AccountPage)
 	app.POST("/account/profile", hs.UpdateProfile)
 	app.POST("/account/email", hs.RequestEmailChange)
@@ -118,59 +124,86 @@ func (s *Server) routes(cfg config.Config) {
 	app.POST("/account/avatar/remove", hs.RemoveAvatar)
 	app.GET("/account/avatar", hs.ServeAvatar)
 	app.POST("/account/password", hs.ChangePassword)
+	app.POST("/account/addons/:slug", hs.ToggleAddOn)
 
-	app.GET("/budget", hs.BudgetIndex)
-	app.POST("/budget/assign/:catID", hs.BudgetAssign)
-	app.POST("/budget/assign/:catID/copy-prev", hs.BudgetAssignCopyPrev)
-	app.POST("/budget/goal/:catID", hs.BudgetGoal)
-	app.GET("/budget/goal/:catID/edit", hs.BudgetGoalEdit)
-	app.GET("/budget/group/new", hs.BudgetGroupNew)
-	app.POST("/budget/group", hs.BudgetGroupCreate)
-	app.POST("/budget/groups/reorder", hs.BudgetGroupsReorder)
-	app.POST("/budget/categories/reorder", hs.BudgetCategoriesReorder)
-	app.PUT("/budget/group/:gid", hs.BudgetGroupRename)
-	app.POST("/budget/group/:gid/delete", hs.BudgetGroupDelete)
-	app.GET("/budget/group/:gid/category/new", hs.BudgetCategoryNew)
-	app.POST("/budget/group/:gid/category", hs.BudgetCategoryCreate)
-	app.PUT("/budget/category/:catID", hs.BudgetCategoryRename)
-	app.POST("/budget/category/:catID/archive", hs.BudgetCategoryArchive)
-	app.POST("/budget/category/:catID/rollover", hs.BudgetSetRollover)
-	app.GET("/budget/income", func(c *gin.Context) {
+	app.GET("/billing", hs.BillingPage)
+	app.POST("/billing/checkout", hs.StartCheckout)
+	// /billing/start is the gate's auto-redirect target for never-subscribed
+	// users: it opens the free-trial Checkout (same handler as the button). GET so
+	// a plain redirect reaches it. Ungated, or the gate would loop onto it.
+	app.GET("/billing/start", hs.StartCheckout)
+	app.POST("/billing/portal", hs.OpenPortal)
+	app.GET("/billing/success", hs.CheckoutSuccess)
+
+	// The sidebar account-overview widget loads on every page (including /billing
+	// and /account, which a locked-out user sees). It's a read-only view of the
+	// user's own accounts, so it stays ungated — gating it would make the shared
+	// sidebar's on-load hx-get redirect to /billing, looping the page reload.
+	app.GET("/accounts/overview", hs.AccountsOverviewPartial)
+
+	// Core app: gated behind an active trial or paid subscription. A user without
+	// access is redirected to /billing. The gate is a no-op when billing isn't
+	// configured (empty base price), so dev without Stripe still works.
+	gated := app.Group("")
+	gated.Use(requireSubscription(s.store, s.billing))
+
+	gated.GET("/", func(c *gin.Context) { c.Redirect(http.StatusSeeOther, "/budget") })
+
+	gated.GET("/budget", hs.BudgetIndex)
+	gated.POST("/budget/assign/:catID", hs.BudgetAssign)
+	gated.POST("/budget/assign/:catID/copy-prev", hs.BudgetAssignCopyPrev)
+	gated.POST("/budget/goal/:catID", hs.BudgetGoal)
+	gated.GET("/budget/goal/:catID/edit", hs.BudgetGoalEdit)
+	gated.GET("/budget/group/new", hs.BudgetGroupNew)
+	gated.POST("/budget/group", hs.BudgetGroupCreate)
+	gated.POST("/budget/groups/reorder", hs.BudgetGroupsReorder)
+	gated.POST("/budget/categories/reorder", hs.BudgetCategoriesReorder)
+	gated.PUT("/budget/group/:gid", hs.BudgetGroupRename)
+	gated.POST("/budget/group/:gid/delete", hs.BudgetGroupDelete)
+	gated.GET("/budget/group/:gid/category/new", hs.BudgetCategoryNew)
+	gated.POST("/budget/group/:gid/category", hs.BudgetCategoryCreate)
+	gated.PUT("/budget/category/:catID", hs.BudgetCategoryRename)
+	gated.POST("/budget/category/:catID/archive", hs.BudgetCategoryArchive)
+	gated.POST("/budget/category/:catID/rollover", hs.BudgetSetRollover)
+	gated.GET("/budget/income", func(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/budget")
 	})
-	app.GET("/budget/income/new", hs.BudgetIncomeNew)
-	app.POST("/budget/income", hs.BudgetIncomeCreate)
-	app.POST("/budget/income/copy-prev", hs.BudgetIncomeCopyPrev)
-	app.PUT("/budget/income/:id", hs.BudgetIncomeUpdate)
-	app.DELETE("/budget/income/:id", hs.BudgetIncomeDelete)
+	gated.GET("/budget/income/new", hs.BudgetIncomeNew)
+	gated.POST("/budget/income", hs.BudgetIncomeCreate)
+	gated.POST("/budget/income/copy-prev", hs.BudgetIncomeCopyPrev)
+	gated.PUT("/budget/income/:id", hs.BudgetIncomeUpdate)
+	gated.DELETE("/budget/income/:id", hs.BudgetIncomeDelete)
 
-	app.GET("/transactions", hs.TransactionsIndex)
-	app.GET("/transactions/new", hs.TransactionsNew)
-	app.POST("/transactions", hs.TransactionsCreate)
-	app.GET("/transactions/:id/edit", hs.TransactionsEdit)
-	app.PUT("/transactions/:id", hs.TransactionsUpdate)
-	app.DELETE("/transactions/:id", hs.TransactionsDelete)
-	app.POST("/transactions/:id/cleared", hs.TransactionsToggleCleared)
+	gated.GET("/transactions", hs.TransactionsIndex)
+	gated.GET("/transactions/new", hs.TransactionsNew)
+	gated.POST("/transactions", hs.TransactionsCreate)
+	gated.GET("/transactions/:id/edit", hs.TransactionsEdit)
+	gated.PUT("/transactions/:id", hs.TransactionsUpdate)
+	gated.DELETE("/transactions/:id", hs.TransactionsDelete)
+	gated.POST("/transactions/:id/cleared", hs.TransactionsToggleCleared)
 
-	app.GET("/accounts/overview", hs.AccountsOverviewPartial)
-	app.GET("/accounts/new", hs.AccountsNew)
-	app.POST("/accounts", hs.AccountsCreate)
-	app.GET("/accounts/:id/edit", hs.AccountsEdit)
-	app.PUT("/accounts/:id", hs.AccountsUpdate)
-	app.POST("/accounts/:id/archive", hs.AccountsArchive)
+	gated.GET("/accounts/new", hs.AccountsNew)
+	gated.POST("/accounts", hs.AccountsCreate)
+	gated.GET("/accounts/:id/edit", hs.AccountsEdit)
+	gated.PUT("/accounts/:id", hs.AccountsUpdate)
+	gated.POST("/accounts/:id/archive", hs.AccountsArchive)
 
 	// Category management now lives inline on the Budget page; the standalone
 	// Categories page was removed. Redirect any old links there.
-	app.GET("/categories", func(c *gin.Context) {
+	gated.GET("/categories", func(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/budget")
 	})
 
-	app.GET("/paydown", hs.PaydownIndex)
-	app.GET("/paydown/:acctID/rows", hs.PaydownRows)
-	app.POST("/paydown/:acctID/include", hs.PaydownInclude)
-	app.POST("/paydown/:acctID/exclude", hs.PaydownExclude)
-	app.GET("/paydown/:acctID/payment-form", hs.PaydownPaymentForm)
-	app.GET("/paydown/:acctID/category-form", hs.PaydownCategoryForm)
-	app.POST("/paydown/:acctID/payment", hs.PaydownSetPayment)
-	app.POST("/paydown/:acctID/category", hs.PaydownSetCategory)
+	// Paydown is an opt-in add-on: gate the whole route group behind it so a
+	// disabled user hitting any /paydown URL directly is redirected to /budget.
+	paydown := gated.Group("/paydown")
+	paydown.Use(requireAddOn("paydown"))
+	paydown.GET("", hs.PaydownIndex)
+	paydown.GET("/:acctID/rows", hs.PaydownRows)
+	paydown.POST("/:acctID/include", hs.PaydownInclude)
+	paydown.POST("/:acctID/exclude", hs.PaydownExclude)
+	paydown.GET("/:acctID/payment-form", hs.PaydownPaymentForm)
+	paydown.GET("/:acctID/category-form", hs.PaydownCategoryForm)
+	paydown.POST("/:acctID/payment", hs.PaydownSetPayment)
+	paydown.POST("/:acctID/category", hs.PaydownSetCategory)
 }
