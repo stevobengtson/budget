@@ -1,0 +1,183 @@
+package ca.pigglet.budget
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+@Composable
+fun BudgetScreen(loadBudget: suspend (String?) -> BudgetData) {
+    var month by remember { mutableStateOf<String?>(null) } // null = current
+    var budget by remember { mutableStateOf<BudgetData?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(month) {
+        loading = true
+        error = null
+        try {
+            budget = loadBudget(month)
+        } catch (e: ApiException) {
+            error = e.message
+        } catch (e: Exception) {
+            error = "Couldn't load the budget."
+        }
+        loading = false
+    }
+
+    val current = budget
+    when {
+        current != null -> BudgetContent(
+            budget = current,
+            onPrev = { month = current.prevMonth },
+            onNext = { month = current.nextMonth },
+        )
+
+        loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+
+        error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(error ?: "", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick = { month = month }) { Text("Retry") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BudgetContent(budget: BudgetData, onPrev: () -> Unit, onNext: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        MonthHeader(monthLabel(budget.month), onPrev, onNext)
+        LazyColumn(Modifier.fillMaxSize()) {
+            item { SummaryCard(budget.summary) }
+            budget.groups.forEach { group ->
+                item { GroupHeader(group.name) }
+                if (group.categories.isEmpty()) {
+                    item {
+                        Text(
+                            "No categories",
+                            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    items(group.categories, key = { it.id }) { CategoryRow(it) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthHeader(label: String, onPrev: () -> Unit, onNext: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onPrev) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous month")
+        }
+        Text(
+            label,
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        IconButton(onClick = onNext) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next month")
+        }
+    }
+}
+
+@Composable
+private fun SummaryCard(summary: BudgetSummary) {
+    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+        SummaryRow("Income", summary.incomeCents, MaterialTheme.colorScheme.onSurface)
+        SummaryRow("Assigned", summary.budgetedCents, MaterialTheme.colorScheme.onSurface)
+        SummaryRow(
+            "Left to assign",
+            summary.remainingCents,
+            if (summary.remainingCents < 0) Color(0xFFC62828) else Color(0xFF2E7D32),
+        )
+    }
+    HorizontalDivider()
+}
+
+@Composable
+private fun SummaryRow(label: String, cents: Long, tint: Color) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Text(label, Modifier.weight(1f))
+        Text(Money.format(cents), color = tint)
+    }
+}
+
+@Composable
+private fun GroupHeader(name: String) {
+    Text(
+        name,
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+    )
+}
+
+@Composable
+private fun CategoryRow(cat: BudgetCategory) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(cat.name)
+            Text(
+                "Assigned ${Money.format(cat.assignedCents)} · Spent ${Money.format(cat.spentCents)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(Money.format(cat.availableCents), color = availableColor(cat.availableCents))
+    }
+}
+
+private fun availableColor(cents: Long): Color = when {
+    cents > 0 -> Color(0xFF2E7D32)
+    cents < 0 -> Color(0xFFC62828)
+    else -> Color.Gray
+}
+
+// monthLabel turns "2026-07" into "July 2026".
+private fun monthLabel(key: String): String = try {
+    YearMonth.parse(key).format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US))
+} catch (e: Exception) {
+    key
+}

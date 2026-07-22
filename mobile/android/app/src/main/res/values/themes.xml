@@ -1,0 +1,4 @@
+<resources>
+    <!-- Minimal window theme; Compose (MaterialTheme) drives the actual UI styling. -->
+    <style name="Theme.Budget" parent="android:Theme.DeviceDefault.Light.NoActionBar" />
+</resources>

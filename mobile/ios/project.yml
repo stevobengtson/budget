@@ -1,0 +1,23 @@
+# XcodeGen spec — the single source of truth for the Xcode project.
+# Regenerate the .xcodeproj after editing:  xcodegen generate
+name: Budget
+options:
+  bundleIdPrefix: ca.pigglet
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+targets:
+  Budget:
+    type: application
+    platform: iOS
+    sources:
+      - path: Budget
+    settings:
+      base:
+        INFOPLIST_FILE: Budget/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: ca.pigglet.budget
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO

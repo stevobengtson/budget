@@ -16,6 +16,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/config"
 	"github.com/sbengtson/budget/internal/core/mail"
 	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/apiv1"
 	"github.com/sbengtson/budget/internal/web/handlers"
 )
 
@@ -110,6 +111,10 @@ func (s *Server) routes(cfg config.Config) {
 
 	// Stripe webhooks: public (no session), authenticated by the Stripe signature.
 	s.engine.POST("/webhooks/stripe", hs.StripeWebhook)
+
+	// JSON API for the native mobile apps. Separate group with its own bearer-
+	// token auth; renders no HTML and reuses the same store/auth/billing services.
+	apiv1.New(s.store, s.auth, s.billing).Register(s.engine.Group("/api/v1"))
 
 	// Authenticated app. Everything below requires a valid session.
 	app := s.engine.Group("/")
