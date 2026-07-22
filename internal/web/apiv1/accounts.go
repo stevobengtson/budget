@@ -20,11 +20,20 @@ type accountItem struct {
 	BalanceCents int64  `json:"balanceCents"`
 }
 
-// Accounts lists the user's active (non-archived) accounts with balances,
-// mirroring the web's account overview. Tapping one drills into its
-// transactions (the account-scoped model).
+// Accounts lists the user's active (non-archived) accounts with balances as of
+// the end of the selected month (default: current). Returns month-nav keys so
+// the list shares the app-wide month selector. Tapping an account drills into
+// its transactions (the account-scoped model).
 func (a *API) Accounts(c *gin.Context) {
-	accts, err := a.store.ListAccounts(c.Request.Context(), c.GetInt64(contextUserID), false)
+	month := c.Query("month")
+	if month == "" {
+		month = store.MonthKey(time.Now())
+	} else if !validMonth(month) {
+		writeError(c, http.StatusBadRequest, "invalid_request", "month must be formatted YYYY-MM.")
+		return
+	}
+
+	accts, err := a.store.ListAccountsAsOf(c.Request.Context(), c.GetInt64(contextUserID), false, month)
 	if err != nil {
 		writeError(c, http.StatusInternalServerError, "internal", "Could not load accounts.")
 		return
@@ -38,7 +47,14 @@ func (a *API) Accounts(c *gin.Context) {
 			BalanceCents: ac.BalanceCents,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"accounts": out})
+
+	parsed, _ := time.Parse("2006-01", month)
+	c.JSON(http.StatusOK, gin.H{
+		"month":     month,
+		"prevMonth": store.PrevMonth(month),
+		"nextMonth": parsed.AddDate(0, 1, 0).Format("2006-01"),
+		"accounts":  out,
+	})
 }
 
 type txItem struct {

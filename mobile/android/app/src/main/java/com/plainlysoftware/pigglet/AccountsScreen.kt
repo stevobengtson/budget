@@ -49,7 +49,9 @@ import java.util.Locale
 
 @Composable
 fun AccountsScreen(
-    loadAccounts: suspend () -> List<Account>,
+    month: String,
+    onMonthChange: (String) -> Unit,
+    loadAccounts: suspend (String?) -> AccountsPage,
     loadTransactions: suspend (Long, String?) -> TransactionsPage,
     loadCategories: suspend () -> List<CategoryOption>,
     createTransaction: suspend (Long, String, String, Long?, String, String, String) -> Unit,
@@ -59,17 +61,25 @@ fun AccountsScreen(
     val account = selected
 
     if (account == null) {
-        AccountList(loadAccounts, onOpen = { selected = it })
+        AccountList(month, onMonthChange, loadAccounts, onOpen = { selected = it })
     } else {
-        AccountTransactions(account, loadTransactions, loadCategories, createTransaction, onBack = { selected = null })
+        AccountTransactions(
+            account, month, onMonthChange, loadTransactions, loadCategories, createTransaction,
+            onBack = { selected = null },
+        )
         BackHandler { selected = null }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AccountList(loadAccounts: suspend () -> List<Account>, onOpen: (Account) -> Unit) {
-    var accounts by remember { mutableStateOf<List<Account>?>(null) }
+private fun AccountList(
+    month: String,
+    onMonthChange: (String) -> Unit,
+    loadAccounts: suspend (String?) -> AccountsPage,
+    onOpen: (Account) -> Unit,
+) {
+    var page by remember { mutableStateOf<AccountsPage?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableStateOf(0) }
     var refreshing by remember { mutableStateOf(false) }
@@ -78,7 +88,7 @@ private fun AccountList(loadAccounts: suspend () -> List<Account>, onOpen: (Acco
     suspend fun fetch() {
         error = null
         try {
-            accounts = loadAccounts()
+            page = loadAccounts(month)
         } catch (e: ApiException) {
             error = e.message
         } catch (e: Exception) {
@@ -86,21 +96,26 @@ private fun AccountList(loadAccounts: suspend () -> List<Account>, onOpen: (Acco
         }
     }
 
-    LaunchedEffect(attempt) {
-        accounts = null
-        fetch()
-    }
+    LaunchedEffect(month, attempt) { fetch() }
 
-    val current = accounts
+    val current = page
     when {
-        current != null -> PullToRefreshBox(
-            isRefreshing = refreshing,
-            onRefresh = { scope.launch { refreshing = true; fetch(); refreshing = false } },
-        ) {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(current, key = { it.id }) { account ->
-                    AccountRow(account, onClick = { onOpen(account) })
-                    HorizontalDivider()
+        current != null -> Column(Modifier.fillMaxSize()) {
+            MonthHeader(
+                label = monthLabel(current.month),
+                onPrev = { onMonthChange(current.prevMonth) },
+                onNext = { onMonthChange(current.nextMonth) },
+            )
+            HorizontalDivider()
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = { scope.launch { refreshing = true; fetch(); refreshing = false } },
+            ) {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(current.accounts, key = { it.id }) { account ->
+                        AccountRow(account, onClick = { onOpen(account) })
+                        HorizontalDivider()
+                    }
                 }
             }
         }
@@ -135,13 +150,14 @@ private fun AccountRow(account: Account, onClick: () -> Unit) {
 @Composable
 private fun AccountTransactions(
     account: Account,
+    month: String,
+    onMonthChange: (String) -> Unit,
     loadTransactions: suspend (Long, String?) -> TransactionsPage,
     loadCategories: suspend () -> List<CategoryOption>,
     createTransaction: suspend (Long, String, String, Long?, String, String, String) -> Unit,
     onBack: () -> Unit,
 ) {
     var page by remember(account.id) { mutableStateOf<TransactionsPage?>(null) }
-    var month by remember(account.id) { mutableStateOf<String?>(null) } // null = current
     var error by remember(account.id) { mutableStateOf<String?>(null) }
     var attempt by remember(account.id) { mutableStateOf(0) }
     var refreshing by remember { mutableStateOf(false) }
@@ -198,8 +214,8 @@ private fun AccountTransactions(
             current != null -> {
                 MonthHeader(
                     label = monthLabel(current.month),
-                    onPrev = { month = current.prevMonth },
-                    onNext = { month = current.nextMonth },
+                    onPrev = { onMonthChange(current.prevMonth) },
+                    onNext = { onMonthChange(current.nextMonth) },
                 )
                 HorizontalDivider()
                 PullToRefreshBox(

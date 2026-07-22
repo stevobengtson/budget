@@ -76,9 +76,15 @@ struct APIClient {
         let amount: String
     }
 
-    func accounts(token: String) async throws -> [Account] {
-        let resp: AccountsBody = try decode(await send(request(path: "api/v1/accounts", method: "GET", token: token)))
-        return resp.accounts
+    func accounts(month: String?, token: String) async throws -> AccountsPage {
+        var comps = URLComponents(
+            url: baseURL.appendingPathComponent("api/v1/accounts"),
+            resolvingAgainstBaseURL: false
+        )!
+        if let month { comps.queryItems = [URLQueryItem(name: "month", value: month)] }
+        var req = URLRequest(url: comps.url!)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return try decode(await send(req))
     }
 
     func transactions(accountId: Int64, month: String?, token: String) async throws -> TransactionsPage {
@@ -107,7 +113,6 @@ struct APIClient {
         let _: CreatedTx = try decode(await send(req))
     }
 
-    private struct AccountsBody: Decodable { let accounts: [Account] }
     private struct CategoriesBody: Decodable { let categories: [CategoryOption] }
     private struct CreatedTx: Decodable { let id: Int64 }
 

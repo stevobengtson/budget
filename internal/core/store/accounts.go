@@ -101,13 +101,32 @@ func (s *Store) DeleteAccount(ctx context.Context, userID, id int64) error {
 // ListAccounts returns accounts with their computed balance. If includeArchived
 // is false, archived accounts are filtered out.
 func (s *Store) ListAccounts(ctx context.Context, userID int64, includeArchived bool) ([]AccountWithBalance, error) {
+	return s.listAccounts(ctx, userID, includeArchived, "")
+}
+
+// ListAccountsAsOf is like ListAccounts, but each balance counts only
+// transactions dated on or before the end of `month` (YYYY-MM) — a point-in-time
+// balance. An empty month behaves like ListAccounts (all transactions).
+func (s *Store) ListAccountsAsOf(ctx context.Context, userID int64, includeArchived bool, month string) ([]AccountWithBalance, error) {
+	return s.listAccounts(ctx, userID, includeArchived, month)
+}
+
+func (s *Store) listAccounts(ctx context.Context, userID int64, includeArchived bool, month string) ([]AccountWithBalance, error) {
+	// Optional as-of-month bound on the balance sub-selects. YYYY-MM sorts
+	// chronologically, so a string `<=` comparison bounds by month-end.
+	bound := ""
+	args := []any{userID, userID, userID}
+	if month != "" {
+		bound = ` AND to_char(t.date, 'YYYY-MM') <= $4`
+		args = append(args, month)
+	}
 	q := `
 SELECT a.id, a.name, a.type, a.starting_balance_cents, a.credit_limit_cents, a.apr_bps,
        a.monthly_payment_cents, a.include_in_paydown, a.payment_category_id,
        a.archived_at, a.created_at,
        a.starting_balance_cents
-         + COALESCE((SELECT SUM(inflow_cents)  FROM transactions t WHERE t.account_id=a.id AND t.user_id=$1), 0)
-         - COALESCE((SELECT SUM(outflow_cents) FROM transactions t WHERE t.account_id=a.id AND t.user_id=$2), 0) AS balance
+         + COALESCE((SELECT SUM(inflow_cents)  FROM transactions t WHERE t.account_id=a.id AND t.user_id=$1` + bound + `), 0)
+         - COALESCE((SELECT SUM(outflow_cents) FROM transactions t WHERE t.account_id=a.id AND t.user_id=$2` + bound + `), 0) AS balance
 FROM accounts a
 WHERE a.user_id=$3`
 	if !includeArchived {
@@ -115,7 +134,7 @@ WHERE a.user_id=$3`
 	}
 	q += ` ORDER BY a.archived_at IS NOT NULL, a.name`
 
-	rows, err := s.queryAll(ctx, q, userID, userID, userID)
+	rows, err := s.queryAll(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}

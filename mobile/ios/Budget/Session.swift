@@ -14,6 +14,16 @@ final class Session: ObservableObject {
     @Published private(set) var addOns: [String] = []
     @Published var loginError: String?
 
+    // App-wide selected month (YYYY-MM). Shared by Budget + Accounts so navigating
+    // months on one carries to the other, matching the web.
+    @Published var selectedMonth: String = Session.currentMonthKey()
+
+    static func currentMonthKey() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM"
+        return f.string(from: Date())
+    }
+
     private let api: APIClient
     private var token: String?
 
@@ -33,9 +43,9 @@ final class Session: ObservableObject {
         return try await api.assign(categoryId: categoryId, month: month, amount: amount, token: token)
     }
 
-    func loadAccounts() async throws -> [Account] {
+    func loadAccounts(month: String?) async throws -> AccountsPage {
         guard let token else { throw APIError(code: "unauthorized", message: "Not signed in.") }
-        return try await api.accounts(token: token)
+        return try await api.accounts(month: month, token: token)
     }
 
     func loadTransactions(accountId: Int64, month: String?) async throws -> TransactionsPage {

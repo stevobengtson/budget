@@ -2,14 +2,11 @@ import SwiftUI
 
 struct AccountsView: View {
     @EnvironmentObject private var session: Session
-    @State private var accounts: [Account]?
+    @State private var page: AccountsPage?
     @State private var loading = false
     @State private var error: String?
 
     var body: some View {
-        // Keep the NavigationStack for the drill-in to transactions, but hide its
-        // bar on the list so a compact custom header matches the other tabs. The
-        // pushed transactions screen keeps its own inline nav bar (back + title).
         NavigationStack {
             VStack(spacing: 0) {
                 HStack {
@@ -19,32 +16,51 @@ struct AccountsView: View {
                 .padding(.horizontal)
                 .padding(.top, 8)
 
-                Group {
-                    if let accounts {
-                        List(accounts) { account in
-                            NavigationLink {
-                                AccountTransactionsView(account: account)
-                            } label: {
-                                accountRow(account)
-                            }
-                        }
-                        .refreshable { await load() }
-                    } else if loading {
-                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if let error {
-                        VStack(spacing: 12) {
-                            Text(error).foregroundStyle(.secondary)
-                            Button("Retry") { Task { await load() } }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        Color.clear
-                    }
+                if let page {
+                    monthHeader(page)
                 }
+
+                content
             }
             .toolbar(.hidden, for: .navigationBar)
         }
-        .task { await load() }
+        .task(id: session.selectedMonth) { await load() }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let page {
+            List(page.accounts) { account in
+                NavigationLink {
+                    AccountTransactionsView(account: account)
+                } label: {
+                    accountRow(account)
+                }
+            }
+            .refreshable { await load() }
+        } else if loading {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error {
+            VStack(spacing: 12) {
+                Text(error).foregroundStyle(.secondary)
+                Button("Retry") { Task { await load() } }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Color.clear
+        }
+    }
+
+    private func monthHeader(_ page: AccountsPage) -> some View {
+        HStack {
+            Button { session.selectedMonth = page.prevMonth } label: { Image(systemName: "chevron.left") }
+            Spacer()
+            Text(Self.monthLabel(page.month)).font(.headline)
+            Spacer()
+            Button { session.selectedMonth = page.nextMonth } label: { Image(systemName: "chevron.right") }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
     }
 
     private func accountRow(_ account: Account) -> some View {
@@ -66,12 +82,27 @@ struct AccountsView: View {
         loading = true
         error = nil
         do {
-            accounts = try await session.loadAccounts()
+            page = try await session.loadAccounts(month: session.selectedMonth)
         } catch let apiError as APIError {
             self.error = apiError.message
         } catch {
             self.error = "Couldn't load accounts."
         }
         loading = false
+    }
+
+    private static let monthKeyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM"
+        return f
+    }()
+    private static let monthNameFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM yyyy"
+        return f
+    }()
+    private static func monthLabel(_ key: String) -> String {
+        guard let d = monthKeyFormatter.date(from: key) else { return key }
+        return monthNameFormatter.string(from: d)
     }
 }

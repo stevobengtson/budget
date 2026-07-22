@@ -47,10 +47,11 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetScreen(
+    month: String,
+    onMonthChange: (String) -> Unit,
     loadBudget: suspend (String?) -> BudgetData,
     assign: suspend (Long, String, String) -> BudgetData,
 ) {
-    var month by remember { mutableStateOf<String?>(null) } // null = current
     var budget by remember { mutableStateOf<BudgetData?>(null) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -86,8 +87,8 @@ fun BudgetScreen(
         ) {
             BudgetContent(
                 budget = current,
-                onPrev = { month = current.prevMonth },
-                onNext = { month = current.nextMonth },
+                onPrev = { onMonthChange(current.prevMonth) },
+                onNext = { onMonthChange(current.nextMonth) },
                 onCategoryClick = {
                     editing = it
                     editText = Money.plain(it.assignedCents)

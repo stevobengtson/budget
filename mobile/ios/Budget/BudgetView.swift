@@ -4,7 +4,6 @@ struct BudgetView: View {
     @EnvironmentObject private var session: Session
 
     @State private var budget: BudgetResponse?
-    @State private var month: String?          // nil = current month
     @State private var loading = false
     @State private var error: String?
 
@@ -24,7 +23,7 @@ struct BudgetView: View {
                 Color.clear
             }
         }
-        .task(id: month) { await load() }
+        .task(id: session.selectedMonth) { await load() }
         .alert("Assign to \(editing?.name ?? "")", isPresented: showingEditor) {
             TextField("Amount", text: $editAmount)
                 .keyboardType(.decimalPad)
@@ -92,11 +91,11 @@ struct BudgetView: View {
 
     private func monthHeader(_ budget: BudgetResponse) -> some View {
         HStack {
-            Button { month = budget.prevMonth } label: { Image(systemName: "chevron.left") }
+            Button { session.selectedMonth = budget.prevMonth } label: { Image(systemName: "chevron.left") }
             Spacer()
             Text(monthLabel(budget.month)).font(.headline)
             Spacer()
-            Button { month = budget.nextMonth } label: { Image(systemName: "chevron.right") }
+            Button { session.selectedMonth = budget.nextMonth } label: { Image(systemName: "chevron.right") }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -166,7 +165,7 @@ struct BudgetView: View {
         loading = true
         error = nil
         do {
-            budget = try await session.loadBudget(month: month)
+            budget = try await session.loadBudget(month: session.selectedMonth)
         } catch let apiError as APIError {
             self.error = apiError.message
         } catch {

@@ -5,7 +5,6 @@ struct AccountTransactionsView: View {
     let account: Account
 
     @State private var page: TransactionsPage?
-    @State private var month: String?          // nil = current month
     @State private var loading = false
     @State private var error: String?
     @State private var showingAdd = false
@@ -29,7 +28,7 @@ struct AccountTransactionsView: View {
                 Task { await load() }
             }
         }
-        .task(id: month) { await load() }
+        .task(id: session.selectedMonth) { await load() }
     }
 
     @ViewBuilder
@@ -59,11 +58,11 @@ struct AccountTransactionsView: View {
 
     private func monthHeader(_ page: TransactionsPage) -> some View {
         HStack {
-            Button { month = page.prevMonth } label: { Image(systemName: "chevron.left") }
+            Button { session.selectedMonth = page.prevMonth } label: { Image(systemName: "chevron.left") }
             Spacer()
             Text(Self.monthLabel(page.month)).font(.headline)
             Spacer()
-            Button { month = page.nextMonth } label: { Image(systemName: "chevron.right") }
+            Button { session.selectedMonth = page.nextMonth } label: { Image(systemName: "chevron.right") }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -93,7 +92,7 @@ struct AccountTransactionsView: View {
         loading = true
         error = nil
         do {
-            page = try await session.loadTransactions(accountId: account.id, month: month)
+            page = try await session.loadTransactions(accountId: account.id, month: session.selectedMonth)
         } catch let apiError as APIError {
             self.error = apiError.message
         } catch {

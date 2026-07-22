@@ -456,6 +456,43 @@ func TestAccounts(t *testing.T) {
 	}
 }
 
+func TestAccountsBalanceAsOfMonth(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	ctx := context.Background()
+
+	acctID, _ := st.CreateAccount(ctx, uid, store.Account{
+		Name: "Checking", Type: store.TypeChecking, StartingBalanceCents: 100000,
+	})
+	st.CreateTransaction(ctx, uid, store.Transaction{
+		Date: time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC), AccountID: acctID, OutflowCents: 2000,
+	})
+	st.CreateTransaction(ctx, uid, store.Transaction{
+		Date: time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC), AccountID: acctID, OutflowCents: 500,
+	})
+
+	balanceAt := func(month string) int64 {
+		var resp struct {
+			Accounts []accountItem `json:"accounts"`
+		}
+		w := doJSON(t, r, http.MethodGet, "/api/v1/accounts?month="+month, token, "", &resp)
+		if w.Code != http.StatusOK || len(resp.Accounts) != 1 {
+			t.Fatalf("accounts %s: %d %+v", month, w.Code, resp.Accounts)
+		}
+		return resp.Accounts[0].BalanceCents
+	}
+	if b := balanceAt("2026-05"); b != 100000 {
+		t.Errorf("May balance = %d, want 100000 (starting only)", b)
+	}
+	if b := balanceAt("2026-06"); b != 98000 {
+		t.Errorf("June balance = %d, want 98000 (100000 − 2000)", b)
+	}
+	if b := balanceAt("2026-07"); b != 97500 {
+		t.Errorf("July balance = %d, want 97500 (100000 − 2000 − 500)", b)
+	}
+}
+
 func TestAccountTransactions(t *testing.T) {
 	_, st, r := newTestAPI(t)
 	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")

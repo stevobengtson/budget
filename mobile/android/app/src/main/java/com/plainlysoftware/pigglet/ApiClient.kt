@@ -33,6 +33,14 @@ data class BudgetData(
 
 // Mirrors GET /api/v1/accounts and /accounts/:id/transactions.
 data class Account(val id: Long, val name: String, val type: String, val balanceCents: Long)
+
+// Mirrors GET /api/v1/accounts?month=… — accounts with balances as of month-end.
+data class AccountsPage(
+    val month: String,
+    val prevMonth: String,
+    val nextMonth: String,
+    val accounts: List<Account>,
+)
 data class TransactionItem(
     val id: Long,
     val date: String,
@@ -100,9 +108,16 @@ class ApiClient(private val baseUrl: String) {
             request("POST", "/api/v1/budget/assign", body = body, token = token).toBudget()
         }
 
-    suspend fun accounts(token: String): List<Account> = withContext(Dispatchers.IO) {
-        val arr = request("GET", "/api/v1/accounts", body = null, token = token).getJSONArray("accounts")
-        List(arr.length()) { arr.getJSONObject(it).toAccount() }
+    suspend fun accounts(token: String, month: String?): AccountsPage = withContext(Dispatchers.IO) {
+        val path = if (month != null) "/api/v1/accounts?month=$month" else "/api/v1/accounts"
+        val json = request("GET", path, body = null, token = token)
+        val arr = json.getJSONArray("accounts")
+        AccountsPage(
+            month = json.getString("month"),
+            prevMonth = json.getString("prevMonth"),
+            nextMonth = json.getString("nextMonth"),
+            accounts = List(arr.length()) { arr.getJSONObject(it).toAccount() },
+        )
     }
 
     suspend fun transactions(token: String, accountId: Long, month: String?): TransactionsPage =

@@ -43,10 +43,12 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 fun MainScreen(
     user: User,
     addOns: List<String>,
+    month: String,
+    onMonthChange: (String) -> Unit,
     onSignOut: () -> Unit,
     loadBudget: suspend (String?) -> BudgetData,
     assign: suspend (Long, String, String) -> BudgetData,
-    loadAccounts: suspend () -> List<Account>,
+    loadAccounts: suspend (String?) -> AccountsPage,
     loadTransactions: suspend (Long, String?) -> TransactionsPage,
     loadCategories: suspend () -> List<CategoryOption>,
     createTransaction: suspend (Long, String, String, Long?, String, String, String) -> Unit,
@@ -74,8 +76,15 @@ fun MainScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (selected) {
-                Tab.Budget -> BudgetScreen(loadBudget = loadBudget, assign = assign)
+                Tab.Budget -> BudgetScreen(
+                    month = month,
+                    onMonthChange = onMonthChange,
+                    loadBudget = loadBudget,
+                    assign = assign,
+                )
                 Tab.Accounts -> AccountsScreen(
+                    month = month,
+                    onMonthChange = onMonthChange,
                     loadAccounts = loadAccounts,
                     loadTransactions = loadTransactions,
                     loadCategories = loadCategories,

@@ -27,6 +27,15 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
     var submitting by mutableStateOf(false)
         private set
 
+    // App-wide selected month (YYYY-MM). Shared by Budget + Accounts so navigating
+    // months on one carries to the other, matching the web.
+    var selectedMonth by mutableStateOf(java.time.YearMonth.now().toString())
+        private set
+
+    fun setMonth(month: String) {
+        selectedMonth = month
+    }
+
     init { bootstrap() }
 
     // bootstrap restores a saved session on launch: if a stored token still
@@ -77,9 +86,9 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         return api.assign(token, categoryId, month, amount)
     }
 
-    suspend fun loadAccounts(): List<Account> {
+    suspend fun loadAccounts(month: String?): AccountsPage {
         val token = tokens.load() ?: throw ApiException("unauthorized", "Not signed in.")
-        return api.accounts(token)
+        return api.accounts(token, month)
     }
 
     suspend fun loadTransactions(accountId: Long, month: String?): TransactionsPage {

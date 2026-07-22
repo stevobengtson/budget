@@ -35,6 +35,8 @@ class MainActivity : ComponentActivity() {
                         is AuthState.SignedIn -> MainScreen(
                             user = s.user,
                             addOns = s.addOns,
+                            month = vm.selectedMonth,
+                            onMonthChange = vm::setMonth,
                             onSignOut = vm::signOut,
                             loadBudget = vm::loadBudget,
                             assign = vm::assign,

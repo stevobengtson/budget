@@ -20,6 +20,14 @@ struct TransactionItem: Codable, Identifiable {
     let cleared: Bool
 }
 
+// Mirrors GET /api/v1/accounts?month=… — accounts with balances as of month-end.
+struct AccountsPage: Codable {
+    let month: String
+    let prevMonth: String
+    let nextMonth: String
+    let accounts: [Account]
+}
+
 // Mirrors GET /api/v1/accounts/:id/transactions?month=… — a month of ledger rows.
 struct TransactionsPage: Codable {
     let month: String

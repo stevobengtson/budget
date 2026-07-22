@@ -12,11 +12,15 @@ targets:
     platform: iOS
     sources:
       - path: Budget
+      # Icon Composer (.icon) bundle — added as an opaque file (type: file) so
+      # XcodeGen doesn't recurse into it. Referenced by ASSETCATALOG_COMPILER_APPICON_NAME.
+      - path: icon_1024.icon
+        type: file
     settings:
       base:
         INFOPLIST_FILE: Budget/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.plainlysoftware.pigglet
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: icon_1024
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
