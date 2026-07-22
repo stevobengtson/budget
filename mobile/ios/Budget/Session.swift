@@ -38,9 +38,9 @@ final class Session: ObservableObject {
         return try await api.accounts(token: token)
     }
 
-    func loadTransactions(accountId: Int64) async throws -> [TransactionItem] {
+    func loadTransactions(accountId: Int64, month: String?) async throws -> TransactionsPage {
         guard let token else { throw APIError(code: "unauthorized", message: "Not signed in.") }
-        return try await api.transactions(accountId: accountId, token: token)
+        return try await api.transactions(accountId: accountId, month: month, token: token)
     }
 
     func loadCategories() async throws -> [CategoryOption] {

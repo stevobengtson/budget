@@ -4,7 +4,7 @@ import Security
 // Stores the session token in the iOS Keychain (not UserDefaults), so it's
 // encrypted at rest and protected by the device's secure enclave/keychain.
 enum KeychainToken {
-    private static let service = "ca.pigglet.budget"
+    private static let service = "com.plainlysoftware.pigglet"
     private static let account = "session-token"
 
     private static var baseQuery: [String: Any] {

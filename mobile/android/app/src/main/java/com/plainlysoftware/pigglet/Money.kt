@@ -1,4 +1,4 @@
-package ca.pigglet.budget
+package com.plainlysoftware.pigglet
 
 import java.text.NumberFormat
 import java.util.Locale

@@ -76,7 +76,15 @@ func (a *API) AccountTransactions(c *gin.Context) {
 		return
 	}
 
-	txs, err := a.store.ListTransactions(ctx, uid, store.TxFilter{AccountID: &accountID, Limit: txPageLimit})
+	month := c.Query("month")
+	if month == "" {
+		month = store.MonthKey(time.Now())
+	} else if !validMonth(month) {
+		writeError(c, http.StatusBadRequest, "invalid_request", "month must be formatted YYYY-MM.")
+		return
+	}
+
+	txs, err := a.store.ListTransactions(ctx, uid, store.TxFilter{AccountID: &accountID, Month: month, Limit: txPageLimit})
 	if err != nil {
 		writeError(c, http.StatusInternalServerError, "internal", "Could not load transactions.")
 		return
@@ -108,7 +116,14 @@ func (a *API) AccountTransactions(c *gin.Context) {
 		}
 		out = append(out, item)
 	}
-	c.JSON(http.StatusOK, gin.H{"transactions": out})
+
+	parsed, _ := time.Parse("2006-01", month)
+	c.JSON(http.StatusOK, gin.H{
+		"month":        month,
+		"prevMonth":    store.PrevMonth(month),
+		"nextMonth":    parsed.AddDate(0, 1, 0).Format("2006-01"),
+		"transactions": out,
+	})
 }
 
 type createTxRequest struct {

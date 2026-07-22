@@ -28,6 +28,7 @@ struct AccountsView: View {
                                 accountRow(account)
                             }
                         }
+                        .refreshable { await load() }
                     } else if loading {
                         ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if let error {

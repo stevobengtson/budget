@@ -81,11 +81,15 @@ struct APIClient {
         return resp.accounts
     }
 
-    func transactions(accountId: Int64, token: String) async throws -> [TransactionItem] {
-        let resp: TransactionsBody = try decode(
-            await send(request(path: "api/v1/accounts/\(accountId)/transactions", method: "GET", token: token))
-        )
-        return resp.transactions
+    func transactions(accountId: Int64, month: String?, token: String) async throws -> TransactionsPage {
+        var comps = URLComponents(
+            url: baseURL.appendingPathComponent("api/v1/accounts/\(accountId)/transactions"),
+            resolvingAgainstBaseURL: false
+        )!
+        if let month { comps.queryItems = [URLQueryItem(name: "month", value: month)] }
+        var req = URLRequest(url: comps.url!)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return try decode(await send(req))
     }
 
     func categories(token: String) async throws -> [CategoryOption] {
@@ -104,7 +108,6 @@ struct APIClient {
     }
 
     private struct AccountsBody: Decodable { let accounts: [Account] }
-    private struct TransactionsBody: Decodable { let transactions: [TransactionItem] }
     private struct CategoriesBody: Decodable { let categories: [CategoryOption] }
     private struct CreatedTx: Decodable { let id: Int64 }
 

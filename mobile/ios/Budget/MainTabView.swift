@@ -15,11 +15,11 @@ struct MainTabView: View {
             AccountsView()
                 .tabItem { Label("Accounts", systemImage: "building.columns") }
 
-            if session.hasAddOn("paydown") {
-                PaydownView()
-                    .tabItem { Label("Paydown", systemImage: "chart.line.downtrend.xyaxis") }
-            }
-
+//            if session.hasAddOn("paydown") {
+//                PaydownView()
+//                    .tabItem { Label("Paydown", systemImage: "chart.line.downtrend.xyaxis") }
+//            }
+//
             SettingsView(user: user)
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }

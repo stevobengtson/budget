@@ -1,4 +1,4 @@
-package ca.pigglet.budget
+package com.plainlysoftware.pigglet
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -13,15 +13,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,18 +37,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
 fun AccountsScreen(
     loadAccounts: suspend () -> List<Account>,
-    loadTransactions: suspend (Long) -> List<TransactionItem>,
+    loadTransactions: suspend (Long, String?) -> TransactionsPage,
     loadCategories: suspend () -> List<CategoryOption>,
     createTransaction: suspend (Long, String, String, Long?, String, String, String) -> Unit,
 ) {
@@ -60,15 +66,17 @@ fun AccountsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AccountList(loadAccounts: suspend () -> List<Account>, onOpen: (Account) -> Unit) {
     var accounts by remember { mutableStateOf<List<Account>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableStateOf(0) }
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(attempt) {
+    suspend fun fetch() {
         error = null
-        accounts = null
         try {
             accounts = loadAccounts()
         } catch (e: ApiException) {
@@ -78,12 +86,22 @@ private fun AccountList(loadAccounts: suspend () -> List<Account>, onOpen: (Acco
         }
     }
 
+    LaunchedEffect(attempt) {
+        accounts = null
+        fetch()
+    }
+
     val current = accounts
     when {
-        current != null -> LazyColumn(Modifier.fillMaxSize()) {
-            items(current, key = { it.id }) { account ->
-                AccountRow(account, onClick = { onOpen(account) })
-                HorizontalDivider()
+        current != null -> PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = { scope.launch { refreshing = true; fetch(); refreshing = false } },
+        ) {
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(current, key = { it.id }) { account ->
+                    AccountRow(account, onClick = { onOpen(account) })
+                    HorizontalDivider()
+                }
             }
         }
 
@@ -113,29 +131,31 @@ private fun AccountRow(account: Account, onClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AccountTransactions(
     account: Account,
-    loadTransactions: suspend (Long) -> List<TransactionItem>,
+    loadTransactions: suspend (Long, String?) -> TransactionsPage,
     loadCategories: suspend () -> List<CategoryOption>,
     createTransaction: suspend (Long, String, String, Long?, String, String, String) -> Unit,
     onBack: () -> Unit,
 ) {
-    var txs by remember(account.id) { mutableStateOf<List<TransactionItem>?>(null) }
+    var page by remember(account.id) { mutableStateOf<TransactionsPage?>(null) }
+    var month by remember(account.id) { mutableStateOf<String?>(null) } // null = current
     var error by remember(account.id) { mutableStateOf<String?>(null) }
     var attempt by remember(account.id) { mutableStateOf(0) }
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     var showAdd by remember { mutableStateOf(false) }
     var categories by remember { mutableStateOf<List<CategoryOption>>(emptyList()) }
     var saving by remember { mutableStateOf(false) }
     var addError by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(account.id, attempt) {
+    suspend fun fetch() {
         error = null
-        txs = null
         try {
-            txs = loadTransactions(account.id)
+            page = loadTransactions(account.id, month)
         } catch (e: ApiException) {
             error = e.message
         } catch (e: Exception) {
@@ -143,7 +163,10 @@ private fun AccountTransactions(
         }
     }
 
-    // Load the category picker the first time the form opens.
+    LaunchedEffect(account.id, month, attempt) {
+        page = null
+        fetch()
+    }
     LaunchedEffect(showAdd) {
         if (showAdd && categories.isEmpty()) {
             categories = runCatching { loadCategories() }.getOrDefault(emptyList())
@@ -170,16 +193,36 @@ private fun AccountTransactions(
         }
         HorizontalDivider()
 
-        val current = txs
+        val current = page
         when {
-            current != null && current.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                Text("No transactions", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            current != null -> LazyColumn(Modifier.fillMaxSize()) {
-                items(current, key = { it.id }) { tx ->
-                    TransactionRow(tx)
-                    HorizontalDivider()
+            current != null -> {
+                MonthHeader(
+                    label = monthLabel(current.month),
+                    onPrev = { month = current.prevMonth },
+                    onNext = { month = current.nextMonth },
+                )
+                HorizontalDivider()
+                PullToRefreshBox(
+                    isRefreshing = refreshing,
+                    onRefresh = { scope.launch { refreshing = true; fetch(); refreshing = false } },
+                ) {
+                    LazyColumn(Modifier.fillMaxSize()) {
+                        if (current.transactions.isEmpty()) {
+                            item {
+                                Text(
+                                    "No transactions this month",
+                                    Modifier.fillMaxWidth().padding(24.dp),
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        } else {
+                            items(current.transactions, key = { it.id }) { tx ->
+                                TransactionRow(tx)
+                                HorizontalDivider()
+                            }
+                        }
+                    }
                 }
             }
 
@@ -219,6 +262,28 @@ private fun AccountTransactions(
                     },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun MonthHeader(label: String, onPrev: () -> Unit, onNext: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onPrev) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous month")
+        }
+        Text(
+            label,
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        IconButton(onClick = onNext) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next month")
         }
     }
 }
@@ -269,4 +334,10 @@ private fun shortDate(iso: String): String = try {
     LocalDate.parse(iso).format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
 } catch (e: Exception) {
     iso
+}
+
+private fun monthLabel(key: String): String = try {
+    YearMonth.parse(key).format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US))
+} catch (e: Exception) {
+    key
 }

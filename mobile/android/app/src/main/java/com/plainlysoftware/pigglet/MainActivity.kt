@@ -1,4 +1,4 @@
-package ca.pigglet.budget
+package com.plainlysoftware.pigglet
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -13,14 +13,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 
-// Dev server base URL. Reached via an adb reverse tunnel:
-//   adb reverse tcp:8080 tcp:8080
-// which forwards the device/emulator's localhost:8080 to the Mac's 127.0.0.1:8080
-// over adb — firewall-proof, and works for physical USB devices too. Re-run the
-// command after an emulator cold boot (it doesn't persist). Without the tunnel,
-// the emulator-only alternative is http://10.0.2.2:8080 (needs the macOS firewall
-// to allow the server's incoming connections).
-const val BASE_URL = "http://localhost:8080"
+// API base URL per build type (see build.gradle.kts): debug → local dev server,
+// release → production. In debug, the emulator/USB device reaches the Mac's
+// localhost:8080 via `adb reverse tcp:8080 tcp:8080`.
+val BASE_URL: String = BuildConfig.API_BASE_URL
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

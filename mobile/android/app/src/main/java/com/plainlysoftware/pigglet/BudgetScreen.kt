@@ -1,4 +1,4 @@
-package ca.pigglet.budget
+package com.plainlysoftware.pigglet
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +44,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetScreen(
     loadBudget: suspend (String?) -> BudgetData,
@@ -56,8 +59,9 @@ fun BudgetScreen(
     var editText by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(month) {
-        loading = true
+    var refreshing by remember { mutableStateOf(false) }
+
+    suspend fun fetch() {
         error = null
         try {
             budget = loadBudget(month)
@@ -66,27 +70,37 @@ fun BudgetScreen(
         } catch (e: Exception) {
             error = "Couldn't load the budget."
         }
+    }
+
+    LaunchedEffect(month) {
+        loading = true
+        fetch()
         loading = false
     }
 
     val current = budget
     when {
-        current != null -> BudgetContent(
-            budget = current,
-            onPrev = { month = current.prevMonth },
-            onNext = { month = current.nextMonth },
-            onCategoryClick = {
-                editing = it
-                editText = Money.plain(it.assignedCents)
-            },
-        )
+        current != null -> PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = { scope.launch { refreshing = true; fetch(); refreshing = false } },
+        ) {
+            BudgetContent(
+                budget = current,
+                onPrev = { month = current.prevMonth },
+                onNext = { month = current.nextMonth },
+                onCategoryClick = {
+                    editing = it
+                    editText = Money.plain(it.assignedCents)
+                },
+            )
+        }
 
         loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
 
         error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(error ?: "", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Button(onClick = { month = month }) { Text("Retry") }
+                Button(onClick = { scope.launch { loading = true; fetch(); loading = false } }) { Text("Retry") }
             }
         }
     }

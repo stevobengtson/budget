@@ -1,4 +1,4 @@
-package ca.pigglet.budget
+package com.plainlysoftware.pigglet
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 private enum class Tab(val label: String, val icon: ImageVector) {
     Budget("Budget", Icons.Filled.Home),
     Accounts("Accounts", Icons.Filled.Person),
-    Paydown("Paydown", Icons.Filled.Star),
+//    Paydown("Paydown", Icons.Filled.Star),
     Settings("Settings", Icons.Filled.Settings),
 }
 
@@ -47,14 +47,15 @@ fun MainScreen(
     loadBudget: suspend (String?) -> BudgetData,
     assign: suspend (Long, String, String) -> BudgetData,
     loadAccounts: suspend () -> List<Account>,
-    loadTransactions: suspend (Long) -> List<TransactionItem>,
+    loadTransactions: suspend (Long, String?) -> TransactionsPage,
     loadCategories: suspend () -> List<CategoryOption>,
     createTransaction: suspend (Long, String, String, Long?, String, String, String) -> Unit,
 ) {
     // Paydown appears only when its add-on is enabled.
-    val tabs = remember(addOns) {
-        Tab.entries.filter { it != Tab.Paydown || "paydown" in addOns }
-    }
+//    val tabs = remember(addOns) {
+//        Tab.entries.filter { it != Tab.Paydown || "paydown" in addOns }
+//    }
+    val tabs = remember() { Tab.entries }
     var selected by remember { mutableStateOf(Tab.Budget) }
 
     Scaffold(
@@ -80,7 +81,7 @@ fun MainScreen(
                     loadCategories = loadCategories,
                     createTransaction = createTransaction,
                 )
-                Tab.Paydown -> ComingSoon("Paydown")
+//                Tab.Paydown -> ComingSoon("Paydown")
                 Tab.Settings -> SettingsContent(user = user, onSignOut = onSignOut)
             }
         }

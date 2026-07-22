@@ -1,4 +1,4 @@
-package ca.pigglet.budget
+package com.plainlysoftware.pigglet
 
 import android.app.Application
 import androidx.compose.runtime.getValue
@@ -82,9 +82,9 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         return api.accounts(token)
     }
 
-    suspend fun loadTransactions(accountId: Long): List<TransactionItem> {
+    suspend fun loadTransactions(accountId: Long, month: String?): TransactionsPage {
         val token = tokens.load() ?: throw ApiException("unauthorized", "Not signed in.")
-        return api.transactions(token, accountId)
+        return api.transactions(token, accountId, month)
     }
 
     suspend fun loadCategories(): List<CategoryOption> {

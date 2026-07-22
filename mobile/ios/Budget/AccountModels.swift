@@ -20,6 +20,14 @@ struct TransactionItem: Codable, Identifiable {
     let cleared: Bool
 }
 
+// Mirrors GET /api/v1/accounts/:id/transactions?month=… — a month of ledger rows.
+struct TransactionsPage: Codable {
+    let month: String
+    let prevMonth: String
+    let nextMonth: String
+    let transactions: [TransactionItem]
+}
+
 // Mirrors GET /api/v1/categories — an option in the transaction category picker.
 struct CategoryOption: Codable, Identifiable {
     let id: Int64

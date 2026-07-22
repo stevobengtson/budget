@@ -488,6 +488,33 @@ func TestAccountTransactions(t *testing.T) {
 	}
 }
 
+func TestAccountTransactionsFilterByMonth(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	ctx := context.Background()
+
+	acctID, _ := st.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+	july := time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC)
+	june := time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)
+	st.CreateTransaction(ctx, uid, store.Transaction{Date: july, AccountID: acctID, OutflowCents: 100})
+	st.CreateTransaction(ctx, uid, store.Transaction{Date: june, AccountID: acctID, OutflowCents: 200})
+
+	var page struct {
+		Month        string   `json:"month"`
+		PrevMonth    string   `json:"prevMonth"`
+		NextMonth    string   `json:"nextMonth"`
+		Transactions []txItem `json:"transactions"`
+	}
+	doJSON(t, r, http.MethodGet, "/api/v1/accounts/"+itoa(acctID)+"/transactions?month=2026-07", token, "", &page)
+	if page.Month != "2026-07" || page.PrevMonth != "2026-06" || page.NextMonth != "2026-08" {
+		t.Errorf("month nav = prev=%s cur=%s next=%s", page.PrevMonth, page.Month, page.NextMonth)
+	}
+	if len(page.Transactions) != 1 || page.Transactions[0].AmountCents != -100 {
+		t.Errorf("july filter = %+v, want the single -100 tx", page.Transactions)
+	}
+}
+
 func TestAccountTransactionsRejectsForeignAccount(t *testing.T) {
 	_, st, r := newTestAPI(t)
 	makeVerifiedUser(t, st, "a@example.com", "supersecret")
@@ -526,7 +553,7 @@ func TestCreateTransaction(t *testing.T) {
 	var list struct {
 		Transactions []txItem `json:"transactions"`
 	}
-	doJSON(t, r, http.MethodGet, "/api/v1/accounts/"+itoa(acctID)+"/transactions", token, "", &list)
+	doJSON(t, r, http.MethodGet, "/api/v1/accounts/"+itoa(acctID)+"/transactions?month=2026-07", token, "", &list)
 	if len(list.Transactions) != 1 {
 		t.Fatalf("transactions = %+v, want one", list.Transactions)
 	}

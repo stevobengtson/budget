@@ -2,7 +2,7 @@
 # Regenerate the .xcodeproj after editing:  xcodegen generate
 name: Budget
 options:
-  bundleIdPrefix: ca.pigglet
+  bundleIdPrefix: com.plainlysoftware
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -15,7 +15,8 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: Budget/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: ca.pigglet.budget
+        PRODUCT_BUNDLE_IDENTIFIER: com.plainlysoftware.pigglet
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"

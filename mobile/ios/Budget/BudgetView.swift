@@ -76,6 +76,7 @@ struct BudgetView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .refreshable { await load() }
         }
     }
 

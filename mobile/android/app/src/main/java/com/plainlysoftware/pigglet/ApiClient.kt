@@ -1,4 +1,4 @@
-package ca.pigglet.budget
+package com.plainlysoftware.pigglet
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -41,6 +41,14 @@ data class TransactionItem(
     val notes: String,
     val amountCents: Long,
     val cleared: Boolean,
+)
+
+// Mirrors GET /api/v1/accounts/:id/transactions?month=… — a month of ledger rows.
+data class TransactionsPage(
+    val month: String,
+    val prevMonth: String,
+    val nextMonth: String,
+    val transactions: List<TransactionItem>,
 )
 
 // Mirrors GET /api/v1/categories — an option in the transaction category picker.
@@ -97,11 +105,22 @@ class ApiClient(private val baseUrl: String) {
         List(arr.length()) { arr.getJSONObject(it).toAccount() }
     }
 
-    suspend fun transactions(token: String, accountId: Long): List<TransactionItem> = withContext(Dispatchers.IO) {
-        val arr = request("GET", "/api/v1/accounts/$accountId/transactions", body = null, token = token)
-            .getJSONArray("transactions")
-        List(arr.length()) { arr.getJSONObject(it).toTransaction() }
-    }
+    suspend fun transactions(token: String, accountId: Long, month: String?): TransactionsPage =
+        withContext(Dispatchers.IO) {
+            val path = if (month != null) {
+                "/api/v1/accounts/$accountId/transactions?month=$month"
+            } else {
+                "/api/v1/accounts/$accountId/transactions"
+            }
+            val json = request("GET", path, body = null, token = token)
+            val arr = json.getJSONArray("transactions")
+            TransactionsPage(
+                month = json.getString("month"),
+                prevMonth = json.getString("prevMonth"),
+                nextMonth = json.getString("nextMonth"),
+                transactions = List(arr.length()) { arr.getJSONObject(it).toTransaction() },
+            )
+        }
 
     suspend fun categories(token: String): List<CategoryOption> = withContext(Dispatchers.IO) {
         val arr = request("GET", "/api/v1/categories", body = null, token = token).getJSONArray("categories")

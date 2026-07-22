@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "ca.pigglet.budget"
+    namespace = "com.plainlysoftware.pigglet"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "ca.pigglet.budget"
+        applicationId = "com.plainlysoftware.pigglet"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
@@ -18,13 +18,21 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Local dev server (emulator/USB device reach it via `adb reverse`).
+            buildConfigField("String", "API_BASE_URL", "\"http://localhost:8080\"")
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
         release {
             isMinifyEnabled = false
+            buildConfigField("String", "API_BASE_URL", "\"https://pigglet.ca\"")
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
         }
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
