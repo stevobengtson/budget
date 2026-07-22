@@ -15,6 +15,7 @@ exclude_dir = [
   "assets",
   "data",
   "docs",
+  "mobile",
   "screenshots",
   "testdata",
   "tmp",

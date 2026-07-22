@@ -16,4 +16,12 @@ enum Money {
 
         return String(format: "%@$%@.%02lld", negative ? "-" : "", dollarStr, frac)
     }
+
+    // plain renders cents as an editable decimal without symbol/grouping, for
+    // prefilling an amount field: 150050 -> "1500.50".
+    static func plain(_ cents: Int64) -> String {
+        let negative = cents < 0
+        let value = negative ? -cents : cents
+        return String(format: "%@%lld.%02lld", negative ? "-" : "", value / 100, value % 100)
+    }
 }

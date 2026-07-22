@@ -8,6 +8,10 @@ struct BudgetView: View {
     @State private var loading = false
     @State private var error: String?
 
+    // Inline assign editor.
+    @State private var editing: BudgetCategory?
+    @State private var editAmount = ""
+
     var body: some View {
         NavigationStack {
             Group {
@@ -24,6 +28,21 @@ struct BudgetView: View {
             .navigationTitle("Budget")
         }
         .task(id: month) { await load() }
+        .alert("Assign to \(editing?.name ?? "")", isPresented: showingEditor) {
+            TextField("Amount", text: $editAmount)
+                .keyboardType(.decimalPad)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                // Capture synchronously: SwiftUI dismisses the alert on tap, which
+                // clears `editing` before an async Task would read it.
+                guard let categoryId = editing?.id else { return }
+                let amount = editAmount
+                Task { await save(categoryId: categoryId, amount: amount) }
+            }
+        }
+        .alert(error ?? "Something went wrong", isPresented: showingError) {
+            Button("OK", role: .cancel) {}
+        }
     }
 
     // MARK: - States
@@ -44,7 +63,10 @@ struct BudgetView: View {
                         if group.categories.isEmpty {
                             Text("No categories").foregroundStyle(.secondary)
                         } else {
-                            ForEach(group.categories) { categoryRow($0) }
+                            ForEach(group.categories) { cat in
+                                Button { beginEdit(cat) } label: { categoryRow(cat) }
+                                    .buttonStyle(.plain)
+                            }
                         }
                     }
                 }
@@ -96,12 +118,41 @@ struct BudgetView: View {
                 .monospacedDigit()
                 .foregroundStyle(availableColor(cat.availableCents))
         }
+        .contentShape(Rectangle())
     }
 
     private func availableColor(_ cents: Int64) -> Color {
         if cents > 0 { return .green }
         if cents < 0 { return .red }
         return .secondary
+    }
+
+    // MARK: - Editing
+
+    private var showingEditor: Binding<Bool> {
+        Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })
+    }
+
+    // Surface errors as an alert only once a budget is on screen (assign or
+    // month-nav failures). The initial-load failure keeps its retry screen.
+    private var showingError: Binding<Bool> {
+        Binding(get: { error != nil && budget != nil }, set: { if !$0 { error = nil } })
+    }
+
+    private func beginEdit(_ cat: BudgetCategory) {
+        editing = cat
+        editAmount = Money.plain(cat.assignedCents)
+    }
+
+    private func save(categoryId: Int64, amount: String) async {
+        guard let month = budget?.month else { return }
+        do {
+            budget = try await session.assign(categoryId: categoryId, month: month, amount: amount)
+        } catch let apiError as APIError {
+            self.error = apiError.message
+        } catch {
+            self.error = "Couldn't save the assignment."
+        }
     }
 
     // MARK: - Data
@@ -112,7 +163,7 @@ struct BudgetView: View {
         do {
             budget = try await session.loadBudget(month: month)
         } catch let apiError as APIError {
-            error = apiError.message
+            self.error = apiError.message
         } catch {
             self.error = "Couldn't load the budget."
         }

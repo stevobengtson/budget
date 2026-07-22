@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -274,6 +275,8 @@ func TestLogoutRevokesToken(t *testing.T) {
 	}
 }
 
+func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
 // login is a small helper: authenticate and return the bearer token.
 func login(t *testing.T, r http.Handler, email, password string) string {
 	t.Helper()
@@ -337,6 +340,72 @@ func TestBudget(t *testing.T) {
 	cats := resp.Groups[0].Categories
 	if len(cats) != 1 || cats[0].Name != "Rent" || cats[0].AssignedCents != 150000 {
 		t.Errorf("categories = %+v, want one Rent assigned 150000", cats)
+	}
+}
+
+func TestAssign(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	ctx := context.Background()
+
+	gid, _ := st.CreateGroup(ctx, uid, "Bills", 0)
+	catID, err := st.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Rent", SortOrder: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assign via a human amount string; the response is the refreshed month.
+	body := `{"categoryId":` + itoa(catID) + `,"month":"2026-07","amount":"1,500.50"}`
+	var resp budgetResponse
+	w := doJSON(t, r, http.MethodPost, "/api/v1/budget/assign", token, body, &resp)
+	if w.Code != http.StatusOK {
+		t.Fatalf("assign: %d %s", w.Code, w.Body.String())
+	}
+	if resp.Summary.BudgetedCents != 150050 {
+		t.Errorf("budgeted = %d, want 150050", resp.Summary.BudgetedCents)
+	}
+	if len(resp.Groups) != 1 || len(resp.Groups[0].Categories) != 1 ||
+		resp.Groups[0].Categories[0].AssignedCents != 150050 {
+		t.Fatalf("assigned not reflected: %+v", resp.Groups)
+	}
+
+	// It persisted.
+	if got, _ := st.GetAssigned(ctx, uid, "2026-07", catID); got != 150050 {
+		t.Errorf("stored assigned = %d, want 150050", got)
+	}
+}
+
+func TestAssignRejectsBadAmount(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	gid, _ := st.CreateGroup(context.Background(), uid, "Bills", 0)
+	catID, _ := st.CreateCategory(context.Background(), uid, store.Category{GroupID: gid, Name: "Rent"})
+
+	var resp errorBody
+	body := `{"categoryId":` + itoa(catID) + `,"month":"2026-07","amount":"lots"}`
+	w := doJSON(t, r, http.MethodPost, "/api/v1/budget/assign", token, body, &resp)
+	if w.Code != http.StatusBadRequest || resp.Error.Code != "invalid_request" {
+		t.Fatalf("bad amount: %d %q", w.Code, resp.Error.Code)
+	}
+}
+
+func TestAssignRejectsForeignCategory(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	makeVerifiedUser(t, st, "a@example.com", "supersecret")
+	other := makeVerifiedUser(t, st, "b@example.com", "supersecret")
+	token := login(t, r, "a@example.com", "supersecret")
+
+	// A category owned by user B.
+	gid, _ := st.CreateGroup(context.Background(), other, "Bills", 0)
+	foreignCat, _ := st.CreateCategory(context.Background(), other, store.Category{GroupID: gid, Name: "Rent"})
+
+	var resp errorBody
+	body := `{"categoryId":` + itoa(foreignCat) + `,"month":"2026-07","amount":"100"}`
+	w := doJSON(t, r, http.MethodPost, "/api/v1/budget/assign", token, body, &resp)
+	if w.Code != http.StatusNotFound || resp.Error.Code != "not_found" {
+		t.Fatalf("foreign category: %d %q", w.Code, resp.Error.Code)
 	}
 }
 

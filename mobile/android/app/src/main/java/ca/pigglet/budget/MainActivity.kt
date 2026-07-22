@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
                             addOns = s.addOns,
                             onSignOut = vm::signOut,
                             loadBudget = vm::loadBudget,
+                            assign = vm::assign,
                         )
                     }
                 }

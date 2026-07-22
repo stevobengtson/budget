@@ -72,6 +72,11 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         return api.budget(token, month)
     }
 
+    suspend fun assign(categoryId: Long, month: String, amount: String): BudgetData {
+        val token = tokens.load() ?: throw ApiException("unauthorized", "Not signed in.")
+        return api.assign(token, categoryId, month, amount)
+    }
+
     fun signOut() {
         viewModelScope.launch {
             tokens.load()?.let { api.logout(it) }

@@ -61,6 +61,21 @@ struct APIClient {
         return try decode(await send(req))
     }
 
+    func assign(categoryId: Int64, month: String, amount: String, token: String) async throws -> BudgetResponse {
+        var req = request(path: "api/v1/budget/assign", method: "POST", token: token)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONEncoder().encode(
+            AssignBody(categoryId: categoryId, month: month, amount: amount)
+        )
+        return try decode(await send(req))
+    }
+
+    private struct AssignBody: Encodable {
+        let categoryId: Int64
+        let month: String
+        let amount: String
+    }
+
     func logout(token: String) async {
         _ = try? await send(request(path: "api/v1/logout", method: "POST", token: token))
     }

@@ -1,11 +1,13 @@
 package apiv1
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
@@ -47,16 +49,59 @@ type budgetCategory struct {
 // surfaced as summary.incomeCents instead. Transactions live behind the account
 // drill-in, so they're not part of this payload.
 func (a *API) Budget(c *gin.Context) {
-	ctx := c.Request.Context()
 	uid := c.GetInt64(contextUserID)
 
 	month := c.Query("month")
 	if month == "" {
 		month = store.MonthKey(time.Now())
-	} else if _, err := time.Parse("2006-01", month); err != nil {
+	} else if !validMonth(month) {
 		writeError(c, http.StatusBadRequest, "invalid_request", "month must be formatted YYYY-MM.")
 		return
 	}
+	a.respondBudget(c, uid, month)
+}
+
+type assignRequest struct {
+	CategoryID int64  `json:"categoryId"`
+	Month      string `json:"month"`
+	Amount     string `json:"amount"`
+}
+
+// Assign sets a category's assigned amount for a month, then returns the updated
+// budget so the client can refresh the whole month in a single round-trip. The
+// amount is a human string (e.g. "1500", "1,500.50", "$1500") parsed the same
+// way as the web via money.Parse.
+func (a *API) Assign(c *gin.Context) {
+	uid := c.GetInt64(contextUserID)
+
+	var req assignRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "Expected a JSON body with categoryId, month, and amount.")
+		return
+	}
+	if !validMonth(req.Month) {
+		writeError(c, http.StatusBadRequest, "invalid_request", "month must be formatted YYYY-MM.")
+		return
+	}
+	cents, err := money.Parse(req.Amount)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "Enter a valid amount.")
+		return
+	}
+	if err := a.store.SetAssigned(c.Request.Context(), uid, req.Month, req.CategoryID, cents); err != nil {
+		if errors.Is(err, store.ErrNotOwned) {
+			writeError(c, http.StatusNotFound, "not_found", "That category doesn't exist.")
+			return
+		}
+		writeError(c, http.StatusInternalServerError, "internal", "Could not save the assignment.")
+		return
+	}
+	a.respondBudget(c, uid, req.Month)
+}
+
+// respondBudget builds and writes the budget JSON for a month.
+func (a *API) respondBudget(c *gin.Context, uid int64, month string) {
+	ctx := c.Request.Context()
 
 	rows, err := a.store.MonthBudget(ctx, uid, month)
 	if err != nil {
@@ -118,4 +163,10 @@ func (a *API) Budget(c *gin.Context) {
 		},
 		Groups: outGroups,
 	})
+}
+
+// validMonth reports whether s is a well-formed YYYY-MM month key.
+func validMonth(s string) bool {
+	_, err := time.Parse("2006-01", s)
+	return err == nil
 }

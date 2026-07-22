@@ -67,6 +67,16 @@ class ApiClient(private val baseUrl: String) {
         request("GET", path, body = null, token = token).toBudget()
     }
 
+    suspend fun assign(token: String, categoryId: Long, month: String, amount: String): BudgetData =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("categoryId", categoryId)
+                .put("month", month)
+                .put("amount", amount)
+                .toString()
+            request("POST", "/api/v1/budget/assign", body = body, token = token).toBudget()
+        }
+
     private fun JSONObject.toUser() = User(getLong("id"), getString("email"), getString("name"))
 
     private fun JSONObject.toBudget(): BudgetData {

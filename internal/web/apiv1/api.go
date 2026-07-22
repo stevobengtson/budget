@@ -36,6 +36,7 @@ func (a *API) Register(r *gin.RouterGroup) {
 	authed.POST("/logout", a.Logout)
 	authed.GET("/me", a.Me)
 	authed.GET("/budget", a.Budget)
+	authed.POST("/budget/assign", a.Assign)
 }
 
 // Health is an unauthenticated liveness check the apps hit first, to prove the

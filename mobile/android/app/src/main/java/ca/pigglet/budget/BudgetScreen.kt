@@ -1,5 +1,6 @@
 package ca.pigglet.budget
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,37 +10,51 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun BudgetScreen(loadBudget: suspend (String?) -> BudgetData) {
+fun BudgetScreen(
+    loadBudget: suspend (String?) -> BudgetData,
+    assign: suspend (Long, String, String) -> BudgetData,
+) {
     var month by remember { mutableStateOf<String?>(null) } // null = current
     var budget by remember { mutableStateOf<BudgetData?>(null) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    var editing by remember { mutableStateOf<BudgetCategory?>(null) }
+    var editText by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(month) {
         loading = true
@@ -60,6 +75,10 @@ fun BudgetScreen(loadBudget: suspend (String?) -> BudgetData) {
             budget = current,
             onPrev = { month = current.prevMonth },
             onNext = { month = current.nextMonth },
+            onCategoryClick = {
+                editing = it
+                editText = Money.plain(it.assignedCents)
+            },
         )
 
         loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
@@ -71,10 +90,58 @@ fun BudgetScreen(loadBudget: suspend (String?) -> BudgetData) {
             }
         }
     }
+
+    val cat = editing
+    if (cat != null) {
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("Assign to ${cat.name}") },
+            text = {
+                OutlinedTextField(
+                    value = editText,
+                    onValueChange = { editText = it },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val month = budget?.month ?: return@TextButton
+                    scope.launch {
+                        try {
+                            budget = assign(cat.id, month, editText)
+                        } catch (e: ApiException) {
+                            error = e.message
+                        } catch (e: Exception) {
+                            error = "Couldn't save the assignment."
+                        }
+                        editing = null
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } },
+        )
+    }
+
+    // Surface errors once a budget is on screen (assign or month-nav failures).
+    // The initial-load failure keeps its retry box above.
+    val err = error
+    if (err != null && budget != null) {
+        AlertDialog(
+            onDismissRequest = { error = null },
+            confirmButton = { TextButton(onClick = { error = null }) { Text("OK") } },
+            text = { Text(err) },
+        )
+    }
 }
 
 @Composable
-private fun BudgetContent(budget: BudgetData, onPrev: () -> Unit, onNext: () -> Unit) {
+private fun BudgetContent(
+    budget: BudgetData,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onCategoryClick: (BudgetCategory) -> Unit,
+) {
     Column(Modifier.fillMaxSize()) {
         MonthHeader(monthLabel(budget.month), onPrev, onNext)
         LazyColumn(Modifier.fillMaxSize()) {
@@ -90,7 +157,9 @@ private fun BudgetContent(budget: BudgetData, onPrev: () -> Unit, onNext: () -> 
                         )
                     }
                 } else {
-                    items(group.categories, key = { it.id }) { CategoryRow(it) }
+                    items(group.categories, key = { it.id }) { cat ->
+                        CategoryRow(cat, onClick = { onCategoryClick(cat) })
+                    }
                 }
             }
         }
@@ -152,9 +221,12 @@ private fun GroupHeader(name: String) {
 }
 
 @Composable
-private fun CategoryRow(cat: BudgetCategory) {
+private fun CategoryRow(cat: BudgetCategory, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

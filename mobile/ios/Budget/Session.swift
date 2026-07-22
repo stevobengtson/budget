@@ -28,6 +28,11 @@ final class Session: ObservableObject {
         return try await api.budget(month: month, token: token)
     }
 
+    func assign(categoryId: Int64, month: String, amount: String) async throws -> BudgetResponse {
+        guard let token else { throw APIError(code: "unauthorized", message: "Not signed in.") }
+        return try await api.assign(categoryId: categoryId, month: month, amount: amount, token: token)
+    }
+
     init(api: APIClient) {
         self.api = api
     }
