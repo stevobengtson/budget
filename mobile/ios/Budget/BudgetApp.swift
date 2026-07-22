@@ -4,10 +4,10 @@ import SwiftUI
 struct BudgetApp: App {
     @StateObject private var session = Session(api: APIClient(baseURL: Self.baseURL))
 
-    // Dev builds talk to the local server (Simulator shares the Mac's localhost);
-    // release builds talk to production.
+    // The Simulator shares the Mac's localhost, so it targets the local dev
+    // server; a real device (and any archive/TestFlight build) targets production.
     private static var baseURL: URL {
-        #if DEBUG
+        #if targetEnvironment(simulator)
         URL(string: "http://localhost:8080")!
         #else
         URL(string: "https://pigglet.ca")!
