@@ -33,6 +33,28 @@ final class Session: ObservableObject {
         return try await api.assign(categoryId: categoryId, month: month, amount: amount, token: token)
     }
 
+    func loadAccounts() async throws -> [Account] {
+        guard let token else { throw APIError(code: "unauthorized", message: "Not signed in.") }
+        return try await api.accounts(token: token)
+    }
+
+    func loadTransactions(accountId: Int64) async throws -> [TransactionItem] {
+        guard let token else { throw APIError(code: "unauthorized", message: "Not signed in.") }
+        return try await api.transactions(accountId: accountId, token: token)
+    }
+
+    func loadCategories() async throws -> [CategoryOption] {
+        guard let token else { throw APIError(code: "unauthorized", message: "Not signed in.") }
+        return try await api.categories(token: token)
+    }
+
+    func createTransaction(accountId: Int64, amount: String, type: String,
+                           categoryId: Int64?, payee: String, notes: String, date: String) async throws {
+        guard let token else { throw APIError(code: "unauthorized", message: "Not signed in.") }
+        try await api.createTransaction(accountId: accountId, amount: amount, type: type,
+                                        categoryId: categoryId, payee: payee, notes: notes, date: date, token: token)
+    }
+
     init(api: APIClient) {
         self.api = api
     }

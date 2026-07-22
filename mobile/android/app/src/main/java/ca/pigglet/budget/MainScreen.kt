@@ -46,6 +46,10 @@ fun MainScreen(
     onSignOut: () -> Unit,
     loadBudget: suspend (String?) -> BudgetData,
     assign: suspend (Long, String, String) -> BudgetData,
+    loadAccounts: suspend () -> List<Account>,
+    loadTransactions: suspend (Long) -> List<TransactionItem>,
+    loadCategories: suspend () -> List<CategoryOption>,
+    createTransaction: suspend (Long, String, String, Long?, String, String, String) -> Unit,
 ) {
     // Paydown appears only when its add-on is enabled.
     val tabs = remember(addOns) {
@@ -70,7 +74,12 @@ fun MainScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (selected) {
                 Tab.Budget -> BudgetScreen(loadBudget = loadBudget, assign = assign)
-                Tab.Accounts -> ComingSoon("Accounts")
+                Tab.Accounts -> AccountsScreen(
+                    loadAccounts = loadAccounts,
+                    loadTransactions = loadTransactions,
+                    loadCategories = loadCategories,
+                    createTransaction = createTransaction,
+                )
                 Tab.Paydown -> ComingSoon("Paydown")
                 Tab.Settings -> SettingsContent(user = user, onSignOut = onSignOut)
             }

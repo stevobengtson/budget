@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -418,6 +419,190 @@ func TestBudgetRejectsBadMonth(t *testing.T) {
 	w := doJSON(t, r, http.MethodGet, "/api/v1/budget?month=July", token, "", &resp)
 	if w.Code != http.StatusBadRequest || resp.Error.Code != "invalid_request" {
 		t.Fatalf("bad month: %d %q", w.Code, resp.Error.Code)
+	}
+}
+
+func TestAccounts(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	ctx := context.Background()
+
+	acctID, err := st.CreateAccount(ctx, uid, store.Account{
+		Name: "Checking", Type: store.TypeChecking, StartingBalanceCents: 100000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateTransaction(ctx, uid, store.Transaction{
+		Date: time.Now(), AccountID: acctID, OutflowCents: 2500,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var resp struct {
+		Accounts []accountItem `json:"accounts"`
+	}
+	w := doJSON(t, r, http.MethodGet, "/api/v1/accounts", token, "", &resp)
+	if w.Code != http.StatusOK {
+		t.Fatalf("accounts: %d %s", w.Code, w.Body.String())
+	}
+	if len(resp.Accounts) != 1 {
+		t.Fatalf("accounts = %+v, want one", resp.Accounts)
+	}
+	a := resp.Accounts[0]
+	if a.Name != "Checking" || a.Type != "checking" || a.BalanceCents != 97500 {
+		t.Errorf("account = %+v, want Checking/checking/97500 ($1000 start − $25)", a)
+	}
+}
+
+func TestAccountTransactions(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	ctx := context.Background()
+
+	gid, _ := st.CreateGroup(ctx, uid, "Food", 0)
+	catID, _ := st.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Groceries"})
+	acctID, _ := st.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+	payee := "Store"
+	if _, err := st.CreateTransaction(ctx, uid, store.Transaction{
+		Date: time.Now(), AccountID: acctID, CategoryID: &catID, Payee: &payee, OutflowCents: 2500,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var resp struct {
+		Transactions []txItem `json:"transactions"`
+	}
+	w := doJSON(t, r, http.MethodGet, "/api/v1/accounts/"+itoa(acctID)+"/transactions", token, "", &resp)
+	if w.Code != http.StatusOK {
+		t.Fatalf("transactions: %d %s", w.Code, w.Body.String())
+	}
+	if len(resp.Transactions) != 1 {
+		t.Fatalf("transactions = %+v, want one", resp.Transactions)
+	}
+	tx := resp.Transactions[0]
+	if tx.Payee != "Store" || tx.Category != "Groceries" || tx.AmountCents != -2500 {
+		t.Errorf("tx = %+v, want Store/Groceries/-2500", tx)
+	}
+}
+
+func TestAccountTransactionsRejectsForeignAccount(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	makeVerifiedUser(t, st, "a@example.com", "supersecret")
+	other := makeVerifiedUser(t, st, "b@example.com", "supersecret")
+	token := login(t, r, "a@example.com", "supersecret")
+	foreign, _ := st.CreateAccount(context.Background(), other, store.Account{Name: "Theirs", Type: store.TypeChecking})
+
+	var resp errorBody
+	w := doJSON(t, r, http.MethodGet, "/api/v1/accounts/"+itoa(foreign)+"/transactions", token, "", &resp)
+	if w.Code != http.StatusNotFound || resp.Error.Code != "not_found" {
+		t.Fatalf("foreign account: %d %q", w.Code, resp.Error.Code)
+	}
+}
+
+func TestCreateTransaction(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	ctx := context.Background()
+
+	gid, _ := st.CreateGroup(ctx, uid, "Food", 0)
+	catID, _ := st.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Groceries"})
+	acctID, _ := st.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+
+	// Create an expense.
+	body := `{"amount":"25.00","type":"expense","categoryId":` + itoa(catID) + `,"payee":"Store","date":"2026-07-15"}`
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	w := doJSON(t, r, http.MethodPost, "/api/v1/accounts/"+itoa(acctID)+"/transactions", token, body, &created)
+	if w.Code != http.StatusCreated || created.ID == 0 {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+
+	// It shows up in the ledger with a negative (outflow) amount.
+	var list struct {
+		Transactions []txItem `json:"transactions"`
+	}
+	doJSON(t, r, http.MethodGet, "/api/v1/accounts/"+itoa(acctID)+"/transactions", token, "", &list)
+	if len(list.Transactions) != 1 {
+		t.Fatalf("transactions = %+v, want one", list.Transactions)
+	}
+	tx := list.Transactions[0]
+	if tx.AmountCents != -2500 || tx.Category != "Groceries" || tx.Payee != "Store" {
+		t.Errorf("tx = %+v, want -2500/Groceries/Store", tx)
+	}
+}
+
+func TestCreateTransactionIncomeIsPositive(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	acctID, _ := st.CreateAccount(context.Background(), uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+
+	body := `{"amount":"1000","type":"income"}`
+	w := doJSON(t, r, http.MethodPost, "/api/v1/accounts/"+itoa(acctID)+"/transactions", token, body, nil)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create income: %d %s", w.Code, w.Body.String())
+	}
+	var list struct {
+		Transactions []txItem `json:"transactions"`
+	}
+	doJSON(t, r, http.MethodGet, "/api/v1/accounts/"+itoa(acctID)+"/transactions", token, "", &list)
+	if len(list.Transactions) != 1 || list.Transactions[0].AmountCents != 100000 {
+		t.Errorf("income tx = %+v, want +100000", list.Transactions)
+	}
+}
+
+func TestCreateTransactionRejectsBadInput(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	acctID, _ := st.CreateAccount(context.Background(), uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+	path := "/api/v1/accounts/" + itoa(acctID) + "/transactions"
+
+	for _, body := range []string{
+		`{"amount":"0","type":"expense"}`,    // must be > 0
+		`{"amount":"nope","type":"expense"}`, // unparseable
+		`{"amount":"5","type":"transfer"}`,   // unsupported type
+	} {
+		var resp errorBody
+		w := doJSON(t, r, http.MethodPost, path, token, body, &resp)
+		if w.Code != http.StatusBadRequest || resp.Error.Code != "invalid_request" {
+			t.Errorf("body %s: got %d %q, want 400 invalid_request", body, w.Code, resp.Error.Code)
+		}
+	}
+}
+
+func TestCategories(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	ctx := context.Background()
+
+	gid, _ := st.CreateGroup(ctx, uid, "Food", 0)
+	st.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Groceries"})
+
+	var resp struct {
+		Categories []categoryItem `json:"categories"`
+	}
+	w := doJSON(t, r, http.MethodGet, "/api/v1/categories", token, "", &resp)
+	if w.Code != http.StatusOK {
+		t.Fatalf("categories: %d %s", w.Code, w.Body.String())
+	}
+	var found bool
+	for _, cat := range resp.Categories {
+		if cat.Name == "Groceries" && cat.Group == "Food" {
+			found = true
+		}
+		if cat.Name == "Income" {
+			t.Errorf("income category should be excluded from the picker")
+		}
+	}
+	if !found {
+		t.Errorf("categories = %+v, want Groceries/Food present", resp.Categories)
 	}
 }
 

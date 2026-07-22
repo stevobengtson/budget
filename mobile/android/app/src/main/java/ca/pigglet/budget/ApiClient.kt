@@ -31,6 +31,21 @@ data class BudgetData(
     val groups: List<BudgetGroup>,
 )
 
+// Mirrors GET /api/v1/accounts and /accounts/:id/transactions.
+data class Account(val id: Long, val name: String, val type: String, val balanceCents: Long)
+data class TransactionItem(
+    val id: Long,
+    val date: String,
+    val payee: String,
+    val category: String,
+    val notes: String,
+    val amountCents: Long,
+    val cleared: Boolean,
+)
+
+// Mirrors GET /api/v1/categories — an option in the transaction category picker.
+data class CategoryOption(val id: Long, val name: String, val group: String)
+
 // ApiException carries the server's error envelope { error: { code, message } }
 // or a transport failure, so the UI can show a message and branch on `code`.
 class ApiException(val code: String, message: String) : Exception(message)
@@ -77,7 +92,60 @@ class ApiClient(private val baseUrl: String) {
             request("POST", "/api/v1/budget/assign", body = body, token = token).toBudget()
         }
 
+    suspend fun accounts(token: String): List<Account> = withContext(Dispatchers.IO) {
+        val arr = request("GET", "/api/v1/accounts", body = null, token = token).getJSONArray("accounts")
+        List(arr.length()) { arr.getJSONObject(it).toAccount() }
+    }
+
+    suspend fun transactions(token: String, accountId: Long): List<TransactionItem> = withContext(Dispatchers.IO) {
+        val arr = request("GET", "/api/v1/accounts/$accountId/transactions", body = null, token = token)
+            .getJSONArray("transactions")
+        List(arr.length()) { arr.getJSONObject(it).toTransaction() }
+    }
+
+    suspend fun categories(token: String): List<CategoryOption> = withContext(Dispatchers.IO) {
+        val arr = request("GET", "/api/v1/categories", body = null, token = token).getJSONArray("categories")
+        List(arr.length()) {
+            val o = arr.getJSONObject(it)
+            CategoryOption(o.getLong("id"), o.getString("name"), o.getString("group"))
+        }
+    }
+
+    suspend fun createTransaction(
+        token: String,
+        accountId: Long,
+        amount: String,
+        type: String,
+        categoryId: Long?,
+        payee: String,
+        notes: String,
+        date: String,
+    ): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("date", date)
+            .put("amount", amount)
+            .put("type", type)
+            .put("payee", payee)
+            .put("notes", notes)
+        if (categoryId != null) body.put("categoryId", categoryId)
+        request("POST", "/api/v1/accounts/$accountId/transactions", body = body.toString(), token = token)
+        Unit
+    }
+
     private fun JSONObject.toUser() = User(getLong("id"), getString("email"), getString("name"))
+
+    private fun JSONObject.toAccount() =
+        Account(getLong("id"), getString("name"), getString("type"), getLong("balanceCents"))
+
+    private fun JSONObject.toTransaction() = TransactionItem(
+        id = getLong("id"),
+        date = getString("date"),
+        payee = getString("payee"),
+        category = getString("category"),
+        notes = getString("notes"),
+        amountCents = getLong("amountCents"),
+        cleared = getBoolean("cleared"),
+    )
 
     private fun JSONObject.toBudget(): BudgetData {
         val s = getJSONObject("summary")

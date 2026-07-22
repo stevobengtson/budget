@@ -13,19 +13,16 @@ struct BudgetView: View {
     @State private var editAmount = ""
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let budget {
-                    loaded(budget)
-                } else if loading {
-                    ProgressView()
-                } else if let error {
-                    failure(error)
-                } else {
-                    Color.clear
-                }
+        Group {
+            if let budget {
+                loaded(budget)
+            } else if loading {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error {
+                failure(error)
+            } else {
+                Color.clear
             }
-            .navigationTitle("Budget")
         }
         .task(id: month) { await load() }
         .alert("Assign to \(editing?.name ?? "")", isPresented: showingEditor) {
@@ -50,6 +47,13 @@ struct BudgetView: View {
     @ViewBuilder
     private func loaded(_ budget: BudgetResponse) -> some View {
         VStack(spacing: 0) {
+            HStack {
+                Text("Budget").font(.largeTitle.bold())
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+
             monthHeader(budget)
             List {
                 Section {

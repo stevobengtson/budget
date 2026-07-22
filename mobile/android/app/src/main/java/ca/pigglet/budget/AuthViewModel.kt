@@ -77,6 +77,34 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         return api.assign(token, categoryId, month, amount)
     }
 
+    suspend fun loadAccounts(): List<Account> {
+        val token = tokens.load() ?: throw ApiException("unauthorized", "Not signed in.")
+        return api.accounts(token)
+    }
+
+    suspend fun loadTransactions(accountId: Long): List<TransactionItem> {
+        val token = tokens.load() ?: throw ApiException("unauthorized", "Not signed in.")
+        return api.transactions(token, accountId)
+    }
+
+    suspend fun loadCategories(): List<CategoryOption> {
+        val token = tokens.load() ?: throw ApiException("unauthorized", "Not signed in.")
+        return api.categories(token)
+    }
+
+    suspend fun createTransaction(
+        accountId: Long,
+        amount: String,
+        type: String,
+        categoryId: Long?,
+        payee: String,
+        notes: String,
+        date: String,
+    ) {
+        val token = tokens.load() ?: throw ApiException("unauthorized", "Not signed in.")
+        api.createTransaction(token, accountId, amount, type, categoryId, payee, notes, date)
+    }
+
     fun signOut() {
         viewModelScope.launch {
             tokens.load()?.let { api.logout(it) }

@@ -1,0 +1,28 @@
+import Foundation
+
+// Mirrors GET /api/v1/accounts.
+struct Account: Codable, Identifiable {
+    let id: Int64
+    let name: String
+    let type: String
+    let balanceCents: Int64
+}
+
+// Mirrors GET /api/v1/accounts/:id/transactions. amountCents is inflow − outflow
+// (positive = money in).
+struct TransactionItem: Codable, Identifiable {
+    let id: Int64
+    let date: String
+    let payee: String
+    let category: String
+    let notes: String
+    let amountCents: Int64
+    let cleared: Bool
+}
+
+// Mirrors GET /api/v1/categories — an option in the transaction category picker.
+struct CategoryOption: Codable, Identifiable {
+    let id: Int64
+    let name: String
+    let group: String
+}

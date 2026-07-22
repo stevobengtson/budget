@@ -76,6 +76,49 @@ struct APIClient {
         let amount: String
     }
 
+    func accounts(token: String) async throws -> [Account] {
+        let resp: AccountsBody = try decode(await send(request(path: "api/v1/accounts", method: "GET", token: token)))
+        return resp.accounts
+    }
+
+    func transactions(accountId: Int64, token: String) async throws -> [TransactionItem] {
+        let resp: TransactionsBody = try decode(
+            await send(request(path: "api/v1/accounts/\(accountId)/transactions", method: "GET", token: token))
+        )
+        return resp.transactions
+    }
+
+    func categories(token: String) async throws -> [CategoryOption] {
+        let resp: CategoriesBody = try decode(await send(request(path: "api/v1/categories", method: "GET", token: token)))
+        return resp.categories
+    }
+
+    func createTransaction(accountId: Int64, amount: String, type: String, categoryId: Int64?,
+                           payee: String, notes: String, date: String, token: String) async throws {
+        var req = request(path: "api/v1/accounts/\(accountId)/transactions", method: "POST", token: token)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONEncoder().encode(
+            CreateTxBody(date: date, amount: amount, type: type, categoryId: categoryId, payee: payee, notes: notes)
+        )
+        let _: CreatedTx = try decode(await send(req))
+    }
+
+    private struct AccountsBody: Decodable { let accounts: [Account] }
+    private struct TransactionsBody: Decodable { let transactions: [TransactionItem] }
+    private struct CategoriesBody: Decodable { let categories: [CategoryOption] }
+    private struct CreatedTx: Decodable { let id: Int64 }
+
+    // categoryId is optional: a nil is omitted (uncategorized) by the synthesized
+    // Encodable, which uses encodeIfPresent for optionals.
+    private struct CreateTxBody: Encodable {
+        let date: String
+        let amount: String
+        let type: String
+        let categoryId: Int64?
+        let payee: String
+        let notes: String
+    }
+
     func logout(token: String) async {
         _ = try? await send(request(path: "api/v1/logout", method: "POST", token: token))
     }

@@ -5,7 +5,14 @@ struct SettingsView: View {
     let user: User
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Settings").font(.largeTitle.bold())
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+
             List {
                 Section("Account") {
                     LabeledContent("Name", value: user.name)
@@ -17,7 +24,6 @@ struct SettingsView: View {
                     }
                 }
             }
-            .navigationTitle("Settings")
         }
     }
 }

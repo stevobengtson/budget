@@ -42,6 +42,10 @@ class MainActivity : ComponentActivity() {
                             onSignOut = vm::signOut,
                             loadBudget = vm::loadBudget,
                             assign = vm::assign,
+                            loadAccounts = vm::loadAccounts,
+                            loadTransactions = vm::loadTransactions,
+                            loadCategories = vm::loadCategories,
+                            createTransaction = vm::createTransaction,
                         )
                     }
                 }
