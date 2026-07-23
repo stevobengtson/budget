@@ -30,6 +30,7 @@ templ marketingLayout(title string) {
 				{ children... }
 			</main>
 			@marketingFooter()
+			@cookieNotice()
 		</body>
 	</html>
 }
@@ -304,4 +305,38 @@ templ pricingPoint(text string) {
 		@icon.CircleCheck(icon.Props{Class: "mt-0.5 size-5 shrink-0 text-primary"})
 		<span class="text-sm">{ text }</span>
 	</div>
+}
+
+// cookieNotice is a dismissible banner explaining that Pigglet uses only
+// essential cookies. It starts hidden and is revealed by the inline script only
+// when the visitor hasn't dismissed it before (tracked in localStorage), so it
+// never flashes for returning visitors and needs no server-side state.
+templ cookieNotice() {
+	<div id="cookie-notice" class="fixed inset-x-0 bottom-0 z-50 hidden p-4 sm:p-6">
+		<div class="mx-auto flex max-w-3xl flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
+			<p class="text-sm text-muted-foreground">
+				We use only the cookies Pigglet needs to work — to keep you signed in and remember
+				your layout. No advertising or tracking cookies, ever.
+				<a href="/privacy" class="font-medium text-foreground underline underline-offset-4">Learn more</a>.
+			</p>
+			<button type="button" onclick="dismissCookieNotice()" class="inline-flex h-9 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+				Got it
+			</button>
+		</div>
+	</div>
+	<script>
+		(function () {
+			try {
+				if (!localStorage.getItem("cookie-notice-dismissed")) {
+					var el = document.getElementById("cookie-notice");
+					if (el) el.classList.remove("hidden");
+				}
+			} catch (e) {}
+		})();
+		function dismissCookieNotice() {
+			try { localStorage.setItem("cookie-notice-dismissed", "1"); } catch (e) {}
+			var el = document.getElementById("cookie-notice");
+			if (el) el.classList.add("hidden");
+		}
+	</script>
 }

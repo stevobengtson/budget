@@ -98,6 +98,12 @@ func (s *Server) routes(cfg config.Config) {
 	// app by the handler; everyone else sees the landing page.
 	s.engine.GET("/", hs.Home)
 
+	// Public informational / legal pages, linked from the marketing footer.
+	s.engine.GET("/contact", hs.ContactPage)
+	s.engine.GET("/privacy", hs.PrivacyPage)
+	s.engine.GET("/refund", hs.RefundPage)
+	s.engine.GET("/terms", hs.TermsPage)
+
 	// Public auth routes (no session required).
 	s.engine.GET("/login", hs.LoginForm)
 	s.engine.POST("/login", hs.Login)

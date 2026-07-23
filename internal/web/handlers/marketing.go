@@ -22,3 +22,10 @@ func (h *Handlers) Home(c *gin.Context) {
 	}
 	render(c, http.StatusOK, views.LandingPage())
 }
+
+// Public informational / legal pages. All are static and reuse the marketing
+// chrome; no session required.
+func (h *Handlers) ContactPage(c *gin.Context) { render(c, http.StatusOK, views.ContactPage()) }
+func (h *Handlers) PrivacyPage(c *gin.Context) { render(c, http.StatusOK, views.PrivacyPage()) }
+func (h *Handlers) RefundPage(c *gin.Context)  { render(c, http.StatusOK, views.RefundPage()) }
+func (h *Handlers) TermsPage(c *gin.Context)   { render(c, http.StatusOK, views.TermsPage()) }

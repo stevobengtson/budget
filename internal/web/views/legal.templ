@@ -1,0 +1,261 @@
+package views
+
+// legalUpdated is the "last updated" date shown on the legal pages. Bump it when
+// the copy materially changes.
+const legalUpdated = "July 23, 2026"
+
+// legalShell wraps a legal/informational page in the marketing chrome with a
+// centered prose column. updated is shown under the title ("" to omit it).
+templ legalShell(title, updated string) {
+	@marketingLayout(title) {
+		<article class="mx-auto max-w-3xl px-4 py-16 sm:px-6">
+			<div class="space-y-2">
+				<h1 class="font-heading text-4xl font-semibold tracking-tight">{ title }</h1>
+				if updated != "" {
+					<p class="text-sm text-muted-foreground">Last updated { updated }</p>
+				}
+			</div>
+			<div class="mt-10 space-y-8 leading-relaxed text-muted-foreground">
+				{ children... }
+			</div>
+		</article>
+	}
+}
+
+// legalSection is one titled block within a legal page.
+templ legalSection(heading string) {
+	<section class="space-y-3">
+		<h2 class="text-xl font-semibold text-foreground">{ heading }</h2>
+		{ children... }
+	</section>
+}
+
+// ── Contact ─────────────────────────────────────────────────────────────────────
+
+templ ContactPage() {
+	@legalShell("Contact Us", "") {
+		<p>
+			Have a question, found a bug, or want to tell us what's missing? We'd love to
+			hear from you.
+		</p>
+		@legalSection("Email") {
+			<p>
+				The best way to reach us is by email at <a href="mailto:contact@plainlysoftware.com" class="font-medium text-foreground underline underline-offset-4">contact@plainlysoftware.com</a>. We read every message and
+				aim to reply within two business days.
+			</p>
+		}
+		@legalSection("Who you're reaching") {
+			<p>
+				Pigglet is built and operated by Plainly Software, an independent software studio
+				in Canada. There's no call centre and no ticket queue — just the small team that
+				makes the app.
+			</p>
+		}
+	}
+}
+
+// ── Privacy Policy ──────────────────────────────────────────────────────────────
+
+templ PrivacyPage() {
+	@legalShell("Privacy Policy", legalUpdated) {
+		<p>
+			Pigglet ("Pigglet", "we", "us") is operated by Plainly Software. This policy
+			explains what we collect, why, and the choices you have. The short version: we
+			collect as little as possible, we never sell your data, and we don't run ad or
+			tracking cookies.
+		</p>
+		@legalSection("Information we collect") {
+			<ul class="list-disc space-y-2 pl-5">
+				<li><span class="text-foreground">Account information</span> — the email address and password you sign up with. Passwords are stored only as a secure hash, never in plain text.</li>
+				<li><span class="text-foreground">Your budget data</span> — the accounts, categories, transactions and goals you enter. This is yours; we use it only to provide the app to you.</li>
+				<li><span class="text-foreground">Payment information</span> — handled by our payment processor, Stripe. We never see or store your full card details; we keep only a customer reference and your subscription status.</li>
+				<li><span class="text-foreground">Minimal technical data</span> — basic server logs (such as IP address and request time) needed to keep the service running securely.</li>
+			</ul>
+		}
+		@legalSection("What we don't do") {
+			<ul class="list-disc space-y-2 pl-5">
+				<li>We do not sell, rent, or trade your personal information.</li>
+				<li>We do not share your data with advertisers, and we run no advertising or third-party tracking cookies.</li>
+				<li>We do not ask for information we don't need — no phone number, no mailing address, no data-broker imports.</li>
+			</ul>
+		}
+		@legalSection("Cookies") {
+			<p>
+				We use only essential cookies required to run the app: a cookie that keeps you
+				signed in, and small preference cookies that remember your layout (for example,
+				whether a section is collapsed). We do not use advertising or cross-site tracking
+				cookies of any kind.
+			</p>
+		}
+		@legalSection("Service providers") {
+			<p>
+				We rely on a few trusted providers to operate Pigglet: Stripe processes payments,
+				and an email provider delivers transactional messages such as verification and
+				password-reset links. These providers process only what's needed to perform their
+				function and are not permitted to use your data for their own purposes.
+			</p>
+		}
+		@legalSection("Retention and deletion") {
+			<p>
+				We keep your data for as long as your account is active. If you cancel and ask us
+				to delete your account, we remove your personal data and budget content, except
+				where we're required to retain limited billing records by law. To request deletion,
+				email <a href="mailto:contact@plainlysoftware.com" class="font-medium text-foreground underline underline-offset-4">contact@plainlysoftware.com</a>.
+			</p>
+		}
+		@legalSection("Security") {
+			<p>
+				Data is encrypted in transit, passwords are hashed, and your budget is only ever
+				visible to you. No system is perfectly secure, but we take reasonable measures to
+				protect your information.
+			</p>
+		}
+		@legalSection("Your rights") {
+			<p>
+				You can access, correct, or delete your information at any time — most of it
+				directly in the app, and the rest by emailing <a href="mailto:contact@plainlysoftware.com" class="font-medium text-foreground underline underline-offset-4">contact@plainlysoftware.com</a>. Depending on where you
+				live, you may have additional rights under applicable privacy law.
+			</p>
+		}
+		@legalSection("Children") {
+			<p>
+				Pigglet is not directed at children and is not intended for anyone under 16. We do
+				not knowingly collect information from children.
+			</p>
+		}
+		@legalSection("Changes to this policy") {
+			<p>
+				We may update this policy from time to time. When we make material changes, we'll
+				update the date at the top of this page. Questions? Email <a href="mailto:contact@plainlysoftware.com" class="font-medium text-foreground underline underline-offset-4">contact@plainlysoftware.com</a>.
+			</p>
+		}
+	}
+}
+
+// ── Refund Policy ───────────────────────────────────────────────────────────────
+
+templ RefundPage() {
+	@legalShell("Refund Policy", legalUpdated) {
+		<p>
+			We keep billing simple and fair: try Pigglet free for 35 days, then pay only if
+			you choose to continue. Because of that, we don't offer refunds.
+		</p>
+		@legalSection("Your free trial") {
+			<p>
+				Every account starts with a 35-day free trial. No payment information is required
+				to begin, and you won't be charged anything during the trial. It's plenty of time
+				to decide whether Pigglet is right for you.
+			</p>
+		}
+		@legalSection("Billing") {
+			<p>
+				After the trial, Pigglet is $4.99 CAD per month. Optional add-ons — some free, some
+				a small additional charge — are billed alongside your subscription only if you
+				enable them. Subscriptions renew automatically each month until you cancel.
+			</p>
+		}
+		@legalSection("No refunds") {
+			<p>
+				Because you get a full 35-day free trial before any charge, and because you can
+				cancel at any time, all payments are non-refundable. When you cancel, your
+				subscription stays active until the end of the current billing period and is not
+				renewed — we don't issue partial or prorated refunds for the remainder of a period.
+			</p>
+		}
+		@legalSection("How to cancel") {
+			<p>
+				You can cancel anytime from the Billing section of your account. Cancelling stops
+				future charges; you keep access until the end of the period you've already paid for.
+			</p>
+		}
+		@legalSection("Exceptions") {
+			<p>
+				Nothing in this policy limits any rights you may have under applicable consumer-
+				protection law. If you believe you were charged in error, email <a href="mailto:contact@plainlysoftware.com" class="font-medium text-foreground underline underline-offset-4">contact@plainlysoftware.com</a> and
+				we'll make it right.
+			</p>
+		}
+	}
+}
+
+// ── Terms & Conditions ──────────────────────────────────────────────────────────
+
+templ TermsPage() {
+	@legalShell("Terms & Conditions", legalUpdated) {
+		<p>
+			These Terms &amp; Conditions ("Terms") govern your use of Pigglet, operated by
+			Plainly Software ("we", "us"). By creating an account or using the app, you agree
+			to these Terms.
+		</p>
+		@legalSection("The service") {
+			<p>
+				Pigglet is a personal budgeting application. We may add, change, or remove features
+				over time as we improve the product.
+			</p>
+		}
+		@legalSection("Your account") {
+			<p>
+				You must provide accurate information when you sign up and keep your password
+				secure. You're responsible for activity that happens under your account. Let us
+				know promptly if you believe your account has been compromised.
+			</p>
+		}
+		@legalSection("Subscriptions, trials, and billing") {
+			<p>
+				Pigglet includes a 35-day free trial with no payment information required. After the
+				trial, the service is $4.99 CAD per month, plus any optional add-ons you enable.
+				Subscriptions renew automatically until cancelled. Payments are non-refundable, as
+				described in our <a href="/refund" class="font-medium text-foreground underline underline-offset-4">Refund Policy</a>. You can cancel anytime from your account.
+			</p>
+		}
+		@legalSection("Acceptable use") {
+			<p>
+				Use Pigglet only for lawful purposes. Don't attempt to disrupt or gain unauthorized
+				access to the service, reverse-engineer it, resell it, or use it to store or
+				transmit unlawful content.
+			</p>
+		}
+		@legalSection("Your data") {
+			<p>
+				Your budget data belongs to you. We claim no ownership of it and use it only to
+				provide the app, as described in our <a href="/privacy" class="font-medium text-foreground underline underline-offset-4">Privacy Policy</a>. The Pigglet software, design, and
+				brand remain the property of Plainly Software.
+			</p>
+		}
+		@legalSection("Not financial advice") {
+			<p>
+				Pigglet is a tool to help you organize your own money. It does not provide
+				financial, investment, tax, or legal advice, and nothing in the app should be
+				treated as such. Decisions you make with it are your own.
+			</p>
+		}
+		@legalSection("Disclaimers and limitation of liability") {
+			<p>
+				The service is provided "as is" and "as available", without warranties of any kind.
+				To the fullest extent permitted by law, Plainly Software is not liable for any
+				indirect, incidental, or consequential damages, or for any loss of data or profits,
+				arising from your use of Pigglet.
+			</p>
+		}
+		@legalSection("Termination") {
+			<p>
+				You may stop using Pigglet and delete your account at any time. We may suspend or
+				terminate access if these Terms are violated or if required to protect the service
+				or other users.
+			</p>
+		}
+		@legalSection("Governing law") {
+			<p>
+				These Terms are governed by the laws of Canada and the province in which Plainly
+				Software operates, without regard to conflict-of-law principles.
+			</p>
+		}
+		@legalSection("Changes to these Terms") {
+			<p>
+				We may update these Terms from time to time. When we make material changes, we'll
+				update the date at the top of this page. Continued use of Pigglet after a change
+				means you accept the updated Terms. Questions? Email <a href="mailto:contact@plainlysoftware.com" class="font-medium text-foreground underline underline-offset-4">contact@plainlysoftware.com</a>.
+			</p>
+		}
+	}
+}

@@ -72,6 +72,10 @@ func marketingLayout(title string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
+		templ_7745c5c3_Err = cookieNotice().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -599,7 +603,7 @@ func browserFrame(src, alt string) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(src)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 271, Col: 16}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 272, Col: 16}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -612,7 +616,7 @@ func browserFrame(src, alt string) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(alt)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 271, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 272, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -662,7 +666,7 @@ func featureCard(ic templ.Component, title, body string) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 280, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 281, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -675,7 +679,7 @@ func featureCard(ic templ.Component, title, body string) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(body)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 281, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 282, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
@@ -725,7 +729,7 @@ func trustItem(ic templ.Component, title, body string) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 290, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 291, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -738,7 +742,7 @@ func trustItem(ic templ.Component, title, body string) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(body)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 291, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 292, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
@@ -788,7 +792,7 @@ func addOnPoint(text string) templ.Component {
 		var templ_7745c5c3_Var23 string
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 298, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 299, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
@@ -838,13 +842,46 @@ func pricingPoint(text string) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 305, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 306, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</span></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// cookieNotice is a dismissible banner explaining that Pigglet uses only
+// essential cookies. It starts hidden and is revealed by the inline script only
+// when the visitor hasn't dismissed it before (tracked in localStorage), so it
+// never flashes for returning visitors and needs no server-side state.
+func cookieNotice() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var26 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var26 == nil {
+			templ_7745c5c3_Var26 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<div id=\"cookie-notice\" class=\"fixed inset-x-0 bottom-0 z-50 hidden p-4 sm:p-6\"><div class=\"mx-auto flex max-w-3xl flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between\"><p class=\"text-sm text-muted-foreground\">We use only the cookies Pigglet needs to work — to keep you signed in and remember your layout. No advertising or tracking cookies, ever. <a href=\"/privacy\" class=\"font-medium text-foreground underline underline-offset-4\">Learn more</a>.</p><button type=\"button\" onclick=\"dismissCookieNotice()\" class=\"inline-flex h-9 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90\">Got it</button></div></div><script>\n\t\t(function () {\n\t\t\ttry {\n\t\t\t\tif (!localStorage.getItem(\"cookie-notice-dismissed\")) {\n\t\t\t\t\tvar el = document.getElementById(\"cookie-notice\");\n\t\t\t\t\tif (el) el.classList.remove(\"hidden\");\n\t\t\t\t}\n\t\t\t} catch (e) {}\n\t\t})();\n\t\tfunction dismissCookieNotice() {\n\t\t\ttry { localStorage.setItem(\"cookie-notice-dismissed\", \"1\"); } catch (e) {}\n\t\t\tvar el = document.getElementById(\"cookie-notice\");\n\t\t\tif (el) el.classList.add(\"hidden\");\n\t\t}\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
