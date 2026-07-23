@@ -1,0 +1,307 @@
+package views
+
+import "github.com/templui/templui/components/icon"
+
+// marketingLayout is the standalone shell for the public marketing + legal
+// pages (no app sidebar, no HTMX). It mirrors authLayout's head — the theme
+// bootstrap script, compiled Tailwind, favicon — and wraps the page in a shared
+// header and footer. title is both the document title and drives nothing else.
+templ marketingLayout(title string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · Pigglet</title>
+			<script>
+				(function () {
+					var t = localStorage.getItem("theme") || "system";
+					if (t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+						document.documentElement.classList.add("dark");
+					}
+				})();
+			</script>
+			<link rel="stylesheet" href="/static/app.css"/>
+			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
+		</head>
+		<body class="min-h-screen bg-background text-foreground antialiased">
+			@marketingHeader()
+			<main>
+				{ children... }
+			</main>
+			@marketingFooter()
+		</body>
+	</html>
+}
+
+// marketingHeader is the sticky top bar: wordmark on the left, in-page nav and
+// the sign-in / start-trial actions on the right.
+templ marketingHeader() {
+	<header class="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
+		<div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+			<a href="/" class="flex items-center gap-2">
+				@icon.PiggyBank(icon.Props{Class: "size-6 text-primary"})
+				<span class="font-heading text-xl font-semibold tracking-tight">Pigglet</span>
+			</a>
+			<nav class="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
+				<a href="#features" class="transition-colors hover:text-foreground">Features</a>
+				<a href="#privacy" class="transition-colors hover:text-foreground">Privacy</a>
+				<a href="#pricing" class="transition-colors hover:text-foreground">Pricing</a>
+			</nav>
+			<div class="flex items-center gap-2 sm:gap-3">
+				<a href="/login" class="hidden h-9 items-center rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline-flex">Sign in</a>
+				<a href="/signup" class="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">Start free trial</a>
+			</div>
+		</div>
+	</header>
+}
+
+// marketingFooter carries the legal-page links and the operating-company notice.
+// The legal routes (/privacy, /terms, /refund, /contact) are added in a later pass.
+templ marketingFooter() {
+	<footer class="border-t border-border/60">
+		<div class="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6 md:flex-row md:items-center md:justify-between">
+			<div class="flex items-center gap-2">
+				@icon.PiggyBank(icon.Props{Class: "size-5 text-primary"})
+				<span class="font-heading text-lg font-semibold tracking-tight">Pigglet</span>
+			</div>
+			<nav class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+				<a href="/privacy" class="transition-colors hover:text-foreground">Privacy Policy</a>
+				<a href="/terms" class="transition-colors hover:text-foreground">Terms &amp; Conditions</a>
+				<a href="/refund" class="transition-colors hover:text-foreground">Refund Policy</a>
+				<a href="/contact" class="transition-colors hover:text-foreground">Contact Us</a>
+			</nav>
+		</div>
+		<div class="border-t border-border/60">
+			<p class="mx-auto max-w-6xl px-4 py-6 text-xs text-muted-foreground sm:px-6">
+				© 2026 Plainly Software. Pigglet is operated by Plainly Software. Built in Canada 🇨🇦
+			</p>
+		</div>
+	</footer>
+}
+
+// ── page ──────────────────────────────────────────────────────────────────────
+
+// LandingPage is the public home page shown to logged-out visitors (a valid
+// session is redirected to /budget by the Home handler).
+templ LandingPage() {
+	@marketingLayout("Simple envelope budgeting") {
+		@heroSection()
+		@featuresSection()
+		@addOnsSection()
+		@privacySection()
+		@pricingSection()
+		@finalCTASection()
+	}
+}
+
+templ heroSection() {
+	<section class="relative overflow-hidden">
+		<div class="mx-auto max-w-6xl px-4 pt-16 pb-12 text-center sm:px-6 sm:pt-24">
+			<span class="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+				@icon.MapPin(icon.Props{Class: "size-3.5 text-primary"})
+				Proudly built in Canada 🇨🇦 · priced in CAD
+			</span>
+			<h1 class="mx-auto mt-6 max-w-3xl font-heading text-4xl font-semibold tracking-tight sm:text-6xl">
+				Budgeting that does exactly what it should — and nothing you didn't ask for.
+			</h1>
+			<p class="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
+				Pigglet is envelope budgeting stripped to the essentials. Plan where your
+				money goes, see where it went, and switch on extra features only when you
+				want them.
+			</p>
+			<div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+				<a href="/signup" class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto">
+					Start your 35-day free trial
+					@icon.ArrowRight(icon.Props{Class: "size-4"})
+				</a>
+				<a href="/login" class="inline-flex h-11 w-full items-center justify-center rounded-md border border-input bg-background px-6 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground sm:w-auto">
+					Sign in
+				</a>
+			</div>
+			<p class="mt-4 text-sm text-muted-foreground">
+				No payment information required. Cancel anytime.
+			</p>
+			<div class="mx-auto mt-14 max-w-5xl">
+				@browserFrame("/static/marketing/budget.png", "The Pigglet budget page showing income, credit and expense categories")
+			</div>
+		</div>
+	</section>
+}
+
+templ featuresSection() {
+	<section id="features" class="border-t border-border/60 bg-muted/20">
+		<div class="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+			<div class="mx-auto max-w-2xl text-center">
+				<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Only what you need</h2>
+				<p class="mt-4 text-muted-foreground">
+					Most budgeting apps bury the basics under dashboards you'll never read.
+					Pigglet keeps the core small and fast, so you can actually stick with it.
+				</p>
+			</div>
+			<div class="mt-14 grid gap-6 sm:grid-cols-3">
+				@featureCard(icon.Wallet(icon.Props{Class: "size-5"}), "Every dollar has a job", "Classic envelope budgeting: assign your income to categories, then spend from what's actually available.")
+				@featureCard(icon.Zap(icon.Props{Class: "size-5"}), "Fast and focused", "Assign, spend, reconcile. No clutter, no busywork, no features fighting for your attention.")
+				@featureCard(icon.Target(icon.Props{Class: "size-5"}), "Goals that keep it real", "Set targets for the things that matter — an emergency fund, a trip — and watch them fill up month over month.")
+			</div>
+			<div class="mx-auto mt-12 max-w-4xl">
+				@browserFrame("/static/marketing/transactions.png", "The Pigglet transactions page for a checking account")
+			</div>
+		</div>
+	</section>
+}
+
+templ addOnsSection() {
+	<section class="border-t border-border/60">
+		<div class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2">
+			<div>
+				<span class="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+					@icon.Blocks(icon.Props{Class: "size-3.5 text-primary"})
+					Add-ons
+				</span>
+				<h2 class="mt-5 font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
+					Add features when you want them — not before
+				</h2>
+				<p class="mt-4 text-muted-foreground">
+					The core app stays lean for everyone. Optional add-ons — like Debt Paydown,
+					which projects how quickly your loans and cards clear — can be switched on
+					from your account whenever you need them, and switched back off just as easily.
+				</p>
+				<ul class="mt-6 space-y-3 text-sm">
+					@addOnPoint("Opt in only to what's useful to you")
+					@addOnPoint("Some add-ons are free; others are a small additional charge — you never pay for features you don't enable")
+					@addOnPoint("Turn add-ons on or off any time from your account")
+				</ul>
+			</div>
+			<div>
+				@browserFrame("/static/marketing/paydown.png", "The Pigglet Debt Paydown add-on projecting payoff schedules")
+			</div>
+		</div>
+	</section>
+}
+
+templ privacySection() {
+	<section id="privacy" class="border-t border-border/60 bg-muted/20">
+		<div class="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+			<div class="mx-auto max-w-2xl text-center">
+				<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Your data is yours</h2>
+				<p class="mt-4 text-muted-foreground">
+					Your finances are personal. We treat them that way — we collect as little as
+					possible and never turn it into a product.
+				</p>
+			</div>
+			<div class="mt-14 grid gap-6 sm:grid-cols-3">
+				@trustItem(icon.ShieldCheck(icon.Props{Class: "size-5"}), "Only what's necessary", "To sign you in we need an email address and a password. That's it — no phone number, no address, no data broker imports.")
+				@trustItem(icon.EyeOff(icon.Props{Class: "size-5"}), "Never sold, never shared", "We don't sell your data and we don't share it with advertisers. There are no ad or tracking cookies — the only cookies we set keep you signed in.")
+				@trustItem(icon.Lock(icon.Props{Class: "size-5"}), "Kept safe", "Passwords are hashed, never stored in plain text, and your budget is only ever visible to you.")
+			</div>
+		</div>
+	</section>
+}
+
+templ pricingSection() {
+	<section id="pricing" class="border-t border-border/60">
+		<div class="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+			<div class="mx-auto max-w-2xl text-center">
+				<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Simple pricing, in Canadian dollars</h2>
+				<p class="mt-4 text-muted-foreground">
+					One plan. Everything in the core app. No tiers to decode.
+				</p>
+			</div>
+			<div class="mx-auto mt-12 max-w-md">
+				<div class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+					<div class="border-b border-border p-8 text-center">
+						<p class="text-sm font-medium text-muted-foreground">Pigglet</p>
+						<p class="mt-3 font-heading text-5xl font-semibold tracking-tight">
+							$4.99 <span class="text-lg font-normal text-muted-foreground">CAD / month</span>
+						</p>
+						<p class="mt-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+							@icon.Sparkles(icon.Props{Class: "size-4"})
+							35-day free trial — no card required
+						</p>
+					</div>
+					<div class="space-y-3 p-8">
+						@pricingPoint("All core budgeting — accounts, categories, goals and transactions")
+						@pricingPoint("35 days free before you're charged a cent")
+						@pricingPoint("No payment information needed to start")
+						@pricingPoint("Optional add-ons — some free, some a small additional charge")
+						@pricingPoint("Cancel anytime from your account")
+						<a href="/signup" class="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+							Start your free trial
+							@icon.ArrowRight(icon.Props{Class: "size-4"})
+						</a>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+}
+
+templ finalCTASection() {
+	<section class="border-t border-border/60 bg-muted/20">
+		<div class="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6">
+			<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
+				Manage your budget, simply
+			</h2>
+			<p class="mx-auto mt-4 max-w-xl text-muted-foreground">
+				Try Pigglet free for 35 days. No card, no commitment — just a calmer way to
+				handle your money.
+			</p>
+			<div class="mt-8">
+				<a href="/signup" class="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+					Start your 35-day free trial
+					@icon.ArrowRight(icon.Props{Class: "size-4"})
+				</a>
+			</div>
+		</div>
+	</section>
+}
+
+// ── shared building blocks ─────────────────────────────────────────────────────
+
+// browserFrame wraps a product screenshot in a faux browser chrome so it reads
+// as a live app rather than a floating image.
+templ browserFrame(src, alt string) {
+	<div class="overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+		<div class="flex items-center gap-1.5 border-b border-border bg-muted/40 px-4 py-2.5">
+			<span class="size-3 rounded-full bg-destructive/50"></span>
+			<span class="size-3 rounded-full bg-yellow-500/50"></span>
+			<span class="size-3 rounded-full bg-primary/50"></span>
+		</div>
+		<img src={ src } alt={ alt } loading="lazy" class="block w-full"/>
+	</div>
+}
+
+templ featureCard(ic templ.Component, title, body string) {
+	<div class="rounded-xl border border-border bg-card p-6">
+		<div class="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+			@ic
+		</div>
+		<h3 class="mt-4 font-medium">{ title }</h3>
+		<p class="mt-2 text-sm text-muted-foreground">{ body }</p>
+	</div>
+}
+
+templ trustItem(ic templ.Component, title, body string) {
+	<div class="rounded-xl border border-border bg-card p-6">
+		<div class="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+			@ic
+		</div>
+		<h3 class="mt-4 font-medium">{ title }</h3>
+		<p class="mt-2 text-sm text-muted-foreground">{ body }</p>
+	</div>
+}
+
+templ addOnPoint(text string) {
+	<li class="flex items-start gap-3">
+		@icon.Check(icon.Props{Class: "mt-0.5 size-4 shrink-0 text-primary"})
+		<span class="text-muted-foreground">{ text }</span>
+	</li>
+}
+
+templ pricingPoint(text string) {
+	<div class="flex items-start gap-3">
+		@icon.CircleCheck(icon.Props{Class: "mt-0.5 size-5 shrink-0 text-primary"})
+		<span class="text-sm">{ text }</span>
+	</div>
+}

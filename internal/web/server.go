@@ -94,6 +94,10 @@ func newMailer(cfg config.Config) mail.Mailer {
 func (s *Server) routes(cfg config.Config) {
 	hs := handlers.New(s.store, s.auth, s.billing, cfg.Auth.CookieSecure, int(cfg.Auth.SessionTTL.Seconds()))
 
+	// Public marketing landing page. Logged-in visitors are redirected into the
+	// app by the handler; everyone else sees the landing page.
+	s.engine.GET("/", hs.Home)
+
 	// Public auth routes (no session required).
 	s.engine.GET("/login", hs.LoginForm)
 	s.engine.POST("/login", hs.Login)
@@ -151,8 +155,6 @@ func (s *Server) routes(cfg config.Config) {
 	// configured (empty base price), so dev without Stripe still works.
 	gated := app.Group("")
 	gated.Use(requireSubscription(s.store, s.billing))
-
-	gated.GET("/", func(c *gin.Context) { c.Redirect(http.StatusSeeOther, "/budget") })
 
 	gated.GET("/budget", hs.BudgetIndex)
 	gated.POST("/budget/assign/:catID", hs.BudgetAssign)
