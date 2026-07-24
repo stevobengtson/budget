@@ -50,6 +50,8 @@ AWS_ENDPOINT_URL=https://fsn1.your-objectstorage.com
 AWS_DEFAULT_REGION=fsn1
 AWS_ACCESS_KEY_ID=REPLACE_ME
 AWS_SECRET_ACCESS_KEY=REPLACE_ME
+# Optional dead-man's-switch (see "Monitoring" below). Leave unset to disable.
+HC_PING_URL=https://hc-ping.com/your-uuid-here
 EOF
 sudo chown root:postgres /etc/budget/backup.env
 sudo chmod 640 /etc/budget/backup.env
@@ -138,18 +140,24 @@ README).
 > **Test a restore periodically.** An untested backup is a hope, not a backup.
 > Do the 2a "restore into a scratch DB" flow a couple of times a year.
 
-## Known gap: failure notifications
+## Monitoring: dead-man's-switch
 
 systemd timers are **silent on failure** — if a nightly backup errors (bad
-credentials, bucket full, DB down), nothing tells you; you just quietly stop
-having fresh backups. Options, in order of effort:
+credentials, bucket full, DB down) or never runs, nothing tells you; you just
+quietly stop having fresh backups. The script closes this with a
+[healthchecks.io](https://healthchecks.io) check (free tier is plenty):
 
-- **Manual:** occasionally check `aws s3 ls` (newest object should be < 24h old)
-  or `systemctl status pigglet-backup.service`.
-- **Automatic (recommended once stable):** add an `OnFailure=` drop-in that
-  triggers a small unit which emails you (the app already sends mail via
-  Resend), or point it at a healthcheck/monitoring service that alerts on a
-  *missed* check-in (dead-man's-switch style, e.g. healthchecks.io).
+1. Create a check with a **period of 1 day** and a **grace of ~2 hours**.
+2. Copy its ping URL into `HC_PING_URL` in `/etc/budget/backup.env`.
+3. Add an alert integration (email, Slack, …) on the check.
 
-This wasn't built here to keep the initial surface small — flag it if you'd like
-the `OnFailure` email unit added.
+The script then pings `…/start` when it begins, the base URL on success, and
+`…/fail` on any error (the `EXIT` trap). healthchecks.io alerts you if a run
+**fails** or if the daily success ping **doesn't arrive** — i.e. it catches a
+backup that silently didn't run, which a plain failure hook cannot.
+
+`HC_PING_URL` is optional: leave it unset and the backup runs exactly the same,
+just without the check-in.
+
+Belt-and-suspenders (optional): occasionally eyeball `aws s3 ls` — the newest
+object should be < 24h old — or `systemctl status pigglet-backup.service`.

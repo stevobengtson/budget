@@ -25,8 +25,28 @@ MIN_BYTES="${MIN_BYTES:-2048}"
 timestamp="$(date -u +%Y%m%d-%H%M%SZ)"
 key="pigglet-db/pigglet-${timestamp}.dump"
 
+# --- Dead-man's-switch (optional) -------------------------------------------
+# If HC_PING_URL is set to a healthchecks.io check URL, signal start / success /
+# failure so a MISSED or FAILED nightly backup raises an alert (that's the whole
+# point — a silent backup failure is the dangerous one). Unset = no-op, so the
+# backup behaves identically whether or not monitoring is configured.
+HC_PING_URL="${HC_PING_URL:-}"
+hc_ping() { # $1 = url suffix: "" (success), "/start", or "/fail"
+  [ -n "$HC_PING_URL" ] || return 0
+  curl -fsS -m 10 --retry 3 -o /dev/null "${HC_PING_URL}${1}" || true
+}
+
 tmp="$(mktemp -t pigglet-backup.XXXXXX.dump)"
-trap 'rm -f "$tmp"' EXIT
+# On any exit: remove the temp dump, then tell healthchecks whether we succeeded
+# (rc 0) or failed. rc is captured FIRST — the rm would otherwise reset $?.
+cleanup() {
+  local rc=$?
+  rm -f "$tmp"
+  if [ "$rc" -eq 0 ]; then hc_ping ""; else hc_ping "/fail"; fi
+}
+trap cleanup EXIT
+
+hc_ping "/start"
 
 echo "→ Dumping database '${PGDATABASE}' (custom format)…"
 pg_dump --format=custom --no-owner --no-privileges "$PGDATABASE" >"$tmp"
