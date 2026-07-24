@@ -175,6 +175,21 @@ func (s *Service) ResetPassword(ctx context.Context, rawToken, newPassword strin
 	return s.store.UpdatePasswordHash(ctx, userID, hash)
 }
 
+// VerifyUserPassword returns ErrInvalidCredentials unless password matches the
+// user's current password. It re-authenticates a signed-in user before a
+// sensitive action (wiping data, deleting the account).
+func (s *Service) VerifyUserPassword(ctx context.Context, userID int64, password string) error {
+	u, err := s.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	ok, err := VerifyPassword(u.PasswordHash, password)
+	if err != nil || !ok {
+		return ErrInvalidCredentials
+	}
+	return nil
+}
+
 func (s *Service) ChangePassword(ctx context.Context, userID int64, current, next string) error {
 	u, err := s.store.GetUserByID(ctx, userID)
 	if err != nil {

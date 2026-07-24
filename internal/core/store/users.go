@@ -217,6 +217,65 @@ func (s *Store) SeedNewUser(ctx context.Context, userID int64) error {
 	return tx.Commit()
 }
 
+// budgetTablesDeleteOrder lists the user-owned budget tables in child→parent
+// order. These tables reference users(id) WITHOUT ON DELETE CASCADE (and each
+// other), so a user's rows must be deleted in this order for the foreign keys to
+// hold. The tricky edges: transactions → accounts + categories; budgets →
+// categories; accounts → categories (payment_category_id, from the paydown
+// add-on); categories → category_groups. So accounts must go before categories
+// (not after), and category_groups is last.
+var budgetTablesDeleteOrder = []string{
+	"transactions", "budgets", "incomes", "accounts", "categories", "category_groups",
+}
+
+// wipeUserDataTx deletes all of the user's budget content within tx. Shared by
+// WipeUserData (start fresh) and DeleteUser (account deletion).
+func (s *Store) wipeUserDataTx(ctx context.Context, tx *sql.Tx, userID int64) error {
+	for _, tbl := range budgetTablesDeleteOrder {
+		if _, err := s.txExec(ctx, tx, `DELETE FROM `+tbl+` WHERE user_id = $1`, userID); err != nil {
+			return fmt.Errorf("wipe %s: %w", tbl, err)
+		}
+	}
+	return nil
+}
+
+// WipeUserData permanently deletes all of the user's budget content — accounts,
+// category groups, categories, transactions, incomes and budget assignments — in
+// a single transaction, leaving the user's account, login and subscription
+// intact. This backs the "start fresh" action; callers typically follow it with
+// SeedNewUser to re-provision the starter budget.
+func (s *Store) WipeUserData(ctx context.Context, userID int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.wipeUserDataTx(ctx, tx, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// DeleteUser permanently deletes the user and all of their data. It wipes budget
+// content first (those tables have no ON DELETE CASCADE) then deletes the user
+// row, which cascades sessions, verification tokens, add-on links and
+// subscription rows. The whole thing runs in one transaction, so a failure
+// leaves the account untouched.
+func (s *Store) DeleteUser(ctx context.Context, userID int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.wipeUserDataTx(ctx, tx, userID); err != nil {
+		return err
+	}
+	if _, err := s.txExec(ctx, tx, `DELETE FROM users WHERE id = $1`, userID); err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	return tx.Commit()
+}
+
 // ClaimOrphanData assigns every row with a NULL user_id (pre-auth data) to userID.
 // Called once, for the first registered user (the owner). Idempotent: after the
 // first claim there are no NULL rows left.

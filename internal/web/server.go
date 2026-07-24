@@ -140,6 +140,9 @@ func (s *Server) routes(cfg config.Config) {
 	app.GET("/account/avatar", hs.ServeAvatar)
 	app.POST("/account/password", hs.ChangePassword)
 	app.POST("/account/addons/:slug", hs.ToggleAddOn)
+	// Danger zone: wipe all budget data (keep account) / delete the account.
+	app.POST("/account/start-fresh", hs.StartFresh)
+	app.POST("/account/delete", hs.DeleteAccount)
 
 	app.GET("/billing", hs.BillingPage)
 	app.POST("/billing/checkout", hs.StartCheckout)

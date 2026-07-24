@@ -162,6 +162,32 @@ func (s *Service) PortalURL(ctx context.Context, userID int64) (string, error) {
 	return ps.URL, nil
 }
 
+// CancelAtPeriodEnd flags the user's base subscription to stop renewing at the
+// end of the current billing period: no further charges, but access remains
+// until the period ends. Used when a user deletes their account. It's a no-op
+// when billing is off, the user has no tracked subscription, or the subscription
+// is already in a non-granting (e.g. canceled) state.
+func (s *Service) CancelAtPeriodEnd(ctx context.Context, userID int64) error {
+	if !s.configured {
+		return nil
+	}
+	sub, err := s.store.GetSubscriptionForUser(ctx, userID, s.basePrice)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if sub.StripeSubscriptionID == "" || !store.AccessGranting(sub.Status) {
+		return nil
+	}
+	if _, err := s.sc.V1Subscriptions.Update(ctx, sub.StripeSubscriptionID,
+		&stripe.SubscriptionUpdateParams{CancelAtPeriodEnd: stripe.Bool(true)}); err != nil {
+		return fmt.Errorf("cancel subscription at period end: %w", err)
+	}
+	return nil
+}
+
 // SyncCheckoutSession retrieves a completed Checkout Session (with its
 // subscription expanded) and upserts the resulting subscription immediately.
 // Called from the success redirect so access is granted without waiting for the
@@ -228,8 +254,15 @@ func (s *Service) processEvent(ctx context.Context, event stripe.Event) error {
 }
 
 // syncSubscription attributes a Stripe subscription to a user and upserts it.
+// An unattributable subscription is treated as a no-op success rather than an
+// error: after a user deletes their account, Stripe still emits trailing events
+// (e.g. the period-end subscription.deleted) for a subscription whose user is
+// gone, and those must not fail the webhook and trigger endless Stripe retries.
 func (s *Service) syncSubscription(ctx context.Context, sub *stripe.Subscription) error {
 	userID, err := s.userIDForSubscription(ctx, sub)
+	if errors.Is(err, errUnknownUser) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}

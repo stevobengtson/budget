@@ -311,6 +311,83 @@ func (h *Handlers) UpdateProfile(c *gin.Context) {
 	render(c, http.StatusOK, views.AccountPage(d))
 }
 
+// StartFresh wipes all of the current user's budget data and re-provisions the
+// default starter budget, keeping their account, login and subscription. It's
+// gated on the current password. On success the user lands on their clean budget.
+func (h *Handlers) StartFresh(c *gin.Context) {
+	uid := currentUserID(c)
+	if err := h.auth.VerifyUserPassword(c.Request.Context(), uid, c.PostForm("password")); err != nil {
+		d := h.accountData(c, "account")
+		d.StartFreshErr = "Current password is incorrect."
+		render(c, http.StatusBadRequest, views.AccountPage(d))
+		return
+	}
+	if err := h.store.WipeUserData(c.Request.Context(), uid); err != nil {
+		_ = c.Error(err)
+		d := h.accountData(c, "account")
+		d.StartFreshErr = "Could not reset your data. Please try again."
+		render(c, http.StatusInternalServerError, views.AccountPage(d))
+		return
+	}
+	// Re-provision the starter budget so the user lands in the same clean state as
+	// a brand-new account rather than an empty (and Income-less) budget.
+	if err := h.store.SeedNewUser(c.Request.Context(), uid); err != nil {
+		_ = c.Error(err)
+		d := h.accountData(c, "account")
+		d.StartFreshErr = "Your data was cleared, but re-creating the starter budget failed."
+		render(c, http.StatusInternalServerError, views.AccountPage(d))
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/budget")
+}
+
+// DeleteAccount permanently deletes the current user and all their data. It's
+// gated on the current password AND on the user re-typing their email address.
+// The user's Stripe subscription is flagged to cancel at period end first
+// (best-effort — a Stripe failure is logged but does not block deletion, since
+// removing the account is the user's primary intent).
+func (h *Handlers) DeleteAccount(c *gin.Context) {
+	uid := currentUserID(c)
+	u, err := h.store.GetUserByID(c.Request.Context(), uid)
+	if err != nil {
+		_ = c.Error(err)
+		c.String(http.StatusInternalServerError, "Something went wrong.")
+		return
+	}
+
+	fail := func(msg string) {
+		d := h.accountData(c, "account")
+		d.DeleteErr = msg
+		render(c, http.StatusBadRequest, views.AccountPage(d))
+	}
+	if err := h.auth.VerifyUserPassword(c.Request.Context(), uid, c.PostForm("password")); err != nil {
+		fail("Current password is incorrect.")
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(c.PostForm("confirm_email")), u.Email) {
+		fail("The email you typed doesn't match your account email.")
+		return
+	}
+
+	// Best-effort: stop the subscription renewing. Log but proceed on failure so a
+	// Stripe hiccup can't trap the user in an account they've asked to delete.
+	if err := h.billing.CancelAtPeriodEnd(c.Request.Context(), uid); err != nil {
+		_ = c.Error(err)
+	}
+
+	if err := h.store.DeleteUser(c.Request.Context(), uid); err != nil {
+		_ = c.Error(err)
+		d := h.accountData(c, "account")
+		d.DeleteErr = "Could not delete your account. Please try again."
+		render(c, http.StatusInternalServerError, views.AccountPage(d))
+		return
+	}
+
+	ClearSessionCookie(c)
+	render(c, http.StatusOK, views.MessagePage("Account deleted",
+		"Your account and all your data have been permanently deleted. We're sorry to see you go.", ""))
+}
+
 func (h *Handlers) ChangePassword(c *gin.Context) {
 	uid := currentUserID(c)
 	cur := c.PostForm("current")

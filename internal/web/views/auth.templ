@@ -195,6 +195,8 @@ type AccountData struct {
 	PasswordOK    string
 	AddOnErr      string
 	AddOnOK       string
+	StartFreshErr string // Danger zone: "start fresh" (wipe data) error
+	DeleteErr     string // Danger zone: delete-account error
 }
 
 templ AccountPage(d AccountData) {
@@ -220,6 +222,7 @@ templ AccountPage(d AccountData) {
 					<div class="space-y-6">
 						@accountProfileSection(d)
 						@accountEmailSection(d)
+						@accountDangerSection(d)
 					</div>
 				}
 				@tabs.Content(tabs.ContentProps{Value: "security", IsActive: d.ActiveTab == "security", Class: "mt-6"}) {
@@ -316,6 +319,68 @@ templ accountEmailSection(d AccountData) {
 			</div>
 		</form>
 	</section>
+}
+
+// accountDangerSection is the Account tab's "Danger zone": irreversible actions
+// (wipe data / delete account), each gated on the current password (and, for
+// deletion, re-typing the account email). Both submit as full-page POSTs.
+templ accountDangerSection(d AccountData) {
+	<section class="space-y-2">
+		<h2 class="text-sm font-semibold text-destructive">Danger zone</h2>
+		<div class="divide-y overflow-hidden rounded-xl border border-destructive/40 bg-card">
+			<div class="space-y-4 p-4 sm:p-6">
+				<div class="space-y-1">
+					<h3 class="text-sm font-medium">Start fresh</h3>
+					<p class="text-sm text-muted-foreground">
+						Delete all your accounts, categories, transactions and goals and start
+						over with the default starter budget. Your login and subscription are
+						kept. This can't be undone.
+					</p>
+				</div>
+				<form method="post" action="/account/start-fresh" class="space-y-4">
+					@dangerPassword("sf_password")
+					@settingsMessages(d.StartFreshErr, "")
+					@dangerButton("Delete all data")
+				</form>
+			</div>
+			<div class="space-y-4 p-4 sm:p-6">
+				<div class="space-y-1">
+					<h3 class="text-sm font-medium">Delete account</h3>
+					<p class="text-sm text-muted-foreground">
+						Permanently delete your account and everything in it. Your subscription
+						is set to cancel at the end of the current period and won't renew. This
+						can't be undone.
+					</p>
+				</div>
+				<form method="post" action="/account/delete" class="space-y-4">
+					@dangerPassword("del_password")
+					<div class="space-y-1.5">
+						<label for="confirm_email" class="text-sm font-medium leading-none">
+							Type <span class="font-semibold text-foreground">{ d.Email }</span> to confirm
+						</label>
+						<input id="confirm_email" name="confirm_email" type="email" autocomplete="off" required placeholder={ d.Email } class={ authInputClass }/>
+					</div>
+					@settingsMessages(d.DeleteErr, "")
+					@dangerButton("Delete my account")
+				</form>
+			</div>
+		</div>
+	</section>
+}
+
+// dangerPassword is the current-password input shared by the danger-zone forms.
+// id is unique per form; the field name is always "password" (what the handlers
+// read).
+templ dangerPassword(id string) {
+	<div class="space-y-1.5">
+		<label for={ id } class="text-sm font-medium leading-none">Current password</label>
+		<input id={ id } name="password" type="password" autocomplete="current-password" required class={ authInputClass }/>
+	</div>
+}
+
+// dangerButton is the destructive submit button for a danger-zone form.
+templ dangerButton(label string) {
+	<button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 focus-visible:ring-offset-background">{ label }</button>
 }
 
 // accountSecuritySection is the Security tab's "Change password" card.
