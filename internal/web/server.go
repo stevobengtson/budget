@@ -2,12 +2,16 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 	templuicomponents "github.com/templui/templui/components"
 
@@ -36,7 +40,15 @@ type Server struct {
 func NewServer(s *store.Store, cfg config.Config) *Server {
 	gin.SetMode(cfg.Web.Level)
 	r := gin.New()
+	// requestLogger is outermost so it observes the final status (even a
+	// Recovery-produced 500). sentrygin sits just inside Recovery with
+	// Repanic:true: it captures the panic to Sentry, then re-panics so
+	// gin.Recovery writes the 500 response. Wired only when a DSN is set.
+	r.Use(requestLogger())
 	r.Use(gin.Recovery())
+	if cfg.Sentry.DSN != "" {
+		r.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
+	}
 
 	authSvc := auth.NewService(s, newMailer(cfg), cfg.Web.BaseURL, auth.Config{
 		SessionTTL: cfg.Auth.SessionTTL,
@@ -82,6 +94,20 @@ func serveTemplUIScript(c *gin.Context) {
 
 func (s *Server) Handler() http.Handler { return s.engine }
 
+// healthz is a readiness probe for uptime monitoring: it pings Postgres and
+// reports 200 only when the DB is reachable, 503 otherwise. The body carries no
+// error detail (it's public); the reason is logged server-side.
+func (s *Server) healthz(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+	defer cancel()
+	if err := s.store.DB().PingContext(ctx); err != nil {
+		slog.Error("healthz: db ping failed", "err", err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "degraded"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 // newMailer builds the configured mail driver: resend in production, console
 // (logs the link) for local dev.
 func newMailer(cfg config.Config) mail.Mailer {
@@ -93,6 +119,11 @@ func newMailer(cfg config.Config) mail.Mailer {
 
 func (s *Server) routes(cfg config.Config) {
 	hs := handlers.New(s.store, s.auth, s.billing, cfg.Auth.CookieSecure, int(cfg.Auth.SessionTTL.Seconds()))
+
+	// Ops readiness probe: pings the DB so an uptime monitor learns of a
+	// Postgres outage, not just a live HTTP process. (The mobile app's
+	// /api/v1/health stays a pure liveness check by design.)
+	s.engine.GET("/healthz", s.healthz)
 
 	// Public marketing landing page. Logged-in visitors are redirected into the
 	// app by the handler; everyone else sees the landing page.

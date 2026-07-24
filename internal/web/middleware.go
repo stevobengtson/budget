@@ -3,7 +3,10 @@ package web
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -13,6 +16,45 @@ import (
 	"github.com/sbengtson/budget/internal/web/handlers"
 	"github.com/sbengtson/budget/internal/web/views"
 )
+
+// requestLogger logs one structured line per request via slog (→ journald).
+// It is registered as the outermost middleware so its deferred log records the
+// final status code, even after gin.Recovery() turns a panic into a 500.
+//
+// The URL path is logged WITHOUT the query string on purpose: auth links carry
+// verification/reset tokens in the query, which must never land in logs.
+func requestLogger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+		// Skip high-volume, low-signal paths so real requests stay readable.
+		if strings.HasPrefix(path, "/static") ||
+			strings.HasPrefix(path, "/templui/") ||
+			path == "/healthz" || path == "/favicon.ico" {
+			c.Next()
+			return
+		}
+
+		start := time.Now()
+		c.Next()
+
+		status := c.Writer.Status()
+		attrs := []any{
+			"method", c.Request.Method,
+			"path", path,
+			"status", status,
+			"dur_ms", time.Since(start).Milliseconds(),
+			"ip", c.ClientIP(),
+		}
+		switch {
+		case status >= 500:
+			slog.Error("http request", attrs...)
+		case status >= 400:
+			slog.Warn("http request", attrs...)
+		default:
+			slog.Info("http request", attrs...)
+		}
+	}
+}
 
 // requireAuth loads the session user into the context or redirects to /login.
 func requireAuth(svc *auth.Service, st *store.Store) gin.HandlerFunc {

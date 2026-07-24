@@ -2,15 +2,59 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/spf13/cobra"
 
 	"github.com/sbengtson/budget/internal/cli"
+	"github.com/sbengtson/budget/internal/core/config"
 	"github.com/sbengtson/budget/internal/core/db"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web"
 )
+
+// setupLogging installs a JSON slog handler on stderr (captured by journald)
+// at the configured level. This finally gives the app real structured logs;
+// the request-logging middleware writes through this logger.
+func setupLogging(level string) {
+	var lvl slog.Level
+	switch strings.ToLower(level) {
+	case "debug":
+		lvl = slog.LevelDebug
+	case "warn":
+		lvl = slog.LevelWarn
+	case "error":
+		lvl = slog.LevelError
+	default:
+		lvl = slog.LevelInfo
+	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})))
+}
+
+// setupSentry initializes error reporting when a DSN is configured. An empty
+// DSN (dev default) is a no-op. Init failure is logged, not fatal — monitoring
+// must never take the app down. Returns a flush func to run on shutdown.
+func setupSentry(cfg config.Config) func() {
+	if cfg.Sentry.DSN == "" {
+		return func() {}
+	}
+	err := sentry.Init(sentry.ClientOptions{
+		Dsn:              cfg.Sentry.DSN,
+		Environment:      cfg.Sentry.Environment,
+		EnableTracing:    cfg.Sentry.TracesSampleRate > 0,
+		TracesSampleRate: cfg.Sentry.TracesSampleRate,
+	})
+	if err != nil {
+		slog.Warn("sentry init failed; continuing without error reporting", "err", err)
+		return func() {}
+	}
+	return func() { sentry.Flush(2 * time.Second) }
+}
 
 func main() {
 	app := cli.NewApp()
@@ -27,6 +71,8 @@ The db/migrate/seed/config admin commands are available as subcommands.`)
 		if err != nil {
 			return err
 		}
+		setupLogging(cfg.Log.Level)
+		defer setupSentry(cfg)()
 		a := addr
 		if a == "" {
 			a = cfg.Web.Addr

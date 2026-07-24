@@ -54,6 +54,17 @@ type Config struct {
 	Log struct {
 		Level string `mapstructure:"level"`
 	} `mapstructure:"log"`
+	Sentry struct {
+		// DSN is the Sentry project DSN. Empty disables error reporting
+		// entirely (dev default) — no events are sent and no middleware wires in.
+		DSN string `mapstructure:"dsn"`
+		// Environment tags events (e.g. "production", "development").
+		Environment string `mapstructure:"environment"`
+		// TracesSampleRate in [0,1] enables performance tracing when > 0. Left
+		// at 0 (off) to conserve the free-tier span quota; error reporting works
+		// regardless.
+		TracesSampleRate float64 `mapstructure:"traces_sample_rate"`
+	} `mapstructure:"sentry"`
 }
 
 // Load reads from the supplied viper instance (which the caller has
@@ -75,6 +86,9 @@ func Load(v *viper.Viper) (Config, error) {
 	v.SetDefault("stripe.webhook_secret", "")
 	v.SetDefault("stripe.price_ids.base", "")
 	v.SetDefault("log.level", "info")
+	v.SetDefault("sentry.dsn", "")
+	v.SetDefault("sentry.environment", "development")
+	v.SetDefault("sentry.traces_sample_rate", 0.0)
 
 	v.SetEnvPrefix("BUDGET")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
