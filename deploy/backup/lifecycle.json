@@ -1,0 +1,15 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-pigglet-backups",
+      "Status": "Enabled",
+      "Prefix": "pigglet-db/",
+      "Expiration": {
+        "Days": 14
+      },
+      "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 3
+      }
+    }
+  ]
+}

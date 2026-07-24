@@ -1,0 +1,30 @@
+[Unit]
+Description=Pigglet database backup to Hetzner Object Storage
+Documentation=https://pigglet.ca
+# Needs the DB up locally and outbound network for the S3 upload.
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+# Run as the postgres OS user: pg_dump then authenticates over the local
+# socket via peer auth, so no DB password is stored anywhere.
+User=postgres
+Group=postgres
+
+# S3 credentials + target bucket/endpoint. Root-owned, group-readable by
+# postgres, not world-readable (see README). Created by hand, never in git.
+EnvironmentFile=/etc/budget/backup.env
+
+ExecStart=/opt/budget/backup.sh
+
+# --- Hardening --------------------------------------------------------------
+# The job reads the DB socket, writes one temp file, and uploads it. Give it a
+# private /tmp for the dump and lock down the rest of the filesystem.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
