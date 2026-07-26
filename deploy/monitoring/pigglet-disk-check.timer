@@ -1,0 +1,12 @@
+[Unit]
+Description=Pigglet disk-space guardrail (every 30 min)
+Documentation=https://pigglet.ca
+
+[Timer]
+# Every 30 minutes. A slowly-filling disk doesn't need finer granularity, and
+# frequent-enough checks keep the healthchecks.io heartbeat fresh.
+OnCalendar=*:0/30
+RandomizedDelaySec=2m
+
+[Install]
+WantedBy=timers.target

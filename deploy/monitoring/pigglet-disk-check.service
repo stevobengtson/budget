@@ -1,0 +1,21 @@
+[Unit]
+Description=Pigglet disk-space guardrail
+Documentation=https://pigglet.ca
+
+[Service]
+Type=oneshot
+# Same non-root service user as the backup; df needs no privileges, and this
+# user can read the shared ops env file (root:postgres 0640).
+User=postgres
+Group=postgres
+EnvironmentFile=/etc/budget/backup.env
+ExecStart=/opt/budget/disk-check.sh
+
+# --- Hardening (read-only check + one outbound ping) ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true

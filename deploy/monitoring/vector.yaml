@@ -1,0 +1,53 @@
+# Vector → Grafana Cloud Loki. Ships the pigglet app's structured JSON request
+# logs (one line per request from slog, via journald) so you can chart
+# requests/min, latency, and error rate, and get searchable/retained logs.
+# Native agent, no Docker.
+#
+# Grafana Cloud creds come from /etc/default/vector:
+#   GRAFANA_LOKI_URL   base URL, e.g. https://logs-prod-012.grafana.net (no path)
+#   GRAFANA_LOKI_USER  Loki username = numeric instance ID
+#   GRAFANA_LOKI_TOKEN access-policy token with the logs:write scope
+#
+# NOTE: this box's Vector does not expand ${VAR} at load, so the values are
+# baked in literally at install time (see README). The ${...} below are just
+# placeholders the bake step replaces.
+
+sources:
+  pigglet_journal:
+    type: journald
+    # Only the app unit — that's where the per-request JSON lives.
+    include_units:
+      - pigglet.service
+
+transforms:
+  pigglet_parse:
+    type: remap
+    inputs: [pigglet_journal]
+    source: |
+      # The app emits one JSON line per request via slog; journald hands it to
+      # us in .message. Parse it so method/path/status/dur_ms become fields you
+      # can query in Loki with `| json`. Non-JSON lines (boot messages, panic
+      # dumps) parse to {} and pass through with .message intact.
+      # (Unlike the Better Stack sink, we keep .timestamp — the loki sink uses
+      # it as the log entry time.)
+      parsed = parse_json(.message) ?? {}
+      . = merge(., parsed) ?? .
+
+sinks:
+  grafana_loki:
+    type: loki
+    inputs: [pigglet_parse]
+    endpoint: "${GRAFANA_LOKI_URL}"
+    auth:
+      strategy: basic
+      user: "${GRAFANA_LOKI_USER}"
+      password: "${GRAFANA_LOKI_TOKEN}"
+    # Keep labels LOW cardinality (Loki indexes them). Everything else — host,
+    # method, path, status, dur_ms — stays in the JSON log line and is queried
+    # at read time via `| json`. (Loki's sink rejects a label whose value is a
+    # bare `{{ field }}` template, and host is a constant on a single box anyway.)
+    labels:
+      service: pigglet
+    encoding:
+      codec: json
+    compression: snappy
