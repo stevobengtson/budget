@@ -15,9 +15,11 @@ struct TransactionItem: Codable, Identifiable {
     let date: String
     let payee: String
     let category: String
+    let categoryId: Int64?
     let notes: String
     let amountCents: Int64
     let cleared: Bool
+    let isTransfer: Bool
 }
 
 // Mirrors GET /api/v1/accounts?month=… — accounts with balances as of month-end.

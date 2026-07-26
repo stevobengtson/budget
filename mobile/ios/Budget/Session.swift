@@ -65,6 +65,13 @@ final class Session: ObservableObject {
                                         categoryId: categoryId, payee: payee, notes: notes, date: date, token: token)
     }
 
+    func updateTransaction(accountId: Int64, transactionId: Int64, amount: String, type: String,
+                           categoryId: Int64?, payee: String, notes: String, date: String) async throws {
+        guard let token else { throw APIError(code: "unauthorized", message: "Not signed in.") }
+        try await api.updateTransaction(accountId: accountId, transactionId: transactionId, amount: amount, type: type,
+                                        categoryId: categoryId, payee: payee, notes: notes, date: date, token: token)
+    }
+
     init(api: APIClient) {
         self.api = api
     }

@@ -43,7 +43,9 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 
+// editing is null for "add" and set to prefill/save an existing transaction.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionScreen(
@@ -52,22 +54,26 @@ fun AddTransactionScreen(
     error: String?,
     onCancel: () -> Unit,
     onSubmit: (amount: String, type: String, categoryId: Long?, payee: String, notes: String, date: String) -> Unit,
+    editing: TransactionItem? = null,
 ) {
-    var amountCents by remember { mutableStateOf(0L) }
-    var isExpense by remember { mutableStateOf(true) }
-    var payee by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-    var categoryId by remember { mutableStateOf<Long?>(null) }
+    // amountCents is inflow − outflow: negative = expense, positive = income.
+    var amountCents by remember { mutableStateOf(editing?.let { abs(it.amountCents) } ?: 0L) }
+    var isExpense by remember { mutableStateOf((editing?.amountCents ?: -1L) < 0L) }
+    var payee by remember { mutableStateOf(editing?.payee ?: "") }
+    var notes by remember { mutableStateOf(editing?.notes ?: "") }
+    var categoryId by remember { mutableStateOf(editing?.categoryId) }
     var expanded by remember { mutableStateOf(false) }
 
     var showDatePicker by remember { mutableStateOf(false) }
-    val dateState = rememberDatePickerState(initialSelectedDateMillis = todayUtcMillis())
+    val dateState = rememberDatePickerState(
+        initialSelectedDateMillis = editing?.let { isoToUtcMillis(it.date) } ?: todayUtcMillis(),
+    )
     val dateMillis = dateState.selectedDateMillis ?: todayUtcMillis()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add Transaction") },
+                title = { Text(if (editing == null) "Add Transaction" else "Edit Transaction") },
                 navigationIcon = {
                     IconButton(onClick = onCancel) {
                         Icon(Icons.Filled.Close, contentDescription = "Cancel")
@@ -86,7 +92,7 @@ fun AddTransactionScreen(
                             )
                         },
                         enabled = !saving && amountCents > 0,
-                    ) { Text("Add") }
+                    ) { Text(if (editing == null) "Add" else "Save") }
                 },
             )
         },
@@ -202,6 +208,9 @@ private fun AmountKeypad(onDigit: (Long) -> Unit, onBackspace: () -> Unit) {
 
 private fun todayUtcMillis(): Long =
     LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+private fun isoToUtcMillis(iso: String): Long =
+    LocalDate.parse(iso).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
 
 private fun utcDate(millis: Long): LocalDate =
     Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()

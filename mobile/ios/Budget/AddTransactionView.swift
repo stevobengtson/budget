@@ -5,6 +5,8 @@ struct AddTransactionView: View {
     @Environment(\.dismiss) private var dismiss
 
     let account: Account
+    // When set, the form edits this existing transaction instead of adding one.
+    let editing: TransactionItem?
     let onSaved: () -> Void
 
     @State private var amountCents: Int64 = 0
@@ -17,6 +19,23 @@ struct AddTransactionView: View {
     @State private var categories: [CategoryOption] = []
     @State private var saving = false
     @State private var error: String?
+
+    init(account: Account, editing: TransactionItem? = nil, onSaved: @escaping () -> Void) {
+        self.account = account
+        self.editing = editing
+        self.onSaved = onSaved
+        if let tx = editing {
+            // amountCents is inflow − outflow: negative = expense, positive = income.
+            _amountCents = State(initialValue: abs(tx.amountCents))
+            _isExpense = State(initialValue: tx.amountCents < 0)
+            _categoryId = State(initialValue: tx.categoryId)
+            _payee = State(initialValue: tx.payee)
+            _notes = State(initialValue: tx.notes)
+            if let d = Self.isoFormatter.date(from: tx.date) {
+                _date = State(initialValue: d)
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -44,14 +63,14 @@ struct AddTransactionView: View {
                 AmountKeypad(onDigit: appendDigit, onBackspace: backspace)
             }
             .padding()
-            .navigationTitle("Add Transaction")
+            .navigationTitle(editing == nil ? "Add Transaction" : "Edit Transaction")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { Task { await save() } }
+                    Button(editing == nil ? "Add" : "Save") { Task { await save() } }
                         .disabled(saving || amountCents == 0)
                 }
             }
@@ -111,15 +130,20 @@ struct AddTransactionView: View {
         saving = true
         error = nil
         do {
-            try await session.createTransaction(
-                accountId: account.id,
-                amount: Money.plain(amountCents),
-                type: isExpense ? "expense" : "income",
-                categoryId: categoryId,
-                payee: payee,
-                notes: notes,
-                date: Self.isoFormatter.string(from: date)
-            )
+            let type = isExpense ? "expense" : "income"
+            let amount = Money.plain(amountCents)
+            let isoDate = Self.isoFormatter.string(from: date)
+            if let tx = editing {
+                try await session.updateTransaction(
+                    accountId: account.id, transactionId: tx.id, amount: amount, type: type,
+                    categoryId: categoryId, payee: payee, notes: notes, date: isoDate
+                )
+            } else {
+                try await session.createTransaction(
+                    accountId: account.id, amount: amount, type: type,
+                    categoryId: categoryId, payee: payee, notes: notes, date: isoDate
+                )
+            }
             onSaved()
             dismiss()
         } catch let apiError as APIError {

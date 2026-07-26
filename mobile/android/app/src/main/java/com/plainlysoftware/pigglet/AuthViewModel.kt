@@ -114,6 +114,20 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
         api.createTransaction(token, accountId, amount, type, categoryId, payee, notes, date)
     }
 
+    suspend fun updateTransaction(
+        accountId: Long,
+        transactionId: Long,
+        amount: String,
+        type: String,
+        categoryId: Long?,
+        payee: String,
+        notes: String,
+        date: String,
+    ) {
+        val token = tokens.load() ?: throw ApiException("unauthorized", "Not signed in.")
+        api.updateTransaction(token, accountId, transactionId, amount, type, categoryId, payee, notes, date)
+    }
+
     fun signOut() {
         viewModelScope.launch {
             tokens.load()?.let { api.logout(it) }

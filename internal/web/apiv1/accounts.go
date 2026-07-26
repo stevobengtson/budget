@@ -62,9 +62,11 @@ type txItem struct {
 	Date        string `json:"date"` // YYYY-MM-DD
 	Payee       string `json:"payee"`
 	Category    string `json:"category"`
+	CategoryID  *int64 `json:"categoryId"` // for edit prefill; null = uncategorized
 	Notes       string `json:"notes"`
 	AmountCents int64  `json:"amountCents"` // inflow − outflow (positive = money in)
 	Cleared     bool   `json:"cleared"`
+	IsTransfer  bool   `json:"isTransfer"` // transfers can't be edited in the app
 }
 
 // txPageLimit caps how many recent transactions a single account view returns.
@@ -118,8 +120,10 @@ func (a *API) AccountTransactions(c *gin.Context) {
 		item := txItem{
 			ID:          t.ID,
 			Date:        t.Date.Format("2006-01-02"),
+			CategoryID:  t.CategoryID,
 			AmountCents: t.InflowCents - t.OutflowCents,
 			Cleared:     t.Cleared,
+			IsTransfer:  t.TransferAccountID != nil || t.TransferPairID != nil,
 		}
 		if t.Payee != nil {
 			item.Payee = *t.Payee
@@ -221,4 +225,103 @@ func (a *API) CreateTransaction(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"id": id})
+}
+
+// UpdateTransaction edits an existing expense or income transaction in place.
+// The account can't change (the app is account-scoped) and the cleared state is
+// preserved, since the app's form doesn't expose either. Transfers are refused —
+// the client hides the edit affordance on them, and this is the server guard.
+func (a *API) UpdateTransaction(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := c.GetInt64(contextUserID)
+
+	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "Invalid account id.")
+		return
+	}
+	txID, err := strconv.ParseInt(c.Param("txId"), 10, 64)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "Invalid transaction id.")
+		return
+	}
+
+	// Load the existing row (user-scoped) to confirm ownership, keep the fields
+	// the form doesn't edit (cleared), and reject transfers.
+	existing, err := a.store.GetTransaction(ctx, uid, txID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(c, http.StatusNotFound, "not_found", "That transaction doesn't exist.")
+			return
+		}
+		writeError(c, http.StatusInternalServerError, "internal", "Could not load the transaction.")
+		return
+	}
+	if existing.AccountID != accountID {
+		writeError(c, http.StatusNotFound, "not_found", "That transaction doesn't exist.")
+		return
+	}
+	if existing.TransferAccountID != nil || existing.TransferPairID != nil {
+		writeError(c, http.StatusUnprocessableEntity, "unsupported", "Transfers can't be edited in the app yet.")
+		return
+	}
+
+	var req createTxRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "Expected a JSON body with amount and type.")
+		return
+	}
+
+	date := existing.Date
+	if req.Date != "" {
+		d, err := time.Parse("2006-01-02", req.Date)
+		if err != nil {
+			writeError(c, http.StatusBadRequest, "invalid_request", "date must be formatted YYYY-MM-DD.")
+			return
+		}
+		date = d
+	}
+
+	cents, err := money.Parse(req.Amount)
+	if err != nil || cents <= 0 {
+		writeError(c, http.StatusBadRequest, "invalid_request", "Enter an amount greater than zero.")
+		return
+	}
+
+	var inflow, outflow int64
+	switch req.Type {
+	case "income":
+		inflow = cents
+	case "expense", "":
+		outflow = cents
+	default:
+		writeError(c, http.StatusBadRequest, "invalid_request", "type must be expense or income.")
+		return
+	}
+
+	tx := store.Transaction{
+		ID:           txID,
+		Date:         date,
+		AccountID:    accountID,
+		CategoryID:   req.CategoryID,
+		OutflowCents: outflow,
+		InflowCents:  inflow,
+		Cleared:      existing.Cleared,
+	}
+	if req.Payee != "" {
+		tx.Payee = &req.Payee
+	}
+	if req.Notes != "" {
+		tx.Notes = &req.Notes
+	}
+
+	if err := a.store.UpdateTransaction(ctx, uid, tx); err != nil {
+		if errors.Is(err, store.ErrNotOwned) {
+			writeError(c, http.StatusNotFound, "not_found", "That account or category doesn't exist.")
+			return
+		}
+		writeError(c, http.StatusInternalServerError, "internal", "Could not save the transaction.")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"id": txID})
 }

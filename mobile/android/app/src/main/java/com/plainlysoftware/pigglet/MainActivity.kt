@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
                             loadTransactions = vm::loadTransactions,
                             loadCategories = vm::loadCategories,
                             createTransaction = vm::createTransaction,
+                            updateTransaction = vm::updateTransaction,
                         )
                     }
                 }

@@ -113,6 +113,16 @@ struct APIClient {
         let _: CreatedTx = try decode(await send(req))
     }
 
+    func updateTransaction(accountId: Int64, transactionId: Int64, amount: String, type: String,
+                           categoryId: Int64?, payee: String, notes: String, date: String, token: String) async throws {
+        var req = request(path: "api/v1/accounts/\(accountId)/transactions/\(transactionId)", method: "PUT", token: token)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONEncoder().encode(
+            CreateTxBody(date: date, amount: amount, type: type, categoryId: categoryId, payee: payee, notes: notes)
+        )
+        let _: CreatedTx = try decode(await send(req))
+    }
+
     private struct CategoriesBody: Decodable { let categories: [CategoryOption] }
     private struct CreatedTx: Decodable { let id: Int64 }
 

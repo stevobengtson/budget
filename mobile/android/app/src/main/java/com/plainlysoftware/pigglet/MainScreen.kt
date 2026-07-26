@@ -52,6 +52,7 @@ fun MainScreen(
     loadTransactions: suspend (Long, String?) -> TransactionsPage,
     loadCategories: suspend () -> List<CategoryOption>,
     createTransaction: suspend (Long, String, String, Long?, String, String, String) -> Unit,
+    updateTransaction: suspend (Long, Long, String, String, Long?, String, String, String) -> Unit,
 ) {
     // Paydown appears only when its add-on is enabled.
 //    val tabs = remember(addOns) {
@@ -89,6 +90,7 @@ fun MainScreen(
                     loadTransactions = loadTransactions,
                     loadCategories = loadCategories,
                     createTransaction = createTransaction,
+                    updateTransaction = updateTransaction,
                 )
 //                Tab.Paydown -> ComingSoon("Paydown")
                 Tab.Settings -> SettingsContent(user = user, onSignOut = onSignOut)

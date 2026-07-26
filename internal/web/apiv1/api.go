@@ -40,6 +40,7 @@ func (a *API) Register(r *gin.RouterGroup) {
 	authed.GET("/accounts", a.Accounts)
 	authed.GET("/accounts/:id/transactions", a.AccountTransactions)
 	authed.POST("/accounts/:id/transactions", a.CreateTransaction)
+	authed.PUT("/accounts/:id/transactions/:txId", a.UpdateTransaction)
 	authed.GET("/categories", a.Categories)
 }
 

@@ -46,9 +46,11 @@ data class TransactionItem(
     val date: String,
     val payee: String,
     val category: String,
+    val categoryId: Long?,
     val notes: String,
     val amountCents: Long,
     val cleared: Boolean,
+    val isTransfer: Boolean,
 )
 
 // Mirrors GET /api/v1/accounts/:id/transactions?month=… — a month of ledger rows.
@@ -166,6 +168,28 @@ class ApiClient(private val baseUrl: String) {
         Unit
     }
 
+    suspend fun updateTransaction(
+        token: String,
+        accountId: Long,
+        transactionId: Long,
+        amount: String,
+        type: String,
+        categoryId: Long?,
+        payee: String,
+        notes: String,
+        date: String,
+    ): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("date", date)
+            .put("amount", amount)
+            .put("type", type)
+            .put("payee", payee)
+            .put("notes", notes)
+        if (categoryId != null) body.put("categoryId", categoryId)
+        request("PUT", "/api/v1/accounts/$accountId/transactions/$transactionId", body = body.toString(), token = token)
+        Unit
+    }
+
     private fun JSONObject.toUser() = User(getLong("id"), getString("email"), getString("name"))
 
     private fun JSONObject.toAccount() =
@@ -176,9 +200,11 @@ class ApiClient(private val baseUrl: String) {
         date = getString("date"),
         payee = getString("payee"),
         category = getString("category"),
+        categoryId = if (isNull("categoryId")) null else getLong("categoryId"),
         notes = getString("notes"),
         amountCents = getLong("amountCents"),
         cleared = getBoolean("cleared"),
+        isTransfer = optBoolean("isTransfer", false),
     )
 
     private fun JSONObject.toBudget(): BudgetData {

@@ -640,6 +640,92 @@ func TestCreateTransactionRejectsBadInput(t *testing.T) {
 	}
 }
 
+func TestUpdateTransaction(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	ctx := context.Background()
+
+	gid, _ := st.CreateGroup(ctx, uid, "Food", 0)
+	catID, _ := st.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Groceries"})
+	acctID, _ := st.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+
+	// Seed a cleared expense, then edit its amount, payee, and category (clear it).
+	payee := "Old Store"
+	txID, err := st.CreateTransaction(ctx, uid, store.Transaction{
+		Date: time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC),
+		AccountID: acctID, CategoryID: &catID, Payee: &payee, OutflowCents: 2500, Cleared: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"amount":"40.00","type":"expense","payee":"New Store","date":"2026-07-16"}`
+	var updated struct {
+		ID int64 `json:"id"`
+	}
+	w := doJSON(t, r, http.MethodPut, "/api/v1/accounts/"+itoa(acctID)+"/transactions/"+itoa(txID), token, body, &updated)
+	if w.Code != http.StatusOK || updated.ID != txID {
+		t.Fatalf("update: %d %s", w.Code, w.Body.String())
+	}
+
+	var list struct {
+		Transactions []txItem `json:"transactions"`
+	}
+	doJSON(t, r, http.MethodGet, "/api/v1/accounts/"+itoa(acctID)+"/transactions?month=2026-07", token, "", &list)
+	if len(list.Transactions) != 1 {
+		t.Fatalf("transactions = %+v, want one", list.Transactions)
+	}
+	tx := list.Transactions[0]
+	// Amount/payee/category changed; cleared preserved (form doesn't touch it).
+	if tx.AmountCents != -4000 || tx.Payee != "New Store" || tx.CategoryID != nil || !tx.Cleared {
+		t.Errorf("tx = %+v, want -4000/New Store/uncategorized/cleared", tx)
+	}
+}
+
+func TestUpdateTransactionRejectsTransfer(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	ctx := context.Background()
+
+	from, _ := st.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+	to, _ := st.CreateAccount(ctx, uid, store.Account{Name: "Savings", Type: store.TypeSavings})
+	legID, _, err := st.CreateTransfer(ctx, uid, store.TransferInput{
+		Date: time.Now(), FromAccountID: from, ToAccountID: to, AmountCents: 1000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := `{"amount":"20.00","type":"expense"}`
+	var resp errorBody
+	w := doJSON(t, r, http.MethodPut, "/api/v1/accounts/"+itoa(from)+"/transactions/"+itoa(legID), token, body, &resp)
+	if w.Code != http.StatusUnprocessableEntity || resp.Error.Code != "unsupported" {
+		t.Fatalf("transfer edit: got %d %q, want 422 unsupported", w.Code, resp.Error.Code)
+	}
+}
+
+func TestUpdateTransactionRejectsForeignAndMissing(t *testing.T) {
+	_, st, r := newTestAPI(t)
+	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")
+	other := makeVerifiedUser(t, st, "b@example.com", "supersecret")
+	token := login(t, r, "user@example.com", "supersecret")
+	ctx := context.Background()
+
+	acctID, _ := st.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+	foreignAcct, _ := st.CreateAccount(ctx, other, store.Account{Name: "Theirs", Type: store.TypeChecking})
+	foreignTx, _ := st.CreateTransaction(ctx, other, store.Transaction{Date: time.Now(), AccountID: foreignAcct, OutflowCents: 500})
+
+	body := `{"amount":"20.00","type":"expense"}`
+	// Another user's transaction is invisible (user-scoped GetTransaction).
+	var resp errorBody
+	w := doJSON(t, r, http.MethodPut, "/api/v1/accounts/"+itoa(acctID)+"/transactions/"+itoa(foreignTx), token, body, &resp)
+	if w.Code != http.StatusNotFound || resp.Error.Code != "not_found" {
+		t.Fatalf("foreign tx: got %d %q, want 404 not_found", w.Code, resp.Error.Code)
+	}
+}
+
 func TestCategories(t *testing.T) {
 	_, st, r := newTestAPI(t)
 	uid := makeVerifiedUser(t, st, "user@example.com", "supersecret")

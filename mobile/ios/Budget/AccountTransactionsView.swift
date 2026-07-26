@@ -8,6 +8,7 @@ struct AccountTransactionsView: View {
     @State private var loading = false
     @State private var error: String?
     @State private var showingAdd = false
+    @State private var editing: TransactionItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,6 +29,11 @@ struct AccountTransactionsView: View {
                 Task { await load() }
             }
         }
+        .sheet(item: $editing) { tx in
+            AddTransactionView(account: account, editing: tx) {
+                Task { await load() }
+            }
+        }
         .task(id: session.selectedMonth) { await load() }
     }
 
@@ -38,7 +44,16 @@ struct AccountTransactionsView: View {
                 if page.transactions.isEmpty {
                     Text("No transactions this month").foregroundStyle(.secondary)
                 } else {
-                    ForEach(page.transactions) { transactionRow($0) }
+                    ForEach(page.transactions) { tx in
+                        // Transfers can't be edited in the app, so only non-transfer
+                        // rows are tappable.
+                        if tx.isTransfer {
+                            transactionRow(tx)
+                        } else {
+                            Button { editing = tx } label: { transactionRow(tx) }
+                                .buttonStyle(.plain)
+                        }
+                    }
                 }
             }
             .listStyle(.plain)

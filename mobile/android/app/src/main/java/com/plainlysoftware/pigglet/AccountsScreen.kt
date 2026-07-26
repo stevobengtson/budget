@@ -55,6 +55,7 @@ fun AccountsScreen(
     loadTransactions: suspend (Long, String?) -> TransactionsPage,
     loadCategories: suspend () -> List<CategoryOption>,
     createTransaction: suspend (Long, String, String, Long?, String, String, String) -> Unit,
+    updateTransaction: suspend (Long, Long, String, String, Long?, String, String, String) -> Unit,
 ) {
     // In-tab drill-in: null = account list, non-null = that account's ledger.
     var selected by remember { mutableStateOf<Account?>(null) }
@@ -64,7 +65,8 @@ fun AccountsScreen(
         AccountList(month, onMonthChange, loadAccounts, onOpen = { selected = it })
     } else {
         AccountTransactions(
-            account, month, onMonthChange, loadTransactions, loadCategories, createTransaction,
+            account, month, onMonthChange, loadTransactions, loadCategories,
+            createTransaction, updateTransaction,
             onBack = { selected = null },
         )
         BackHandler { selected = null }
@@ -155,6 +157,7 @@ private fun AccountTransactions(
     loadTransactions: suspend (Long, String?) -> TransactionsPage,
     loadCategories: suspend () -> List<CategoryOption>,
     createTransaction: suspend (Long, String, String, Long?, String, String, String) -> Unit,
+    updateTransaction: suspend (Long, Long, String, String, Long?, String, String, String) -> Unit,
     onBack: () -> Unit,
 ) {
     var page by remember(account.id) { mutableStateOf<TransactionsPage?>(null) }
@@ -164,9 +167,10 @@ private fun AccountTransactions(
     val scope = rememberCoroutineScope()
 
     var showAdd by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<TransactionItem?>(null) }
     var categories by remember { mutableStateOf<List<CategoryOption>>(emptyList()) }
     var saving by remember { mutableStateOf(false) }
-    var addError by remember { mutableStateOf<String?>(null) }
+    var formError by remember { mutableStateOf<String?>(null) }
 
     suspend fun fetch() {
         error = null
@@ -183,8 +187,8 @@ private fun AccountTransactions(
         page = null
         fetch()
     }
-    LaunchedEffect(showAdd) {
-        if (showAdd && categories.isEmpty()) {
+    LaunchedEffect(showAdd, editing) {
+        if ((showAdd || editing != null) && categories.isEmpty()) {
             categories = runCatching { loadCategories() }.getOrDefault(emptyList())
         }
     }
@@ -203,7 +207,7 @@ private fun AccountTransactions(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
-            IconButton(onClick = { addError = null; showAdd = true }) {
+            IconButton(onClick = { formError = null; showAdd = true }) {
                 Icon(Icons.Filled.Add, contentDescription = "Add transaction")
             }
         }
@@ -234,7 +238,14 @@ private fun AccountTransactions(
                             }
                         } else {
                             items(current.transactions, key = { it.id }) { tx ->
-                                TransactionRow(tx)
+                                // Transfers can't be edited in the app, so only
+                                // non-transfer rows open the editor.
+                                TransactionRow(
+                                    tx,
+                                    onClick = if (tx.isTransfer) null else {
+                                        { formError = null; editing = tx }
+                                    },
+                                )
                                 HorizontalDivider()
                             }
                         }
@@ -258,24 +269,58 @@ private fun AccountTransactions(
                 AddTransactionScreen(
                     categories = categories,
                     saving = saving,
-                    error = addError,
+                    error = formError,
                     onCancel = { showAdd = false },
                     onSubmit = { amount, type, categoryId, payee, notes, date ->
                         saving = true
-                        addError = null
+                        formError = null
                         scope.launch {
                             try {
                                 createTransaction(account.id, amount, type, categoryId, payee, notes, date)
                                 showAdd = false
                                 attempt++ // reload the ledger with the new transaction
                             } catch (e: ApiException) {
-                                addError = e.message
+                                formError = e.message
                             } catch (e: Exception) {
-                                addError = "Couldn't save the transaction."
+                                formError = "Couldn't save the transaction."
                             }
                             saving = false
                         }
                     },
+                )
+            }
+        }
+    }
+
+    val edited = editing
+    if (edited != null) {
+        Dialog(
+            onDismissRequest = { editing = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(Modifier.fillMaxSize()) {
+                AddTransactionScreen(
+                    categories = categories,
+                    saving = saving,
+                    error = formError,
+                    onCancel = { editing = null },
+                    onSubmit = { amount, type, categoryId, payee, notes, date ->
+                        saving = true
+                        formError = null
+                        scope.launch {
+                            try {
+                                updateTransaction(account.id, edited.id, amount, type, categoryId, payee, notes, date)
+                                editing = null
+                                attempt++ // reload the ledger with the edit applied
+                            } catch (e: ApiException) {
+                                formError = e.message
+                            } catch (e: Exception) {
+                                formError = "Couldn't save the transaction."
+                            }
+                            saving = false
+                        }
+                    },
+                    editing = edited,
                 )
             }
         }
@@ -305,9 +350,12 @@ private fun MonthHeader(label: String, onPrev: () -> Unit, onNext: () -> Unit) {
 }
 
 @Composable
-private fun TransactionRow(tx: TransactionItem) {
+private fun TransactionRow(tx: TransactionItem, onClick: (() -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().padding(16.dp),
+        Modifier
+            .fillMaxWidth()
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
