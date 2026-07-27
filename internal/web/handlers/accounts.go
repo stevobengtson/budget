@@ -14,11 +14,24 @@ import (
 
 // AccountsOverviewPartial renders just the account overview fragment for the
 // sidebar. It is lazy-loaded on page load and re-fetched whenever a mutation
-// emits the "accountsChanged" HTMX event. Month is empty so per-account links
-// default to the current month on the transactions page.
+// emits the "accountsChanged" HTMX event.
+//
+// Because the fragment is fetched separately from the page, it has no query
+// string of its own: the whole view context (highlighted account, plus the
+// month and category carried into the per-account links) comes from the
+// HX-Current-URL header. HTMX sends that on the initial load and every
+// accountsChanged refresh, so the highlight survives transaction edits.
+// /budget and /transactions name the month param identically, so viewing a past
+// budget month opens that same month's transactions.
 func (h *Handlers) AccountsOverviewPartial(c *gin.Context) {
 	accts, _ := h.store.ListAccounts(c.Request.Context(), currentUserID(c), true)
-	render(c, http.StatusOK, accountsoverview.AccountsOverview(accts, ""))
+	q := currentURLQuery(c)
+	view := accountsoverview.ViewContext{
+		Month:      q.Get("month"),
+		AccountID:  parseIDQuery(q.Get("account")),
+		CategoryID: parseIDQuery(q.Get("category")),
+	}
+	render(c, http.StatusOK, accountsoverview.AccountsOverview(accts, view))
 }
 
 func (h *Handlers) AccountsNew(c *gin.Context) {

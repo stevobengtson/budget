@@ -26,13 +26,16 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 			acctPtr = &v
 		}
 	}
-	// The transactions view is always scoped to a single account; viewing every
-	// account's transactions at once was confusing. Without an account filter
-	// there's nothing meaningful to show, so send the user back to the budget.
-	if acctPtr == nil {
-		c.Redirect(http.StatusSeeOther, "/budget")
-		return
+	var catPtr *int64
+	if v := c.Query("category"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			catPtr = &id
+		}
 	}
+	// Both filters are optional: the filter bar lets the user clear back to an
+	// unscoped month view, so an unfiltered request lists every account's
+	// transactions rather than redirecting away.
+	//
 	// Default to current month unless ?all=1 is set. This matches the
 	// Budget tab's behavior where the user lands on the current month
 	// and navigates with prev/next links.
@@ -47,7 +50,7 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 
 	uid := currentUserID(c)
 	rows, err := h.store.ListTransactions(ctx, uid, store.TxFilter{
-		AccountID: acctPtr, Month: month, Limit: 5000,
+		AccountID: acctPtr, CategoryID: catPtr, Month: month, Limit: 5000,
 	})
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
@@ -75,18 +78,19 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 		next = t.AddDate(0, 1, 0).Format("2006-01")
 	}
 	data := views.TransactionsData{
-		Rows:          rows,
-		Accounts:      accts,
-		Categories:    cats,
-		Groups:        groups,
-		FilterAccount: acctPtr,
-		FilterMonth:   month,
-		PrevMonth:     prev,
-		NextMonth:     next,
-		Today:         store.MonthKey(time.Now()),
-		Page:          page,
-		PageSize:      txPageSize,
-		Total:         total,
+		Rows:           rows,
+		Accounts:       accts,
+		Categories:     cats,
+		Groups:         groups,
+		FilterAccount:  acctPtr,
+		FilterCategory: catPtr,
+		FilterMonth:    month,
+		PrevMonth:      prev,
+		NextMonth:      next,
+		Today:          store.MonthKey(time.Now()),
+		Page:           page,
+		PageSize:       txPageSize,
+		Total:          total,
 	}
 	render(c, http.StatusOK, views.TransactionsPage(data, collapsed))
 }
@@ -114,7 +118,26 @@ func (h *Handlers) TransactionsNew(c *gin.Context) {
 			}
 		}
 	}
+	d.CategoryID = defaultCategoryForNewTx(c, cats)
 	render(c, http.StatusOK, views.TransactionForm(d))
+}
+
+// defaultCategoryForNewTx preselects the category a new transaction starts
+// with: the one the transactions view is filtered to, since adding from a
+// category view means the user is already working within that category. cats
+// holds the selectable (non-archived) categories, so a filter pointing at an
+// archived category falls through to no selection.
+func defaultCategoryForNewTx(c *gin.Context, cats []store.Category) *int64 {
+	filtered := txFilterFromRequest(c, "category")
+	if filtered == nil {
+		return nil
+	}
+	for _, cat := range cats {
+		if cat.ID == *filtered {
+			return filtered
+		}
+	}
+	return nil
 }
 
 func (h *Handlers) TransactionsCreate(c *gin.Context) {
@@ -354,26 +377,19 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 func (h *Handlers) renderTxRows(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	var acctPtr *int64
+	q := currentURLQuery(c)
+	acctPtr := parseIDQuery(q.Get("account"))
+	catPtr := parseIDQuery(q.Get("category"))
 	month := store.MonthKey(time.Now())
-	if currentURL := c.GetHeader("HX-Current-URL"); currentURL != "" {
-		if u, err := url.Parse(currentURL); err == nil {
-			if a := u.Query().Get("account"); a != "" {
-				if v, err := strconv.ParseInt(a, 10, 64); err == nil {
-					acctPtr = &v
-				}
-			}
-			if m := u.Query().Get("month"); m != "" {
-				month = m
-			} else if u.Query().Get("all") == "1" {
-				month = ""
-			}
-		}
+	if m := q.Get("month"); m != "" {
+		month = m
+	} else if q.Get("all") == "1" {
+		month = ""
 	}
 
 	uid := currentUserID(c)
 	rows, _ := h.store.ListTransactions(ctx, uid, store.TxFilter{
-		AccountID: acctPtr, Month: month, Limit: txPageSize,
+		AccountID: acctPtr, CategoryID: catPtr, Month: month, Limit: txPageSize,
 	})
 	accts, _ := h.store.ListAccounts(ctx, uid, true)
 	cats, _ := h.store.ListCategories(ctx, uid, true)
@@ -388,16 +404,44 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 // filter is active. Used to default a new transaction's account to the
 // filtered one.
 func txAccountFromRequest(c *gin.Context) *int64 {
-	if currentURL := c.GetHeader("HX-Current-URL"); currentURL != "" {
-		if u, err := url.Parse(currentURL); err == nil {
-			if a := u.Query().Get("account"); a != "" {
-				if v, err := strconv.ParseInt(a, 10, 64); err == nil {
-					return &v
-				}
-			}
-		}
+	return txFilterFromRequest(c, "account")
+}
+
+// txFilterFromRequest reads one id-valued filter (account, category) from the
+// query string of the transactions view the request came from.
+func txFilterFromRequest(c *gin.Context, param string) *int64 {
+	return parseIDQuery(currentURLQuery(c).Get(param))
+}
+
+// currentURLQuery returns the query string of the page an HTMX request came
+// from, via the HX-Current-URL header. Fragments fetched separately from the
+// page (the sidebar overview, the transaction form) have no query string of
+// their own, so this is how they see the active filters. Returns nil when the
+// header is absent or unparseable; url.Values.Get is nil-safe, so callers can
+// read from it unconditionally.
+func currentURLQuery(c *gin.Context) url.Values {
+	currentURL := c.GetHeader("HX-Current-URL")
+	if currentURL == "" {
+		return nil
 	}
-	return nil
+	u, err := url.Parse(currentURL)
+	if err != nil {
+		return nil
+	}
+	return u.Query()
+}
+
+// parseIDQuery converts a query-string id to a pointer, returning nil when the
+// value is absent or unparseable (an unusable filter is treated as no filter).
+func parseIDQuery(s string) *int64 {
+	if s == "" {
+		return nil
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &v
 }
 
 type errInvalid string

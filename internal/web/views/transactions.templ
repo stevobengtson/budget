@@ -26,13 +26,17 @@ type TransactionsData struct {
 	Categories    []store.Category
 	Groups        []store.CategoryGroup
 	FilterAccount *int64
-	FilterMonth   string // "YYYY-MM" or "" when viewing all months
-	PrevMonth     string
-	NextMonth     string
-	Today         string // current month key, for the "today" jump button
-	Page          int    // 1-based
-	PageSize      int
-	Total         int
+
+	// FilterCategory narrows the view to one category, set either by the filter
+	// bar or by the budget page's "View Transactions" action.
+	FilterCategory *int64
+	FilterMonth    string // "YYYY-MM" or "" when viewing all months
+	PrevMonth      string
+	NextMonth          string
+	Today              string // current month key, for the "today" jump button
+	Page               int    // 1-based
+	PageSize           int
+	Total              int
 }
 
 templ TransactionsPage(d TransactionsData, collapsed bool) {
@@ -64,6 +68,7 @@ templ TransactionsBody(d TransactionsData) {
 			}
 		</div>
 	</div>
+	@TxFilterBar(d)
 	@table.Table(table.Props{Class: "mt-4"}) {
 		@table.Header() {
 			@table.Row() {
@@ -107,6 +112,54 @@ templ TransactionsBody(d TransactionsData) {
 			}
 		</div>
 	}
+}
+
+// TxFilterBar renders the category filter under the page header. It is a plain
+// GET form to /transactions: picking a category re-requests the page with the
+// active month and account carried in hidden fields, so the filter narrows the
+// current view rather than replacing it.
+//
+// The auto-submit hangs off the hidden input templUI posts from (see
+// SelectField) — templUI dispatches `change` there only on a user pick or the
+// built-in clear button, never on init, so this can't loop on page load.
+templ TxFilterBar(d TransactionsData) {
+	<form method="get" action="/transactions" class="flex flex-wrap items-center gap-2 border-b border-border pb-3">
+		if d.FilterMonth != "" {
+			<input type="hidden" name="month" value={ d.FilterMonth }/>
+		} else {
+			<input type="hidden" name="all" value="1"/>
+		}
+		if d.FilterAccount != nil {
+			<input type="hidden" name="account" value={ strconv.FormatInt(*d.FilterAccount, 10) }/>
+		}
+		@label.Label(label.Props{For: "filter-category", Class: "text-sm text-muted-foreground"}) {
+			Category
+		}
+		@SelectField(SelectFieldProps{
+			ID:         "filter-category",
+			Name:       "category",
+			Class:      "w-56",
+			Attributes: templ.Attributes{"onchange": "this.form.requestSubmit()"},
+		}, categoryFilterOptions(d.Categories, d.FilterCategory))
+	</form>
+}
+
+// categoryFilterOptions lists the categories for the filter bar, led by an
+// empty-valued "All categories" entry that clears the filter. Archived
+// categories are included: they still label historical transactions, so a
+// filter arriving from the budget stays correctly labelled after the category
+// is archived.
+func categoryFilterOptions(cats []store.Category, selected *int64) []Opt {
+	out := make([]Opt, 0, len(cats)+1)
+	out = append(out, Opt{Value: "", Label: "All categories", Selected: selected == nil})
+	for _, c := range cats {
+		out = append(out, Opt{
+			Value:    strconv.FormatInt(c.ID, 10),
+			Label:    c.Name,
+			Selected: selected != nil && *selected == c.ID,
+		})
+	}
+	return out
 }
 
 // TxRows renders the sorted transaction rows with day-change separators. Shared
@@ -400,15 +453,12 @@ func transactionsPageHref(d TransactionsData, page int) string {
 	} else {
 		q += "&all=1"
 	}
-	if d.FilterAccount != nil {
-		q += fmt.Sprintf("&account=%d", *d.FilterAccount)
-	}
-	return q
+	return q + txFilterQuery(d)
 }
 
 // txMonthHref builds a /transactions URL pointing at the given month
 // (or "all months" when month is empty), preserving the active account
-// filter.
+// and category filters.
 func txMonthHref(d TransactionsData, month string) string {
 	q := "/transactions"
 	if month != "" {
@@ -416,8 +466,18 @@ func txMonthHref(d TransactionsData, month string) string {
 	} else {
 		q += "?all=1"
 	}
+	return q + txFilterQuery(d)
+}
+
+// txFilterQuery renders the active account/category filters as query params to
+// append to a /transactions URL, so month navigation and paging stay scoped.
+func txFilterQuery(d TransactionsData) string {
+	q := ""
 	if d.FilterAccount != nil {
 		q += fmt.Sprintf("&account=%d", *d.FilterAccount)
+	}
+	if d.FilterCategory != nil {
+		q += fmt.Sprintf("&category=%d", *d.FilterCategory)
 	}
 	return q
 }

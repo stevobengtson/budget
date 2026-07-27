@@ -1,6 +1,7 @@
 package accountsoverview
 
 import (
+	"net/url"
 	"strconv"
 
 	"github.com/sbengtson/budget/internal/core/money"
@@ -11,27 +12,28 @@ import (
 	"github.com/templui/templui/components/icon"
 )
 
+// ViewContext describes the page the sidebar is being rendered alongside. All
+// three fields come from the same place — the current URL's query string — and
+// travel together: AccountID highlights the active row, while Month and
+// CategoryID are carried into every account link so switching accounts keeps
+// the view you were in. Grouped into a struct rather than passed positionally
+// because two bare *int64 parameters are trivial to transpose.
+type ViewContext struct {
+	Month      string // "YYYY-MM"; empty omits the param and the page falls back to today
+	AccountID  *int64 // the account being viewed, highlighted in the list
+	CategoryID *int64 // the active category filter, preserved across account switches
+}
+
 // AccountsOverview renders a grouped account list (Cash/Credit/Loan) with an
 // estimated net-worth footer. Self-contained: pass the raw account slice and it
-// does its own grouping and totaling. Reusable on any page.
-templ AccountsOverview(accts []store.AccountWithBalance, month string) {
-	@overview(accts, month, false)
-}
-
-// AccountsOverviewOOB renders the overview as an out-of-band swap so a
-// transaction mutation can refresh account balances without re-rendering the
-// page. It targets the stable #accounts-overview container.
-templ AccountsOverviewOOB(accts []store.AccountWithBalance, month string) {
-	@overview(accts, month, true)
-}
-
-templ overview(accts []store.AccountWithBalance, month string, oob bool) {
+// does its own grouping and totaling. Reusable on any page — pass a zero
+// ViewContext where there is no active view (nothing highlighted, bare links).
+//
+// #accounts-overview is a stable id: the sidebar refetches this fragment into
+// it whenever a mutation emits accountsChanged.
+templ AccountsOverview(accts []store.AccountWithBalance, view ViewContext) {
 	{{ buckets, net := group(accts) }}
-	{{ attrs := templ.Attributes{"id": "accounts-overview"} }}
-	if oob {
-		{{ attrs["hx-swap-oob"] = "true" }}
-	}
-	<div { attrs... }>
+	<div id="accounts-overview">
 		<div class="space-y-3">
 			if len(buckets) == 0 {
 				<p class="px-2 py-1 text-sm text-muted-foreground">
@@ -48,13 +50,17 @@ templ overview(accts []store.AccountWithBalance, month string, oob bool) {
 					</div>
 					<div class="mt-1 space-y-0.5">
 						for _, a := range b.Accounts {
-							<div class="flex items-center rounded-md pr-1 transition-colors hover:bg-muted/60">
+							{{ active := view.AccountID != nil && *view.AccountID == a.ID }}
+							<div class={ acctRowClass(active) }>
 								<a
-									href={ templ.URL(txHref(a.ID, month)) }
+									href={ templ.URL(txHref(a.ID, view)) }
 									class="flex flex-1 items-center justify-between rounded-md py-1 pl-2 pr-1 text-sm"
 									title={ "View transactions for " + a.Name }
+									if active {
+										aria-current="page"
+									}
 								>
-									<span class="truncate text-sidebar-foreground">{ a.Name }</span>
+									<span class={ acctNameClass(active) }>{ a.Name }</span>
 									<span class="tabular-nums text-muted-foreground">{ money.Format(displayCents(a)) }</span>
 								</a>
 								@acctMenu(a)
@@ -122,14 +128,46 @@ templ acctMenu(a store.AccountWithBalance) {
 	}
 }
 
-// txHref builds a link to the transactions page filtered to one account. The
-// selected month is preserved when set (e.g. when navigating from a past-month
-// budget view), so the transactions page opens on the same month; when unset it
-// is omitted and the transactions page falls back to the current month.
-func txHref(accountID int64, month string) string {
-	acct := "account=" + strconv.FormatInt(accountID, 10)
-	if month != "" {
-		return "/transactions?month=" + month + "&" + acct
+// acctRowClass styles one account row. The selected row reuses the primary
+// nav's active treatment (templUI applies these same classes for
+// data-tui-sidebar-active) so a selected account reads identically to the
+// selected Budget item. Hover is dropped when active — it would otherwise
+// paint over the accent background on mouseover.
+func acctRowClass(active bool) string {
+	const base = "flex items-center rounded-md pr-1 transition-colors"
+	if active {
+		return base + " bg-sidebar-accent font-medium text-sidebar-accent-foreground"
 	}
-	return "/transactions?" + acct
+	return base + " hover:bg-muted/60"
+}
+
+// acctNameClass keeps the account name readable on the active row's accent
+// background. The balance stays muted in both states, preserving the
+// name-over-number hierarchy.
+func acctNameClass(active bool) string {
+	if active {
+		return "truncate text-sidebar-accent-foreground"
+	}
+	return "truncate text-sidebar-foreground"
+}
+
+// txHref builds a link to the transactions page for one account, carrying the
+// current view's month and category filter so switching accounts changes only
+// the account. An unset month is omitted and the transactions page falls back
+// to the current month; an unset category means no category filter.
+//
+// Built with url.Values rather than concatenation because month originates in
+// the HX-Current-URL header rather than in our own code: an unescaped "&" in it
+// would otherwise append extra query params, and Gin reads the first value of a
+// repeated param.
+func txHref(accountID int64, view ViewContext) string {
+	q := url.Values{}
+	if view.Month != "" {
+		q.Set("month", view.Month)
+	}
+	q.Set("account", strconv.FormatInt(accountID, 10))
+	if view.CategoryID != nil {
+		q.Set("category", strconv.FormatInt(*view.CategoryID, 10))
+	}
+	return "/transactions?" + q.Encode()
 }

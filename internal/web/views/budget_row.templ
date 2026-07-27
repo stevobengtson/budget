@@ -153,10 +153,11 @@ func findGroup(groups []BudgetGroup, gid int64) (BudgetGroup, bool) {
 	return BudgetGroup{}, false
 }
 
-// rowMenu renders the per-category three-dot actions menu: rollover toggles,
-// copy-from-previous-month, and delete (archive). The two toggle items post the
-// target rollover mode computed from the row's current mode and keep the menu
-// open (PreventClose) so both can be flipped in one visit.
+// rowMenu renders the per-category three-dot actions menu: view transactions,
+// rollover toggles, copy-from-previous-month, and delete (archive). The two
+// toggle items post the target rollover mode computed from the row's current
+// mode and keep the menu open (PreventClose) so both can be flipped in one
+// visit.
 templ rowMenu(month string, r store.CategoryBudget) {
 	{{ rolloverOn := r.RolloverMode != store.RolloverNone }}
 	{{ ignoreNeg := r.RolloverMode == store.RolloverCarryPositive }}
@@ -178,6 +179,12 @@ templ rowMenu(month string, r store.CategoryBudget) {
 			@icon.EllipsisVertical(icon.Props{Class: "size-4"})
 		}
 		@dropdown.Content() {
+			@dropdown.Item(dropdown.ItemProps{
+				Href: fmt.Sprintf("/transactions?category=%d&month=%s", r.CategoryID, month),
+			}) {
+				View Transactions
+			}
+			@dropdown.Separator()
 			@dropdown.Item(dropdown.ItemProps{
 				PreventClose: true,
 				Attributes: templ.Attributes{

@@ -238,6 +238,79 @@ func TestAccountsOverviewPartialRenders(t *testing.T) {
 	}
 }
 
+// TestAccountsOverviewHighlightsCurrentAccount covers the sidebar highlight
+// wiring. The fragment is fetched separately from the page, so the selected
+// account can only come from the HX-Current-URL header HTMX sends.
+func TestAccountsOverviewHighlightsCurrentAccount(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	chequing, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking})
+	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Savings", Type: store.TypeSavings}); err != nil {
+		t.Fatal(err)
+	}
+
+	get := func(currentURL string) string {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodGet, ts.URL+"/accounts/overview", nil)
+		if currentURL != "" {
+			req.Header.Set("HX-Current-URL", currentURL)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+		return readAll(t, resp)
+	}
+
+	onAccount := get(ts.URL + "/transactions?account=" + strconv.FormatInt(chequing, 10) + "&month=2026-07")
+	if got := strings.Count(onAccount, `aria-current="page"`); got != 1 {
+		t.Errorf("aria-current count = %d, want 1 when an account is in the URL", got)
+	}
+
+	// The budget page carries no account, so nothing should be highlighted.
+	if body := get(ts.URL + "/budget"); strings.Contains(body, `aria-current="page"`) {
+		t.Error("no account should be highlighted on /budget")
+	}
+	// A category-only transactions view likewise selects no account.
+	if body := get(ts.URL + "/transactions?month=2026-07&category=3"); strings.Contains(body, `aria-current="page"`) {
+		t.Error("no account should be highlighted on a category-only view")
+	}
+	// Non-HTMX fetches (no header) must not error or guess.
+	if body := get(""); strings.Contains(body, `aria-current="page"`) {
+		t.Error("no header should mean no highlight")
+	}
+
+	// The month carries into the account links, so a past-month view keeps its
+	// month when switching accounts. /budget uses the same param name.
+	// (url.Values.Encode sorts params, and templ escapes & as &amp;.)
+	fromBudget := get(ts.URL + "/budget?month=2026-05")
+	if want := "account=" + strconv.FormatInt(chequing, 10) + "&amp;month=2026-05"; !strings.Contains(fromBudget, want) {
+		t.Errorf("account links missing carried month %q", want)
+	}
+	// Without a month anywhere, links omit it and the page falls back to today.
+	plain := get(ts.URL + "/budget")
+	if strings.Contains(plain, "month=") {
+		t.Error("account links should omit month when the current view has none")
+	}
+
+	// The category filter carries too, so switching accounts from a filtered
+	// transactions view changes only the account.
+	filtered := get(ts.URL + "/transactions?month=2026-05&account=" +
+		strconv.FormatInt(chequing, 10) + "&category=42")
+	if want := "&amp;category=42&amp;month=2026-05"; !strings.Contains(filtered, want) {
+		t.Errorf("account links missing carried category %q", want)
+	}
+	// Every account link points at its own account, not the one being viewed.
+	if strings.Count(filtered, "category=42") < 2 {
+		t.Error("category should be carried onto every account link, not just the active one")
+	}
+}
+
 // TestUnauthenticatedRedirectsToLogin verifies an anonymous client (no session
 // cookie) is bounced to /login from a protected app route.
 func TestUnauthenticatedRedirectsToLogin(t *testing.T) {
@@ -366,6 +439,175 @@ func TestTransactionCreateByType(t *testing.T) {
 	bRows, _ := s.ListTransactions(ctx, uid, store.TxFilter{AccountID: &b})
 	if len(bRows) != 1 || bRows[0].InflowCents != 1500 || bRows[0].TransferAccountID == nil || *bRows[0].TransferAccountID != a {
 		t.Errorf("transfer dest leg: want inflow 1500 from a, got %+v", bRows)
+	}
+}
+
+// TestTransactionsCategoryFilter covers the budget page's "View Transactions"
+// action. The view is scoped to one category across every account (no account
+// filter), so it matches the budget's Spent figure, and names the category in
+// its heading.
+func TestTransactionsCategoryFilter(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	chequing, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking})
+	visa, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Visa", Type: store.TypeChecking})
+	gid, _ := s.CreateGroup(ctx, uid, "Everyday", 0)
+	groceries, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Groceries"})
+	dining, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Dining"})
+
+	// Same category, two different accounts — both belong in the view.
+	mkTx(t, s, uid, chequing, groceries, "2026-07-04", "Loblaws")
+	mkTx(t, s, uid, visa, groceries, "2026-07-09", "Costco")
+	// Another category, and the same category in another month — both excluded.
+	mkTx(t, s, uid, chequing, dining, "2026-07-05", "CornerCafe")
+	mkTx(t, s, uid, chequing, groceries, "2026-06-04", "OldMart")
+
+	resp, err := client.Get(ts.URL + "/transactions?category=" + strconv.FormatInt(groceries, 10) + "&month=2026-07")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	body := readAll(t, resp)
+
+	for _, want := range []string{"Loblaws", "Costco"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q; want every account's transactions in the category", want)
+		}
+	}
+	for _, notWant := range []string{"CornerCafe", "OldMart"} {
+		if strings.Contains(body, notWant) {
+			t.Errorf("body contains %q; want it filtered out by category+month", notWant)
+		}
+	}
+	// The filter bar must reflect the active filter, not just the row set.
+	if want := selectboxSelected(groceries); !strings.Contains(body, want) {
+		t.Errorf("filter bar did not show category %d as selected", groceries)
+	}
+	// Month navigation must carry the category, or stepping a month silently
+	// widens the view to every category. The href is attribute-escaped.
+	if want := "/transactions?month=2026-06&amp;category=" + strconv.FormatInt(groceries, 10); !strings.Contains(body, want) {
+		t.Errorf("body missing prev-month link %q", want)
+	}
+}
+
+// TestTransactionsFilterBarNarrowsAccount covers the filter bar on an account
+// view: category narrows within the selected account rather than replacing it.
+func TestTransactionsFilterBarNarrowsAccount(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	chequing, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking})
+	visa, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Visa", Type: store.TypeChecking})
+	gid, _ := s.CreateGroup(ctx, uid, "Everyday", 0)
+	groceries, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Groceries"})
+	dining, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Dining"})
+
+	mkTx(t, s, uid, chequing, groceries, "2026-07-04", "Loblaws")
+	mkTx(t, s, uid, visa, groceries, "2026-07-09", "Costco")
+	mkTx(t, s, uid, chequing, dining, "2026-07-05", "CornerCafe")
+
+	resp, err := client.Get(ts.URL + "/transactions?account=" + strconv.FormatInt(chequing, 10) +
+		"&month=2026-07&category=" + strconv.FormatInt(groceries, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	body := readAll(t, resp)
+
+	if !strings.Contains(body, "Loblaws") {
+		t.Error("body missing Loblaws; want the account+category intersection")
+	}
+	// Same category, other account: excluded because the account filter stands.
+	if strings.Contains(body, "Costco") {
+		t.Error("body contains Costco; category must narrow within the account, not replace it")
+	}
+	// Same account, other category.
+	if strings.Contains(body, "CornerCafe") {
+		t.Error("body contains CornerCafe; want it filtered out by category")
+	}
+	// The bar's hidden field carries the account so the next pick keeps it.
+	if want := `name="account" value="` + strconv.FormatInt(chequing, 10) + `"`; !strings.Contains(body, want) {
+		t.Errorf("filter bar missing hidden account field %q", want)
+	}
+}
+
+// TestTransactionsUnfilteredListsMonth pins the filter bar's "All categories"
+// end state. With neither filter the page lists every account's transactions
+// for the month; it deliberately no longer redirects to the budget.
+func TestTransactionsUnfilteredListsMonth(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	chequing, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking})
+	visa, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Visa", Type: store.TypeChecking})
+	gid, _ := s.CreateGroup(ctx, uid, "Everyday", 0)
+	groceries, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Groceries"})
+	dining, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Dining"})
+
+	mkTx(t, s, uid, chequing, groceries, "2026-07-04", "Loblaws")
+	mkTx(t, s, uid, visa, dining, "2026-07-09", "CornerCafe")
+	mkTx(t, s, uid, chequing, groceries, "2026-06-04", "OldMart")
+
+	resp, err := client.Get(ts.URL + "/transactions?month=2026-07")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (unfiltered view no longer redirects)", resp.StatusCode)
+	}
+	body := readAll(t, resp)
+
+	for _, want := range []string{"Loblaws", "CornerCafe"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q; want every account and category for the month", want)
+		}
+	}
+	if strings.Contains(body, "OldMart") {
+		t.Error("body contains OldMart; the month filter must still apply")
+	}
+	if !strings.Contains(body, "All categories") {
+		t.Error("filter bar missing the All categories option")
+	}
+}
+
+// TestTransactionsNewPreselectsCategory checks that adding a transaction from a
+// category-filtered view starts with that category selected.
+func TestTransactionsNewPreselectsCategory(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking}); err != nil {
+		t.Fatal(err)
+	}
+	gid, _ := s.CreateGroup(ctx, uid, "Everyday", 0)
+	groceries, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Groceries"})
+	dining, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Dining"})
+
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/transactions/new", nil)
+	req.Header.Set("HX-Current-URL", ts.URL+"/transactions?category="+strconv.FormatInt(groceries, 10)+"&month=2026-07")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	body := readAll(t, resp)
+
+	if !strings.Contains(body, selectboxSelected(groceries)) {
+		t.Errorf("form did not preselect the filtered category %d", groceries)
+	}
+	if strings.Contains(body, selectboxSelected(dining)) {
+		t.Errorf("form preselected category %d, which is not the filtered one", dining)
 	}
 }
 
@@ -631,6 +873,28 @@ func findCatMode(cats []store.Category, id int64) string {
 		}
 	}
 	return ""
+}
+
+// mkTx inserts a categorized expense, identified in assertions by its payee.
+func mkTx(t *testing.T, s *store.Store, uid, acct, cat int64, date, payee string) {
+	t.Helper()
+	d, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := payee
+	if _, err := s.CreateTransaction(context.Background(), uid, store.Transaction{
+		Date: d, AccountID: acct, CategoryID: &cat, Payee: &p, OutflowCents: 1000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// selectboxSelected is the markup templUI emits for a chosen selectbox option.
+// Asserting on it couples these tests to templUI's DOM, but it is the only
+// signal that distinguishes "selected" from merely "present in the list".
+func selectboxSelected(id int64) string {
+	return `data-tui-selectbox-value="` + strconv.FormatInt(id, 10) + `" data-tui-selectbox-selected="true"`
 }
 
 func readAll(t *testing.T, resp *http.Response) string {
