@@ -6,3 +6,8 @@ build/
 *.iml
 .DS_Store
 .kotlin/
+
+# Release signing — never commit the keystore or its passwords
+keystore.properties
+*.jks
+*.keystore

@@ -1,4 +1,4 @@
-package com.plainlysoftware.pigglet
+package ca.pigglet.budget
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec

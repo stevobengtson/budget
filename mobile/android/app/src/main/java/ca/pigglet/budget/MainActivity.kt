@@ -1,4 +1,4 @@
-package com.plainlysoftware.pigglet
+package ca.pigglet.budget
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity

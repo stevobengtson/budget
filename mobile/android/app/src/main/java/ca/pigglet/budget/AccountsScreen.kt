@@ -1,4 +1,4 @@
-package com.plainlysoftware.pigglet
+package ca.pigglet.budget
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable

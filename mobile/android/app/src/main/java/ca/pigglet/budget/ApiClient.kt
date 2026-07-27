@@ -1,4 +1,4 @@
-package com.plainlysoftware.pigglet
+package ca.pigglet.budget
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

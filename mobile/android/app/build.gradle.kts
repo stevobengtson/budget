@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // Kotlin is compiled by AGP 9's built-in support; only the Compose compiler
@@ -5,16 +7,35 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Release signing is read from an untracked keystore.properties (see
+// keystore.properties.example). Absent it, release builds are left unsigned so
+// the build still works for anyone without the upload key.
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+}
+
 android {
-    namespace = "com.plainlysoftware.pigglet"
+    namespace = "ca.pigglet.budget"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.plainlysoftware.pigglet"
+        applicationId = "ca.pigglet.budget"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
+    }
+
+    signingConfigs {
+        if (keystorePropsFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps["storeFile"] as String)
+                storePassword = keystoreProps["storePassword"] as String
+                keyAlias = keystoreProps["keyAlias"] as String
+                keyPassword = keystoreProps["keyPassword"] as String
+            }
+        }
     }
 
     buildTypes {
@@ -27,6 +48,9 @@ android {
             isMinifyEnabled = false
             buildConfigField("String", "API_BASE_URL", "\"https://pigglet.ca\"")
             manifestPlaceholders["usesCleartextTraffic"] = "false"
+            if (keystorePropsFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-package com.plainlysoftware.pigglet
+package ca.pigglet.budget
 
 import android.app.Application
 import androidx.compose.runtime.getValue

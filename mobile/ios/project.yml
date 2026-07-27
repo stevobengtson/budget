@@ -2,7 +2,7 @@
 # Regenerate the .xcodeproj after editing:  xcodegen generate
 name: Budget
 options:
-  bundleIdPrefix: com.plainlysoftware
+  bundleIdPrefix: ca.pigglet
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -19,14 +19,14 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: Budget/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.plainlysoftware.pigglet
+        PRODUCT_BUNDLE_IDENTIFIER: ca.pigglet.budget
         ASSETCATALOG_COMPILER_APPICON_NAME: icon_1024
         # Paid Apple Developer team. Automatic signing lets Xcode create/manage the
         # dev + distribution certs and provisioning profiles (device + TestFlight).
         DEVELOPMENT_TEAM: NTQ6QQEU5A
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "1.1.0"
+        CURRENT_PROJECT_VERSION: "2"
         SWIFT_VERSION: "5.0"
         # iPhone only. (iPad would require supporting all four orientations for
         # multitasking; the app is portrait-only. It still runs on iPad scaled.)
