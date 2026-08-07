@@ -206,17 +206,46 @@
   #budget-table [data-group]:not(.group-collapsed) .js-group-total-header { display: none; }
   #budget-table [data-group]:not(.group-collapsed) .js-group-caret { transform: rotate(90deg); }
 
-  /* Transaction form: the "Transfer to" destination shows only when the
-     Transfer type is selected (the amount then posts as an outflow from the
-     chosen account). Driven purely by the radio's :checked state — no JS. */
+  /* Transaction type drives which fields are shown, with no JavaScript: the
+     radio group's :checked state is read by :has() on the enclosing form.
+     [data-tx-form] matches both the edit sheet (#tx-form-inner) and the
+     always-open quick-add row (#tx-quickadd), so the two stay in step.
+
+     The "Transfer to" destination appears only for a transfer (the amount then
+     posts as an outflow from the chosen account). */
   .tx-transfer-field { display: none; }
-  #tx-form-inner:has(input[name="tx_type"][value="transfer"]:checked) .tx-transfer-field { display: block; }
+  [data-tx-form]:has(input[name="tx_type"][value="transfer"]:checked) .tx-transfer-field { display: block; }
 
   /* The amount label follows the type: "Inflow" for Income, "Outflow" for
      Expense/Transfer (a transfer is an outflow from the chosen account). */
   .tx-amount-inflow { display: none; }
-  #tx-form-inner:has(input[name="tx_type"][value="income"]:checked) .tx-amount-outflow { display: none; }
-  #tx-form-inner:has(input[name="tx_type"][value="income"]:checked) .tx-amount-inflow { display: inline; }
+  [data-tx-form]:has(input[name="tx_type"][value="income"]:checked) .tx-amount-outflow,
+  [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="income"][data-tui-selectbox-selected="true"]) .tx-amount-outflow { display: none; }
+  [data-tx-form]:has(input[name="tx_type"][value="income"]:checked) .tx-amount-inflow,
+  [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="income"][data-tui-selectbox-selected="true"]) .tx-amount-inflow { display: inline; }
+
+  /* Quick-add row: a transfer swaps Payee and Category out for the To account
+     and the swap button, and relabels Account as From, so the row reads as a
+     From -> To pair.
+     The quick-add picks its type with templUI's SelectBox, whose value lives in
+     a hidden input that CSS cannot match on. It can be read from the dropdown
+     instead: selectbox.js keeps `data-tui-selectbox-selected` current on the
+     chosen item — on click, and on a programmatic value change too (it overrides
+     the hidden input's value setter to re-sync). Scoped to .tx-type-select so
+     the account and category dropdowns can't trip these rules. Both selector
+     forms are listed per rule so the sheet's radios and the quick-add's
+     SelectBox keep sharing one set of utility classes. */
+  .tx-transfer-only { display: none; }
+  [data-tx-form]:has(input[name="tx_type"][value="transfer"]:checked) .tx-transfer-only,
+  [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="transfer"][data-tui-selectbox-selected="true"]) .tx-transfer-only { display: flex; }
+  [data-tx-form]:has(input[name="tx_type"][value="transfer"]:checked) .tx-plain-only,
+  [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="transfer"][data-tui-selectbox-selected="true"]) .tx-plain-only { display: none; }
+
+  .tx-label-from { display: none; }
+  [data-tx-form]:has(input[name="tx_type"][value="transfer"]:checked) .tx-label-account,
+  [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="transfer"][data-tui-selectbox-selected="true"]) .tx-label-account { display: none; }
+  [data-tx-form]:has(input[name="tx_type"][value="transfer"]:checked) .tx-label-from,
+  [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="transfer"][data-tui-selectbox-selected="true"]) .tx-label-from { display: inline; }
 }
 
 @keyframes sheet-in {

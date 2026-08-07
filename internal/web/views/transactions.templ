@@ -16,8 +16,6 @@ import (
 	"github.com/templui/templui/components/icon"
 	"github.com/templui/templui/components/input"
 	"github.com/templui/templui/components/label"
-	switchcomp "github.com/templui/templui/components/switch"
-	"github.com/templui/templui/components/table"
 )
 
 type TransactionsData struct {
@@ -46,75 +44,207 @@ templ TransactionsPage(d TransactionsData, collapsed bool) {
 }
 
 templ TransactionsBody(d TransactionsData) {
-	<div class="grid grid-cols-3 items-center gap-4 pb-2">
-		<h1 class="text-2xl font-semibold tracking-tight">{ txMonthLabel(d.FilterMonth) }</h1>
-		<div class="flex justify-center">
-			@monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth), d.FilterMonth == d.Today)
+	<div class="flex flex-col gap-s3">
+		<div class="flex flex-wrap items-center justify-between gap-s3">
+			<h1 class="font-heading text-[22px] font-semibold">{ txMonthLabel(d.FilterMonth) }</h1>
+			<div class="flex flex-wrap items-center gap-s3">
+				@TxAccountFilter(d)
+				@monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth), d.FilterMonth == d.Today)
+			</div>
 		</div>
-		<div class="flex justify-end">
-			@button.Button(button.Props{
-				Href: "/transactions/new",
-        Type: "button",
-        Variant: button.VariantOutline,
-				Size: button.SizeSm,
-				Attributes: templ.Attributes{
-					"hx-get":    "/transactions/new",
-					"hx-target": "#modal",
-					"hx-swap":   "innerHTML",
-          "title": "Add transaction",
-				},
-			}) {
-				Add transaction
-			}
+		@TxQuickAdd(d)
+		@TxFilterBar(d)
+		<div id="tx-rows" class="flex flex-col">
+			@TxRows(d.Rows, d.Accounts, d.Categories, d.FilterAccount)
 		</div>
-	</div>
-	@TxFilterBar(d)
-	@table.Table(table.Props{Class: "mt-4"}) {
-		@table.Header() {
-			@table.Row() {
-				@table.Head() {
-					Date
+		if d.Total > d.PageSize {
+			<div class="flex items-center gap-s3 pt-s3 text-[13px] text-muted-foreground">
+				if d.Page > 1 {
+					@button.Button(button.Props{Href: transactionsPageHref(d, d.Page-1), Variant: button.VariantOutline, Size: button.SizeSm, Class: "rounded-pill"}) {
+						‹ prev
+					}
 				}
-				@table.Head() {
-					Category / Transfer 
+				<span>page { strconv.Itoa(d.Page) } of { strconv.Itoa((d.Total + d.PageSize - 1) / d.PageSize) }</span>
+				if d.Page * d.PageSize < d.Total {
+					@button.Button(button.Props{Href: transactionsPageHref(d, d.Page+1), Variant: button.VariantOutline, Size: button.SizeSm, Class: "rounded-pill"}) {
+						next ›
+					}
 				}
-				@table.Head() {
-					Payee 
-				}
-				@table.Head(table.HeadProps{Class: "text-right"}) {
-					Outflow 
-				}
-				@table.Head(table.HeadProps{Class: "text-right"}) {
-					Inflow 
-				}
-				@table.Head(table.HeadProps{Class: "text-center"}) {
-					@icon.Check(icon.Props{Class: "size-4 inline text-muted-foreground"})
-				}
-				@table.Head()
-			}
+			</div>
 		}
-		<tbody id="tx-rows" class="[&_tr:last-child]:border-0">
-			@TxRows(d.Rows, d.Accounts, d.Categories)
-		</tbody>
-	}
-	if d.Total > d.PageSize {
-		<div class="mt-4 flex items-center gap-3 text-sm text-muted-foreground">
-			if d.Page > 1 {
-				@button.Button(button.Props{Href: transactionsPageHref(d, d.Page-1), Variant: button.VariantOutline, Size: button.SizeSm}) {
-					‹ prev
-				}
-			}
-			<span>page { strconv.Itoa(d.Page) } of { strconv.Itoa((d.Total + d.PageSize - 1) / d.PageSize) }</span>
-			if d.Page * d.PageSize < d.Total {
-				@button.Button(button.Props{Href: transactionsPageHref(d, d.Page+1), Variant: button.VariantOutline, Size: button.SizeSm}) {
-					next ›
-				}
-			}
-		</div>
-	}
+	</div>
 }
 
-// TxFilterBar renders the category filter under the page header. It is a plain
+// TxAccountFilter is the segmented account filter. These are links, not form
+// controls: each re-requests the page with the account scoped, which is also
+// what makes a transfer render as its own account's leg (see TxRows).
+templ TxAccountFilter(d TransactionsData) {
+	<div class="flex max-w-full items-center gap-1 overflow-x-auto rounded-pill bg-muted p-1">
+		@txAccountChip(txAccountHref(d, nil), "All accounts", d.FilterAccount == nil)
+		for _, a := range d.Accounts {
+			@txAccountChip(txAccountHref(d, &a.ID), a.Name, d.FilterAccount != nil && *d.FilterAccount == a.ID)
+		}
+	</div>
+}
+
+templ txAccountChip(href, label string, active bool) {
+	<a
+		href={ templ.SafeURL(href) }
+		if active {
+			aria-current="true"
+			class="shrink-0 whitespace-nowrap rounded-pill bg-primary px-s3 py-1 text-[14px] font-semibold text-primary-foreground"
+		} else {
+			class="shrink-0 whitespace-nowrap rounded-pill px-s3 py-1 text-[14px] text-muted-foreground hover:text-foreground"
+		}
+	>
+		{ label }
+	</a>
+}
+
+// TxQuickAdd is the always-open entry row — the redesign's centrepiece. It
+// replaces the Add transaction -> sheet -> form -> save round trip: the row is
+// never behind a button, focus opens on Amount, and Enter saves and starts the
+// next entry with Date and Account retained.
+//
+// Field swapping between expense/income/transfer is pure CSS, driven by the
+// radio group's :checked state (see input.css) — the same approach the old sheet
+// form used, extended to the From -> To pair.
+//
+// The selects are native rather than templUI's SelectField: this row is built
+// for a keyboard run (tab through, Enter, repeat), and a native select tabs and
+// type-aheads correctly and can be reassigned by the swap button without driving
+// a custom popover widget.
+templ TxQuickAdd(d TransactionsData) {
+	<form
+		id="tx-quickadd"
+		data-tx-form
+		hx-post="/transactions"
+		hx-target="#tx-rows"
+		hx-swap="innerHTML"
+		class="flex flex-col gap-s3 rounded-xl bg-surface-quickadd p-s3 shadow-organic-sm"
+	>
+		<div class="flex flex-wrap items-end gap-s2">
+			@quickField("qa-type", "Type", "w-[140px]") {
+				@SelectField(SelectFieldProps{
+					ID:           "qa-type",
+					Name:         "tx_type",
+					Class:        "tx-type-select w-full",
+					TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+					NoSearch:     true,
+				}, []Opt{
+					{Value: "expense", Label: "Expense", Selected: true},
+					{Value: "income", Label: "Income"},
+					{Value: "transfer", Label: "Transfer"},
+				})
+			}
+			@quickField("qa-date", "Date", "w-[170px]") {
+				@datepicker.DatePicker(datepicker.Props{
+					ID:          "qa-date",
+					Name:        "date",
+					Value:       time.Now(),
+					Placeholder: "Pick a date",
+					Class:       "w-full",
+				})
+			}
+			@quickField("qa-amount", "Amount", "w-[124px]") {
+				<input
+					id="qa-amount"
+					type="text"
+					name="amount"
+					inputmode="decimal"
+					autocomplete="off"
+					placeholder="0.00"
+					class="h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				/>
+			}
+			<div class="tx-plain-only min-w-[150px] flex-1">
+				@quickField("qa-payee", "Payee", "w-full") {
+					<input
+						id="qa-payee"
+						type="text"
+						name="payee"
+						autocomplete="off"
+						class="h-9 w-full rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary"
+					/>
+				}
+			</div>
+			<div class="tx-plain-only w-[170px]">
+				@quickField("qa-category", "Category", "w-full") {
+					@SelectField(SelectFieldProps{
+						ID:           "qa-category",
+						Name:         "category_id",
+						Placeholder:  "(none)",
+						Class:        "w-full",
+						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+					}, categoryOptions(d.Categories, nil))
+				}
+			</div>
+			// When the list is already scoped to one account, the Account field is
+			// redundant in expense/income mode — the answer is the account you are
+			// looking at. It stays in the DOM (a display:none select still posts its
+			// value) and reappears as "From" in transfer mode, where both ends of the
+			// movement have to be visible.
+			<div
+				id="qa-account-field"
+				if d.FilterAccount != nil {
+					class="tx-transfer-only w-[180px]"
+				} else {
+					class="w-[180px]"
+				}
+			>
+				@quickField("qa-account", "Account", "w-full") {
+					@SelectField(SelectFieldProps{
+						ID:           "qa-account",
+						Name:         "account_id",
+						Class:        "w-full",
+						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+					}, accountOptions(d.Accounts, txDefaultAccount(d)))
+				}
+			</div>
+			<div class="tx-transfer-only w-[180px]">
+				@quickField("qa-transfer", "To", "w-full") {
+					@SelectField(SelectFieldProps{
+						ID:           "qa-transfer",
+						Name:         "transfer_to",
+						Placeholder:  "(none)",
+						Class:        "w-full",
+						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+					}, transferOptions(d.Accounts, nil))
+				}
+			</div>
+			<button
+				type="button"
+				id="qa-swap"
+				aria-label="Swap From and To"
+				title="Swap From and To"
+				class="tx-transfer-only h-9 w-9 shrink-0 items-center justify-center rounded-pill border border-border text-foreground hover:bg-foreground/[0.07]"
+			>
+				@icon.ArrowLeftRight(icon.Props{Class: "size-[18px]"})
+			</button>
+			@button.Button(button.Props{Type: "submit", Class: "h-9 rounded-pill"}) {
+				Add
+			}
+		</div>
+	</form>
+}
+
+// quickField is one labelled field in the quick-add row: a micro label above a
+// pill control.
+templ quickField(id, label, class string) {
+	<div class={ "flex flex-col gap-1", class }>
+		<label for={ id } class="text-[12px] font-semibold text-muted-foreground">
+			if label == "Account" {
+				<span class="tx-label-account">Account</span>
+				<span class="tx-label-from">From</span>
+			} else {
+				{ label }
+			}
+		</label>
+		{ children... }
+	</div>
+}
+
+// TxFilterBar renders the category filter under the quick-add row. It is a plain
 // GET form to /transactions: picking a category re-requests the page with the
 // active month and account carried in hidden fields, so the filter narrows the
 // current view rather than replacing it.
@@ -123,7 +253,7 @@ templ TransactionsBody(d TransactionsData) {
 // SelectField) — templUI dispatches `change` there only on a user pick or the
 // built-in clear button, never on init, so this can't loop on page load.
 templ TxFilterBar(d TransactionsData) {
-	<form method="get" action="/transactions" class="flex flex-wrap items-center gap-2 border-b border-border pb-3">
+	<form method="get" action="/transactions" class="flex flex-wrap items-center gap-s2 border-b border-border pb-s3">
 		if d.FilterMonth != "" {
 			<input type="hidden" name="month" value={ d.FilterMonth }/>
 		} else {
@@ -132,7 +262,7 @@ templ TxFilterBar(d TransactionsData) {
 		if d.FilterAccount != nil {
 			<input type="hidden" name="account" value={ strconv.FormatInt(*d.FilterAccount, 10) }/>
 		}
-		@label.Label(label.Props{For: "filter-category", Class: "text-sm text-muted-foreground"}) {
+		@label.Label(label.Props{For: "filter-category", Class: "text-[13px] text-muted-foreground"}) {
 			Category
 		}
 		@SelectField(SelectFieldProps{
@@ -162,16 +292,72 @@ func categoryFilterOptions(cats []store.Category, selected *int64) []Opt {
 	return out
 }
 
-// TxRows renders the sorted transaction rows with day-change separators. Shared
-// by the initial page render and the htmx refresh after a create/update so both
-// produce identical, correctly ordered markup.
-templ TxRows(rows []store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
-	for i, t := range rows {
-		if i > 0 && !sameDay(rows[i-1].Date, t.Date) {
-			<tr><td colspan="7" class="h-2 bg-muted/30 p-0"></td></tr>
-		}
-		@TransactionRow(t, accts, cats, false)
+// TxRows renders the rows grouped by day, each group under a date header
+// carrying that day's net. Shared by the initial page render and the htmx
+// refresh after a create/update so both produce identical markup.
+templ TxRows(rows []store.Transaction, accts []store.AccountWithBalance, cats []store.Category, filterAccount *int64) {
+	{{ days := groupTxByDay(visibleTxRows(rows, filterAccount)) }}
+	if len(days) == 0 {
+		<p class="px-s3 py-s6 text-[15px] text-muted-foreground">
+			Nothing here yet. Add your first transaction in the row above.
+		</p>
 	}
+	for _, day := range days {
+		<div class="flex items-baseline justify-between px-s3 pb-s1 pt-s4">
+			<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+				{ day.Date.Format("Mon 2 Jan") }
+			</span>
+			<span class="text-[13px] tabular-nums text-muted-foreground">
+				{ money.Format(day.Net) }
+			</span>
+		</div>
+		for _, t := range day.Rows {
+			@TransactionRow(t, accts, cats, false)
+		}
+	}
+}
+
+// txDay is one day's transactions plus that day's net movement.
+type txDay struct {
+	Date time.Time
+	Rows []store.Transaction
+	Net  int64
+}
+
+// groupTxByDay buckets already-sorted rows into consecutive day groups.
+func groupTxByDay(rows []store.Transaction) []txDay {
+	var days []txDay
+	for _, t := range rows {
+		if len(days) == 0 || !sameDay(days[len(days)-1].Date, t.Date) {
+			days = append(days, txDay{Date: t.Date})
+		}
+		d := &days[len(days)-1]
+		d.Rows = append(d.Rows, t)
+		d.Net += t.InflowCents - t.OutflowCents
+	}
+	return days
+}
+
+// visibleTxRows collapses a transfer's two stored legs into the one row that
+// makes sense for the current view. The pair is still stored and still edited as
+// two legs — only the rendering changes.
+//
+// Scoped to a single account, the query already returned just that account's
+// leg, so everything passes through and the transfer reads from that account's
+// point of view. Unscoped, the arriving leg is dropped so money always reads as
+// leaving and a transfer never appears twice in one list.
+func visibleTxRows(rows []store.Transaction, filterAccount *int64) []store.Transaction {
+	if filterAccount != nil {
+		return rows
+	}
+	out := make([]store.Transaction, 0, len(rows))
+	for _, t := range rows {
+		if t.TransferAccountID != nil && t.InflowCents > 0 {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }
 
 templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category, oob bool) {
@@ -179,48 +365,101 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
-	@table.Row(table.RowProps{Attributes: attrs}) {
-		@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
-			{ t.Date.Format("Jan 2, 2006") }
-		}
-		@table.Cell() {
+	<div
+		class="group grid grid-cols-[1fr_190px_140px_28px_32px] items-center gap-s4 rounded-md px-s3 py-[9px] hover:bg-foreground/[0.04]"
+		{ attrs... }
+	>
+		<div class="flex min-w-0 items-center gap-s2">
+			<span class="truncate text-[16px] font-semibold">{ txDisplayName(t, accts) }</span>
 			@TxCategoryCell(t, accts, cats)
-		}
-		@table.Cell() {
-			if t.Payee != nil {
-				{ *t.Payee }
-			}
-		}
-		@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
-			if t.OutflowCents > 0 {
-				<span class="text-money-negative">{ money.Format(t.OutflowCents) }</span>
-			}
-		}
-		@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
+		</div>
+		<span class="truncate text-[14px] text-muted-foreground">
+			{ accountName(accts, t.AccountID) }
+		</span>
+		<span class="text-right text-[17px] font-bold tabular-nums">
 			if t.InflowCents > 0 {
 				<span class="text-money-positive">{ money.Format(t.InflowCents) }</span>
+			} else {
+				<span class="text-foreground">{ money.Format(-t.OutflowCents) }</span>
 			}
-		}
-		@table.Cell(table.CellProps{Class: "text-center"}) {
-			@txClearCell(t)
-		}
-		@table.Cell(table.CellProps{Class: "text-right"}) {
+		</span>
+		@txClearCell(t)
+		<span class="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
 			@txRowMenu(t)
-		}
-	}
+		</span>
+	</div>
 }
 
-// txRowMenu renders the per-row three-dot actions menu (Edit / Delete),
-// matching the budget page's rowMenu pattern.
+// txDisplayName is what the row leads with: the payee for a normal transaction,
+// and for a transfer the account at the other end — so a transfer reads as a
+// movement between two named places rather than as a payee-less blank.
+func txDisplayName(t store.Transaction, accts []store.AccountWithBalance) string {
+	if t.TransferAccountID != nil {
+		return accountName(accts, *t.TransferAccountID)
+	}
+	if t.Payee != nil && *t.Payee != "" {
+		return *t.Payee
+	}
+	return "(no payee)"
+}
+
+// TxCategoryCell renders the row's tag: a neutral "transfer" tag, or the
+// category in sage. A transfer that also carries a budget category (a card
+// payment tagged to an envelope) shows both.
+templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
+	<span class="flex shrink-0 items-center gap-1">
+		if t.TransferAccountID != nil {
+			<span class="rounded-pill bg-warm-200 px-2 py-0.5 text-[12px] font-semibold text-warm-700">transfer</span>
+			if t.CategoryID != nil {
+				<span class="rounded-pill bg-sage-200 px-2 py-0.5 text-[12px] font-semibold text-sage-700">
+					{ categoryName(cats, *t.CategoryID) }
+				</span>
+			}
+		} else if t.CategoryID != nil {
+			<span class="rounded-pill bg-sage-200 px-2 py-0.5 text-[12px] font-semibold text-sage-700">
+				{ categoryName(cats, *t.CategoryID) }
+			</span>
+		} else {
+			<span class="rounded-pill bg-warm-200 px-2 py-0.5 text-[12px] font-semibold text-warm-700">uncategorized</span>
+		}
+	</span>
+}
+
+// txClearCell is the cleared marker: a sage check when cleared, and an explicit
+// empty circle when not — a stated "pending", not the absence of a tick. For a
+// transfer this toggles both legs (SetCleared already does).
+templ txClearCell(t store.Transaction) {
+	{{ title := "Not cleared — click to clear" }}
+	if t.Cleared {
+		{{ title = "Cleared — click to unclear" }}
+	}
+	<button
+		type="button"
+		title={ title }
+		aria-pressed={ fmt.Sprintf("%t", t.Cleared) }
+		class="inline-flex size-7 items-center justify-center rounded-pill hover:bg-foreground/[0.07]"
+		hx-post={ fmt.Sprintf("/transactions/%d/cleared", t.ID) }
+		hx-target={ fmt.Sprintf("#tx-%d", t.ID) }
+		hx-swap="outerHTML"
+	>
+		if t.Cleared {
+			@icon.Check(icon.Props{Class: "size-[17px] text-money-positive"})
+		} else {
+			<span class="block size-[10px] rounded-pill border-2 border-muted-foreground"></span>
+		}
+	</button>
+}
+
+// txRowMenu renders the per-row actions menu.
 templ txRowMenu(t store.Transaction) {
 	@dropdown.Dropdown() {
 		@dropdown.Trigger(dropdown.TriggerProps{
-			Class:      "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
+			Class:      "inline-flex size-8 items-center justify-center rounded-pill text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground",
 			Attributes: templ.Attributes{"title": "Transaction actions"},
 		}) {
 			@icon.EllipsisVertical(icon.Props{Class: "size-4"})
 		}
-		@dropdown.Content() {
+		@dropdown.Content(dropdown.ContentProps{Class: "w-[260px]"}) {
 			@dropdown.Item(dropdown.ItemProps{
 				Attributes: templ.Attributes{
 					"hx-get":    fmt.Sprintf("/transactions/%d/edit", t.ID),
@@ -228,67 +467,74 @@ templ txRowMenu(t store.Transaction) {
 					"hx-swap":   "innerHTML",
 				},
 			}) {
-				Edit Transaction
+				Edit transaction
 			}
 			@dropdown.Separator()
 			@dropdown.Item(dropdown.ItemProps{
-				Class: "text-destructive",
+				Class: "text-money-negative",
 				Attributes: templ.Attributes{
 					"hx-delete":  fmt.Sprintf("/transactions/%d", t.ID),
 					"hx-target":  fmt.Sprintf("#tx-%d", t.ID),
 					"hx-swap":    "outerHTML",
-					"hx-confirm": "Delete Transaction?",
+					"hx-confirm": txDeleteConfirm(t),
 				},
 			}) {
-				Delete Transaction
+				Delete transaction
 			}
 		}
 	}
 }
 
-templ txClearCell(t store.Transaction) {
-	{{ title := "Not cleared — click to clear" }}
-	if t.Cleared {
-		{{ title = "Cleared — click to unclear" }}
-	}
-	<span title={ title } class="inline-flex">
-		@switchcomp.Switch(switchcomp.Props{
-			Checked: t.Cleared,
-			Attributes: templ.Attributes{
-				"hx-post":    fmt.Sprintf("/transactions/%d/cleared", t.ID),
-				"hx-target":  fmt.Sprintf("#tx-%d", t.ID),
-				"hx-swap":    "outerHTML",
-				"hx-trigger": "change",
-			},
-		})
-	</span>
-}
-
-templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
+// txDeleteConfirm words the confirmation. A transfer has two stored legs and
+// deleting removes both — there is no half-deleted transfer — so the prompt says
+// so rather than letting the user assume only the visible row goes.
+func txDeleteConfirm(t store.Transaction) string {
 	if t.TransferAccountID != nil {
-		<span class="text-muted-foreground">
-			if t.OutflowCents > 0 {
-				→
-			} else {
-				←
-			}
-			{ accountName(accts, *t.TransferAccountID) }
-		</span>
-		if t.CategoryID != nil {
-			<span class="text-muted-foreground">· </span>
-			{ categoryName(cats, *t.CategoryID) }
-		}
-	} else if t.CategoryID != nil {
-		{ categoryName(cats, *t.CategoryID) }
-	} else {
-		<span class="text-muted-foreground">(uncategorized)</span>
+		return "Delete this transfer? It is removed from both accounts."
 	}
+	return "Delete this transaction?"
+}
+
+// txAccountHref builds a /transactions URL scoped to one account (or all
+// accounts when id is nil), preserving the active month and category filters.
+func txAccountHref(d TransactionsData, id *int64) string {
+	q := "/transactions"
+	if d.FilterMonth != "" {
+		q += "?month=" + d.FilterMonth
+	} else {
+		q += "?all=1"
+	}
+	if id != nil {
+		q += fmt.Sprintf("&account=%d", *id)
+	}
+	if d.FilterCategory != nil {
+		q += fmt.Sprintf("&category=%d", *d.FilterCategory)
+	}
+	return q
+}
+
+// txDefaultAccount preselects the quick-add's account: the one being filtered
+// on, else the first account, so a run of entries starts on the right one.
+func txDefaultAccount(d TransactionsData) int64 {
+	if d.FilterAccount != nil {
+		return *d.FilterAccount
+	}
+	if len(d.Accounts) > 0 {
+		return d.Accounts[0].ID
+	}
+	return 0
+}
+
+// todayISO is today's date in the format a native date input expects.
+func todayISO() string {
+	return time.Now().Format("2006-01-02")
 }
 
 templ TransactionForm(d TxFormData) {
 	@sheetPanel("") {
 		<form
 			id="tx-form-inner"
+			data-tx-form
 			if d.Editing {
 				hx-put={ fmt.Sprintf("/transactions/%d", d.ID) }
 			} else {

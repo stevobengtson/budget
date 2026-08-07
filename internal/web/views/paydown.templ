@@ -356,10 +356,10 @@ templ PaymentModal(acct store.AccountWithBalance) {
 }
 
 // CategoryModal renders the modal for linking / unlinking a budget
-// category that drives this account's per-month payment override.
-// The native <select> here renders <optgroup> entries (per category
-// group), which the shared selectbox helper doesn't model, so we emit
-// the markup directly using selectbox's class signature.
+// category that drives this account's per-month payment override. The picker
+// groups categories by category group, via SelectFieldGrouped — this used to be
+// a hand-written native <select> with <optgroup>, on the assumption that
+// templUI's selectbox had no grouping. It does (Group + Label).
 templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups []store.CategoryGroup) {
 	@dialogPanel("") {
 		@dialog.Header() {
@@ -369,26 +369,13 @@ templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups
 		}
 		<form hx-post={ fmt.Sprintf("/paydown/%d/category", acct.ID) } hx-target="body" hx-swap="outerHTML" class="grid gap-4">
 			@formRow("pd-category", "Category") {
-				<select
-					id="pd-category"
-					name="category_id"
-					class="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-background [&>option]:text-foreground"
-				>
-					<option value="">(none — fall back to default)</option>
-					for _, g := range groups {
-						<optgroup label={ g.Name }>
-							for _, c := range cats {
-								if c.GroupID == g.ID {
-									if acct.PaymentCategoryID != nil && *acct.PaymentCategoryID == c.ID {
-										<option value={ strconv.FormatInt(c.ID, 10) } selected>{ c.Name }</option>
-									} else {
-										<option value={ strconv.FormatInt(c.ID, 10) }>{ c.Name }</option>
-									}
-								}
-							}
-						</optgroup>
-					}
-				</select>
+				@SelectFieldGrouped(SelectFieldProps{
+					ID:    "pd-category",
+					Name:  "category_id",
+					Class: "w-full",
+				}, []Opt{
+					{Value: "", Label: "(none — fall back to default)", Selected: acct.PaymentCategoryID == nil},
+				}, categoryOptGroups(cats, groups, acct.PaymentCategoryID))
 			}
 			<p class="text-sm text-muted-foreground">
 				For each projected month the engine picks <strong>spent</strong> in this
@@ -408,4 +395,27 @@ templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups
 			}
 		</form>
 	}
+}
+
+// categoryOptGroups buckets categories under their category group, dropping any
+// group that ended up empty so the dropdown shows no bare headings.
+func categoryOptGroups(cats []store.Category, groups []store.CategoryGroup, selected *int64) []OptGroup {
+	out := make([]OptGroup, 0, len(groups))
+	for _, g := range groups {
+		og := OptGroup{Label: g.Name}
+		for _, c := range cats {
+			if c.GroupID != g.ID {
+				continue
+			}
+			og.Opts = append(og.Opts, Opt{
+				Value:    strconv.FormatInt(c.ID, 10),
+				Label:    c.Name,
+				Selected: selected != nil && *selected == c.ID,
+			})
+		}
+		if len(og.Opts) > 0 {
+			out = append(out, og)
+		}
+	}
+	return out
 }

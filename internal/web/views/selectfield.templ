@@ -25,7 +25,14 @@ type SelectFieldProps struct {
 	Required    bool
 	Placeholder string
 	Class       string
-	Attributes  templ.Attributes
+	// TriggerClass styles the trigger button itself (height, radius, fill).
+	// templUI merges it last, so it wins over the component's defaults.
+	TriggerClass string
+	// NoSearch drops the dropdown's search box. templUI enables search by
+	// default, which is right for accounts and categories but noise on a short,
+	// fixed list like the transaction type.
+	NoSearch   bool
+	Attributes templ.Attributes
 }
 
 // SelectField renders a single-select field using templUI's selectbox.
@@ -41,14 +48,61 @@ templ SelectField(p SelectFieldProps, opts []Opt) {
 		@selectbox.Trigger(selectbox.TriggerProps{
 			ID:         p.ID,
 			Name:       p.Name,
+			Class:      p.TriggerClass,
 			Attributes: selectFieldAttrs(p),
 		}) {
 			@selectbox.Value(selectbox.ValueProps{Placeholder: p.Placeholder})
 		}
-		@selectbox.Content() {
+		@selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch}) {
 			for _, o := range opts {
 				@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected}) {
 					{ o.Label }
+				}
+			}
+		}
+	}
+}
+
+// OptGroup is a labelled run of options, the selectbox equivalent of an
+// <optgroup>.
+type OptGroup struct {
+	Label string
+	Opts  []Opt
+}
+
+// SelectFieldGrouped is SelectField with its options organised under group
+// headings, plus an optional run of ungrouped options rendered first (for a
+// leading "(none)" entry).
+//
+// This exists because templUI's selectbox does model grouping, via Group +
+// Label — the paydown category picker previously hand-rolled a native <select>
+// with <optgroup> on the assumption that it didn't.
+templ SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) {
+	@selectbox.SelectBox(selectbox.Props{Class: p.Class}) {
+		@selectbox.Trigger(selectbox.TriggerProps{
+			ID:         p.ID,
+			Name:       p.Name,
+			Class:      p.TriggerClass,
+			Attributes: selectFieldAttrs(p),
+		}) {
+			@selectbox.Value(selectbox.ValueProps{Placeholder: p.Placeholder})
+		}
+		@selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch}) {
+			for _, o := range lead {
+				@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected}) {
+					{ o.Label }
+				}
+			}
+			for _, g := range groups {
+				@selectbox.Group() {
+					@selectbox.Label() {
+						{ g.Label }
+					}
+					for _, o := range g.Opts {
+						@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected}) {
+							{ o.Label }
+						}
+					}
 				}
 			}
 		}

@@ -393,7 +393,7 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 	cats, _ := h.store.ListCategories(ctx, uid, true)
 	c.Status(http.StatusOK)
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = views.TxRows(rows, accts, cats).Render(ctx, c.Writer)
+	_ = views.TxRows(rows, accts, cats, acctPtr).Render(ctx, c.Writer)
 	_, _ = c.Writer.WriteString(`<div id="modal" class="modal-mount" hx-swap-oob="true"></div>`)
 }
 
