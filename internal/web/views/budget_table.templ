@@ -9,10 +9,13 @@ import (
 	"github.com/templui/templui/components/icon"
 )
 
-// budgetGridCols is the shared four-column track for the column heads and every
+// budgetGridCols is the shared column track for the column heads and every
 // category row: name, assigned, progress, available. Declared once so a head and
-// its rows can never drift apart.
-const budgetGridCols = "grid grid-cols-[1fr_140px_200px_140px] items-center gap-s4"
+// its rows can never drift apart. Below 768px the four columns
+// collapse to two: the name and its progress bar stack in the first, and
+// Available spans both rows in the second. Children place themselves explicitly
+// (col-start/row-start) so one DOM order serves both layouts.
+const budgetGridCols = "grid grid-cols-[1fr_auto] items-center gap-x-s3 gap-y-1 md:grid-cols-[1fr_140px_200px_140px] md:gap-s4"
 
 // BudgetTable is the category list. It is a div grid rather than a <table>: the
 // redesign shows two numbers per row (Assigned as an editable field, Available
@@ -82,11 +85,9 @@ templ BudgetTable(d BudgetData) {
 			}
 		</div>
 		if d.UncategorizedSpent != 0 {
-			<div class={ budgetGridCols, "px-s3 py-2 text-muted-foreground" }>
+			<div class="flex items-center justify-between gap-s3 px-s3 py-2 text-muted-foreground">
 				<span class="truncate text-[15px]">Uncategorized</span>
-				<span></span>
-				<span class="text-[13px]">spent { money.Format(d.UncategorizedSpent) }</span>
-				<span></span>
+				<span class="text-[13px] tabular-nums">spent { money.Format(d.UncategorizedSpent) }</span>
 			</div>
 		}
 	</div>
@@ -95,7 +96,7 @@ templ BudgetTable(d BudgetData) {
 // budgetColumnHeads labels the four tracks. Assigned and Available are
 // right-aligned so the labels sit over their figures.
 templ budgetColumnHeads() {
-	<div class={ budgetGridCols, "px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground" }>
+	<div class={ budgetGridCols, "hidden px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:grid" }>
 		<span>Category</span>
 		<span class="text-right">Assigned</span>
 		<span>Progress</span>

@@ -1,0 +1,104 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
+)
+
+// BudgetAssignSheet is how assigning works below 768px. The desktop row edits
+// Assigned in place, but a 36px number field inside a four-column row does not
+// survive the reflow, so on a phone the figure is a tap target that opens this
+// sheet instead. That is a deliberate divergence from the desktop interaction,
+// called out as such in the design handoff.
+//
+// It posts to the same POST /budget/assign/:catID as the inline field, so the
+// response is the usual BudgetAssignResult — the edited row plus an out-of-band
+// rail refresh — and the sheet closes itself once that lands.
+templ BudgetAssignSheet(month string, r store.CategoryBudget, remain int64) {
+	<div
+		class="animate-sheet-up fixed inset-x-0 bottom-0 z-50 flex flex-col gap-s3 rounded-t-[30px] bg-card p-s4 pb-s6 shadow-organic-lg"
+		role="dialog"
+		aria-modal="true"
+		aria-label={ "Assign to " + r.CategoryName }
+	>
+		// The grab handle is also the way out. Nothing in this app closes a modal
+		// on a backdrop tap or Esc, so a sheet with only "Assign" in it would be a
+		// dead end for anyone who opened it by mistake.
+		<button
+			type="button"
+			aria-label="Close"
+			class="mx-auto flex h-[22px] w-16 shrink-0 items-center justify-center"
+			hx-on:click="document.getElementById('modal').innerHTML = ''"
+		>
+			<span class="h-[5px] w-11 rounded-pill bg-foreground/20"></span>
+		</button>
+		<h2 class="font-heading text-[24px] font-semibold">Assign to { r.CategoryName }</h2>
+		<p class="text-[14px] text-muted-foreground">
+			@assignPosition(r)
+		</p>
+		<form
+			hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
+			hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful) document.getElementById('modal').innerHTML = ''"
+			class="flex flex-col gap-s3"
+		>
+			<input
+				type="text"
+				name="amount"
+				value={ money.Format(r.AssignedCents) }
+				inputmode="decimal"
+				autocomplete="off"
+				autofocus
+				aria-label="Amount to assign"
+				class="h-[56px] w-full rounded-pill border border-primary bg-surface-sunk px-s4 text-right text-[26px] font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			/>
+			<div class="flex flex-wrap gap-s2">
+				// "Same as last month" is the existing copy-prev action. It posts on
+				// its own and closes the sheet, so it sits outside the amount form.
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantOutline,
+					Class:   "min-h-[44px] flex-1 rounded-pill",
+					Attributes: templ.Attributes{
+						"hx-post":       fmt.Sprintf("/budget/assign/%d/copy-prev?month=%s", r.CategoryID, month),
+						"hx-target":     fmt.Sprintf("#cat-%d", r.CategoryID),
+						"hx-swap":       "outerHTML",
+						"hx-on::after-request": "if(event.detail.successful) document.getElementById('modal').innerHTML = ''",
+					},
+				}) {
+					Same as last month
+				}
+				// Empty it is just assigning zero, so it only has to clear the field.
+				<button
+					type="button"
+					class="min-h-[44px] flex-1 rounded-pill border border-border px-s3 text-[15px] font-semibold hover:bg-foreground/[0.07]"
+					onclick="this.closest('form').elements['amount'].value = '0.00'"
+				>
+					Empty it
+				</button>
+			</div>
+			@button.Button(button.Props{Type: "submit", Class: "min-h-[48px] w-full rounded-pill"}) {
+				Assign
+			}
+		</form>
+		<p class="text-center text-[13px] text-muted-foreground">
+			Comes out of the { money.Format(remain) } left to assign
+		</p>
+	</div>
+}
+
+// assignPosition states where the category stands in words, so the sheet says
+// what the number means rather than only showing it.
+templ assignPosition(r store.CategoryBudget) {
+	if r.AvailableCents < 0 {
+		{ r.CategoryName } is overspent by { money.Format(-r.AvailableCents) }.
+		You have assigned { money.Format(r.AssignedCents) } and spent { money.Format(r.SpentCents) }.
+	} else {
+		You have assigned { money.Format(r.AssignedCents) } and spent { money.Format(r.SpentCents) },
+		leaving { money.Format(r.AvailableCents) }.
+	}
+}

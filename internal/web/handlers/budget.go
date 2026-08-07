@@ -220,6 +220,23 @@ func findCatRow(rows []store.CategoryBudget, catID int64) store.CategoryBudget {
 	return store.CategoryBudget{}
 }
 
+// BudgetAssignSheet renders the mobile assign sheet for one category. Below
+// 768px the row's Available figure is a tap target instead of an inline field
+// (a 36px number input does not survive the reflow), and this is what it opens.
+func (h *Handlers) BudgetAssignSheet(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	month := monthOrNow(c)
+	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
+
+	data, rows, err := h.budgetData(ctx, uid, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetAssignSheet(month, findCatRow(rows, catID), data.Remain))
+}
+
 // BudgetAssignCopyPrev replaces the current month's assignment for a
 // single category with whatever was assigned in the previous month
 // (defaults to 0 if there was no entry there). Returns the same region

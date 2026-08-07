@@ -123,8 +123,13 @@ templ TxQuickAdd(d TransactionsData) {
 		hx-swap="innerHTML"
 		class="flex flex-col gap-s3 rounded-xl bg-surface-quickadd p-s3 shadow-organic-sm"
 	>
+		// Below 768px the fields stack full-width with touch-sized targets and Add
+		// becomes a full-width primary action at the foot of the card. The design
+		// pairs Amount beside Add on one line; that would need Add moved next to
+		// Amount in the DOM, which reorders the desktop row, so the phone layout
+		// keeps the stack and gives Add the full width instead.
 		<div class="flex flex-wrap items-end gap-s2">
-			@quickField("qa-type", "Type", "w-[140px]") {
+			@quickField("qa-type", "Type", "w-full md:w-[140px]") {
 				@SelectField(SelectFieldProps{
 					ID:           "qa-type",
 					Name:         "tx_type",
@@ -137,7 +142,7 @@ templ TxQuickAdd(d TransactionsData) {
 					{Value: "transfer", Label: "Transfer"},
 				})
 			}
-			@quickField("qa-date", "Date", "w-[170px]") {
+			@quickField("qa-date", "Date", "w-full md:w-[170px]") {
 				@datepicker.DatePicker(datepicker.Props{
 					ID:          "qa-date",
 					Name:        "date",
@@ -146,7 +151,7 @@ templ TxQuickAdd(d TransactionsData) {
 					Class:       "w-full",
 				})
 			}
-			@quickField("qa-amount", "Amount", "w-[124px]") {
+			@quickField("qa-amount", "Amount", "flex-1 md:w-[124px] md:flex-none") {
 				<input
 					id="qa-amount"
 					type="text"
@@ -154,21 +159,21 @@ templ TxQuickAdd(d TransactionsData) {
 					inputmode="decimal"
 					autocomplete="off"
 					placeholder="0.00"
-					class="h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					class="h-[52px] w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[22px] font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-[15px]"
 				/>
 			}
-			<div class="tx-plain-only min-w-[150px] flex-1">
+			<div class="tx-plain-only w-full min-w-[150px] md:flex-1">
 				@quickField("qa-payee", "Payee", "w-full") {
 					<input
 						id="qa-payee"
 						type="text"
 						name="payee"
 						autocomplete="off"
-						class="h-9 w-full rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary"
+						class="h-12 w-full rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary md:h-9"
 					/>
 				}
 			</div>
-			<div class="tx-plain-only w-[170px]">
+			<div class="tx-plain-only w-full md:w-[170px]">
 				@quickField("qa-category", "Category", "w-full") {
 					@SelectField(SelectFieldProps{
 						ID:           "qa-category",
@@ -187,9 +192,9 @@ templ TxQuickAdd(d TransactionsData) {
 			<div
 				id="qa-account-field"
 				if d.FilterAccount != nil {
-					class="tx-transfer-only w-[180px]"
+					class="tx-transfer-only w-full md:w-[180px]"
 				} else {
-					class="w-[180px]"
+					class="w-full md:w-[180px]"
 				}
 			>
 				@quickField("qa-account", "Account", "w-full") {
@@ -201,7 +206,7 @@ templ TxQuickAdd(d TransactionsData) {
 					}, accountOptions(d.Accounts, txDefaultAccount(d)))
 				}
 			</div>
-			<div class="tx-transfer-only w-[180px]">
+			<div class="tx-transfer-only w-full md:w-[180px]">
 				@quickField("qa-transfer", "To", "w-full") {
 					@SelectField(SelectFieldProps{
 						ID:           "qa-transfer",
@@ -221,7 +226,7 @@ templ TxQuickAdd(d TransactionsData) {
 			>
 				@icon.ArrowLeftRight(icon.Props{Class: "size-[18px]"})
 			</button>
-			@button.Button(button.Props{Type: "submit", Class: "h-9 rounded-pill"}) {
+			@button.Button(button.Props{Type: "submit", Class: "h-[52px] w-full shrink-0 rounded-pill text-[16px] md:h-9 md:w-auto md:px-s3 md:text-[14px]"}) {
 				Add
 			}
 		</div>

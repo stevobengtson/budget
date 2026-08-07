@@ -321,3 +321,49 @@ func TestPaydownSourceIsWorded(t *testing.T) {
 		}
 	}
 }
+
+// TestAssignSheetOpensAndSaves covers the mobile assign path. Below 768px the
+// inline Assigned field is hidden and the Available figure opens this sheet
+// instead; the sheet posts to the same endpoint, so the response is the usual
+// row + out-of-band rail refresh.
+func TestAssignSheetOpensAndSaves(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	cid := seedCategory(t, s, uid, "2026-07", 10000)
+
+	sheet := readAll(t, mustGetOK(t, client,
+		ts.URL+"/budget/assign/"+itoa(cid)+"/sheet?month=2026-07"))
+	for _, m := range []string{"Assign to Gas", "Same as last month", "Empty it", "left to assign"} {
+		if !strings.Contains(sheet, m) {
+			t.Errorf("assign sheet missing %q", m)
+		}
+	}
+
+	// Saving from the sheet uses the ordinary assign endpoint.
+	resp, err := client.PostForm(ts.URL+"/budget/assign/"+itoa(cid)+"?month=2026-07",
+		url.Values{"amount": {"75.00"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := readAll(t, resp)
+	if !strings.Contains(body, `id="budget-rail"`) || !strings.Contains(body, "$75.00") {
+		t.Error("assign from the sheet should return the row plus the rail")
+	}
+}
+
+// TestBudgetRowHidesInlineAssignOnMobile is the structural half of the same
+// change: the inline field and the sheet trigger must both exist, each scoped to
+// its own breakpoint, or one viewport ends up with no way to assign at all.
+func TestBudgetRowHidesInlineAssignOnMobile(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	cid := seedCategory(t, s, uid, "2026-07", 10000)
+
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget?month=2026-07"))
+	if !strings.Contains(body, `class="js-assign hidden items-center justify-end md:flex"`) {
+		t.Error("inline assign form should be desktop-only")
+	}
+	if !strings.Contains(body, "/budget/assign/"+itoa(cid)+"/sheet") {
+		t.Error("row should offer the assign sheet as the mobile path")
+	}
+}

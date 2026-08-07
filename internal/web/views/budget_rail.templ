@@ -1,6 +1,8 @@
 package views
 
 import (
+	"fmt"
+
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/templui/templui/components/icon"
@@ -116,10 +118,23 @@ templ railNeedsAttention(d BudgetData) {
 		<div class="flex flex-col gap-s2 rounded-xl bg-surface-attention p-s3 text-surface-attention-fg shadow-organic-sm">
 			<span class="text-[12px] font-bold uppercase tracking-[0.08em]">Needs attention</span>
 			for _, r := range over {
-				<div class="flex items-baseline justify-between gap-s2 text-[14px]">
+				// On a phone this is the way into the assign sheet: an overspend is
+				// the thing you most want to act on, so it is a 48px tap target
+				// rather than a line of text. On desktop the row's own Assigned
+				// field is right there, so it stays plain.
+				<button
+					type="button"
+					class="flex min-h-[48px] items-center justify-between gap-s2 rounded-md text-left text-[14px] md:pointer-events-none md:min-h-0"
+					hx-get={ fmt.Sprintf("/budget/assign/%d/sheet?month=%s", r.CategoryID, d.Month) }
+					hx-target="#modal"
+					hx-swap="innerHTML"
+				>
 					<span class="truncate">{ r.CategoryName } overspent</span>
-					<span class="shrink-0 font-bold tabular-nums">{ money.Format(r.AvailableCents) }</span>
-				</div>
+					<span class="flex shrink-0 items-center gap-1">
+						<span class="font-bold tabular-nums">{ money.Format(r.AvailableCents) }</span>
+						@icon.ChevronRight(icon.Props{Class: "size-4 md:hidden"})
+					</span>
+				</button>
 			}
 			for _, c := range owing {
 				<div class="flex items-baseline justify-between gap-s2 text-[14px]">

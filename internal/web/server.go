@@ -201,6 +201,7 @@ func (s *Server) routes(cfg config.Config) {
 
 	gated.GET("/budget", hs.BudgetIndex)
 	gated.POST("/budget/assign/:catID", hs.BudgetAssign)
+	gated.GET("/budget/assign/:catID/sheet", hs.BudgetAssignSheet)
 	gated.POST("/budget/assign/:catID/copy-prev", hs.BudgetAssignCopyPrev)
 	gated.POST("/budget/goal/:catID", hs.BudgetGoal)
 	gated.GET("/budget/goal/:catID/edit", hs.BudgetGoalEdit)

@@ -35,9 +35,9 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 		{{ rowClass += " bg-surface-overspent" }}
 	}
 	<div class={ rowClass } { attrs... }>
-		<div class="flex min-w-0 items-center gap-1">
+		<div class="col-start-1 row-start-1 flex min-w-0 items-center gap-1">
 			<span
-				class="js-category-handle inline-flex cursor-grab touch-none items-center text-warm-400 opacity-0 transition-opacity group-hover:opacity-100"
+				class="js-category-handle hidden cursor-grab touch-none items-center text-warm-400 opacity-0 transition-opacity group-hover:opacity-100 md:inline-flex"
 				title="Drag to reorder category"
 				aria-hidden="true"
 			>
@@ -65,7 +65,7 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 			hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
 			hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
 			hx-swap="outerHTML"
-			class="js-assign flex items-center justify-end"
+			class="js-assign hidden items-center justify-end md:flex"
 		>
 			<button
 				type="button"
@@ -84,11 +84,27 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 			/>
 		</form>
 		@budgetProgress(r)
-		<div class="flex items-center justify-end gap-1">
-			<span class={ "text-[17px] font-bold tabular-nums", availColorClass(r.AvailableCents) }>
+		<div class="col-start-2 row-start-1 row-span-2 flex items-center justify-end gap-1 md:col-start-4 md:row-span-1">
+			// Below 768px Available doubles as the assign control: a 36px number
+			// field cannot survive the reflow, so tapping the figure opens the
+			// assign sheet instead of editing in place.
+			<button
+				type="button"
+				class={ "flex min-h-[44px] items-center gap-1 rounded-md px-1 text-[19px] font-bold tabular-nums md:hidden", availColorClass(r.AvailableCents) }
+				aria-label={ "Assign to " + r.CategoryName }
+				hx-get={ fmt.Sprintf("/budget/assign/%d/sheet?month=%s", r.CategoryID, month) }
+				hx-target="#modal"
+				hx-swap="innerHTML"
+			>
+				{ money.Format(r.AvailableCents) }
+				@icon.ChevronRight(icon.Props{Class: "size-4 text-muted-foreground"})
+			</button>
+			<span class={ "hidden text-[17px] font-bold tabular-nums md:inline", availColorClass(r.AvailableCents) }>
 				{ money.Format(r.AvailableCents) }
 			</span>
-			<span class="opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+			// Hover-reveal is a pointer affordance; on touch the menu must simply
+			// be there.
+			<span class="opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
 				@rowMenu(month, r)
 			</span>
 		</div>
@@ -100,8 +116,8 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 // words, so the state never rests on colour alone.
 templ budgetProgress(r store.CategoryBudget) {
 	{{ pct, over := progressPct(r.SpentCents, r.AssignedCents) }}
-	<div class="flex flex-col gap-1">
-		<div class="h-2 w-full overflow-hidden rounded-pill bg-progress-track">
+	<div class="col-start-1 row-start-2 flex flex-col gap-1 md:col-start-3 md:row-start-1">
+		<div class="h-[7px] w-full overflow-hidden rounded-pill bg-progress-track md:h-2">
 			<div
 				class={ "h-full rounded-pill", templ.KV("bg-progress-fill-over", over), templ.KV("bg-progress-fill", !over) }
 				style={ fmt.Sprintf("width:%d%%", pct) }
