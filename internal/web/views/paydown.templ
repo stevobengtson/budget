@@ -65,8 +65,9 @@ templ PaydownPage(d PaydownData, collapsed bool) {
 		</div>
 		if len(d.Plans) == 0 {
 			<p class="text-sm text-muted-foreground">
-				No accounts in the paydown plan yet. Edit an account from the sidebar
-				(the ✎ button), add its APR, and check &#34;include in paydown&#34;.
+				No accounts in the paydown plan yet. Edit an account from the list on
+				the Budget page (the ✎ button), add its APR, and check
+				&#34;include in paydown&#34;.
 			</p>
 		}
 		for i, p := range d.Plans {

@@ -18,8 +18,8 @@ import (
 // BillingData is the billing page view model, derived from the user's current
 // Stripe subscription (a synced projection in the store).
 type BillingData struct {
+	Configured        bool // billing is set up in this environment
 	Collapsed         bool
-	Configured        bool   // billing is set up in this environment
 	Standalone        bool   // render the sidebar-less paywall (locked-out states)
 	State             string // "none" | "trialing" | "active" | "past_due" | "ended"
 	TrialDaysLeft     int

@@ -29,11 +29,13 @@ type ViewContext struct {
 // does its own grouping and totaling. Reusable on any page — pass a zero
 // ViewContext where there is no active view (nothing highlighted, bare links).
 //
-// #accounts-overview is a stable id: the sidebar refetches this fragment into
-// it whenever a mutation emits accountsChanged.
+// data-accounts-overview is the stable marker. It is an attribute rather than an
+// id because the fragment is now mounted twice — once in the desktop sidebar and
+// once on the Budget page for mobile — and duplicate ids are invalid. Nothing
+// targets it: the refetch targets each mount's own outer id and swaps innerHTML.
 templ AccountsOverview(accts []store.AccountWithBalance, view ViewContext) {
 	{{ buckets, net := group(accts) }}
-	<div id="accounts-overview">
+	<div data-accounts-overview>
 		<div class="space-y-3">
 			if len(buckets) == 0 {
 				<p class="px-2 py-1 text-sm text-muted-foreground">

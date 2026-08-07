@@ -124,20 +124,24 @@ func TestBillingExemptBypassesGate(t *testing.T) {
 }
 
 // TestBillingStandaloneLayout verifies a never-subscribed user's /billing is the
-// sidebar-less paywall (no account-overview widget), while a user with access
-// sees the in-app management page (with the sidebar). Regression for the
-// early-return that skipped the Standalone flag for never-subscribed users.
+// chrome-less paywall, while a user with access sees the in-app management page
+// inside the app shell. Regression for the early-return that skipped the
+// Standalone flag for never-subscribed users.
+//
+// The marker is the nav rail itself rather than the account-overview widget:
+// the widget used to live in the shell, but the redesign moved it into the
+// individual pages, so it is no longer evidence either way.
 func TestBillingStandaloneLayout(t *testing.T) {
 	s := store.New(openTestDB(t))
 	ts, client, uid := serveAuthedCfg(t, s, billingCfg(t))
 
-	// Never subscribed → standalone paywall, no sidebar overview widget.
+	// Never subscribed → standalone paywall, no app chrome.
 	body := readAll(t, mustGetOK(t, client, ts.URL+"/billing"))
 	if !strings.Contains(body, "Start free trial") {
 		t.Error("standalone /billing missing Start free trial CTA")
 	}
-	if strings.Contains(body, `id="sidebar-overview"`) || strings.Contains(body, "/accounts/overview") {
-		t.Error("standalone /billing should not render the app sidebar")
+	if strings.Contains(body, `id="app-rail"`) {
+		t.Error("standalone /billing should not render the app shell")
 	}
 
 	// Active subscription → in-app management page, with the sidebar.
@@ -148,8 +152,8 @@ func TestBillingStandaloneLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	body = readAll(t, mustGetOK(t, client, ts.URL+"/billing"))
-	if !strings.Contains(body, `id="sidebar-overview"`) {
-		t.Error("in-app /billing (active sub) should render the app sidebar")
+	if !strings.Contains(body, `id="app-rail"`) {
+		t.Error("in-app /billing (active sub) should render the app shell")
 	}
 }
 

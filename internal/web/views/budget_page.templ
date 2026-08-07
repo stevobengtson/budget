@@ -70,6 +70,12 @@ templ BudgetRegion(d BudgetData) {
 	<div id="budget-region" class="flex flex-col gap-2">
 		@BudgetMonthSelector(d)
 		@BudgetTable(d)
+		// Mobile only: the sidebar carries this list at >=768px but is hidden
+		// below it, and the design puts the account summary under the Budget tab
+		// on phones. Distinct mount id because both copies are server-rendered.
+		<div class="mt-s6 border-t border-border pt-s4 md:hidden">
+			@accountsPanel("mobile-overview")
+		</div>
 	</div>
 }
 

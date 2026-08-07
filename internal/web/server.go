@@ -184,10 +184,13 @@ func (s *Server) routes(cfg config.Config) {
 	app.POST("/billing/portal", hs.OpenPortal)
 	app.GET("/billing/success", hs.CheckoutSuccess)
 
-	// The sidebar account-overview widget loads on every page (including /billing
-	// and /account, which a locked-out user sees). It's a read-only view of the
-	// user's own accounts, so it stays ungated — gating it would make the shared
-	// sidebar's on-load hx-get redirect to /billing, looping the page reload.
+	// The account-overview widget. It used to load on every page from the shared
+	// sidebar, including /billing and /account which a locked-out user sees, so
+	// it had to stay ungated or its on-load hx-get would redirect to /billing and
+	// loop the page reload. The redesign mounts it only on /budget and
+	// /transactions, both gated, so that rationale is now historical — it stays
+	// here because it is a read-only view of the user's own accounts and moving
+	// it buys nothing. Worth gating once Phase 2/3 settle its final home.
 	app.GET("/accounts/overview", hs.AccountsOverviewPartial)
 
 	// Core app: gated behind an active trial or paid subscription. A user without

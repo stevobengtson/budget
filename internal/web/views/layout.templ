@@ -14,8 +14,8 @@ import (
 	"github.com/templui/templui/components/label"
 	"github.com/templui/templui/components/selectbox"
 	"github.com/templui/templui/components/sheet"
-  "github.com/templui/templui/components/skeleton"
 	"github.com/templui/templui/components/sidebar"
+	"github.com/templui/templui/components/skeleton"
 	"github.com/templui/templui/components/tabs"
 	"github.com/templui/templui/components/tooltip"
 )
@@ -61,83 +61,99 @@ templ Layout(title string, active string, collapsed bool) {
 			<script src="/static/theme-toggle.js"></script>
 		</head>
 		<body class="min-h-screen bg-background text-foreground">
-      @appSidebar(collapsed, active) { { children... } }
+			@appShell(active, collapsed) {
+				{ children... }
+			}
 		</body>
 	</html>
 }
 
-templ appSidebar(collapsed bool, active string) {
-  @sidebar.Layout() {
-    @sidebar.Sidebar(sidebar.Props{
-      Variant: sidebar.VariantInset,
-      Collapsible: sidebar.CollapsibleIcon,
-      Collapsed: collapsed,
-      Attributes: templ.Attributes{
-        "style": "--sidebar-width:20rem", // Any CSS unit works: px, %, vw, etc.
-      },
-    }) {
-      @sidebar.Header() {
-        <div class="flex items-center gap-2 px-1">
-          @sidebar.Trigger()
-          <span class="text-lg font-semibold group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">Pigglet</span>
-        </div>
-      }
-      @sidebar.Content() {
-        @sidebar.Group() {
-          @sidebar.Menu() {
-            @navItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-4"}), active)
-            if AddOnEnabled(ctx, "paydown") {
-              @navItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-4"}), active)
-            }
-          }
-        }
-        @sidebar.Separator(sidebar.SeparatorProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
-        @sidebar.Group(sidebar.GroupProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"}) {
-          <div
-            id="sidebar-overview"
-            hx-get="/accounts/overview"
-            hx-trigger="load, accountsChanged from:body"
-            hx-swap="innerHTML"
-          >
-            <div class="space-y-2 w-full max-w-sm">
-              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-full"})
-              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-2/3"})
-              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-1/3"})
-              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-2/3"})
-              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-1/3"})
-              @skeleton.Skeleton(skeleton.Props{Class: "h-4 w-1/3"})
-            </div>
-          </div>
-        }
-      }
-      @sidebar.Footer() {
-        @sidebar.Menu() {
-          @sidebar.MenuItem() {
-            @userMenu()
-          }
-        }
-      }
-    }
-    @sidebar.Inset() {
-      <div id="main" class="mx-auto w-full max-w-screen-2xl px-4 py-4 sm:px-6 sm:py-6">
-        { children... }
-      </div>
-      <div id="modal" class="modal-mount"></div>
-      <div id="flash"></div>
-    }
-  }
+// appShell is the signed-in chrome. At >=768px it is the full sidebar — brand,
+// primary nav, account summary, user menu — collapsing to a 72px icon rail whose
+// state persists in the templUI-written sidebar_state cookie. Below 768px the
+// sidebar is hidden entirely and a bottom tab bar takes over; the account
+// summary reappears inside the Budget page there (see BudgetRegion).
+//
+// The design presents each screen as a rounded, shadowed card on a canvas. That
+// framing belongs to the canvas, not the product — a real full-viewport app has
+// nothing to float above — so the shell fills the window.
+templ appShell(active string, collapsed bool) {
+	@sidebar.Layout() {
+		@sidebar.Sidebar(sidebar.Props{
+			ID:          "app-rail",
+			Collapsible: sidebar.CollapsibleIcon,
+			Collapsed:   collapsed,
+			// templUI hardcodes the icon-mode collapsed width to w-12 (48px).
+			// The design calls for 72px, so override it at the same variant
+			// specificity — TwMerge keeps the later class on a conflict.
+			Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:w-[72px] border-r-0",
+			Attributes: templ.Attributes{
+				"style": "--sidebar-width:19rem",
+			},
+		}) {
+			@sidebar.Header() {
+				<div class="flex items-center gap-s2 px-s2 py-s1 group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:px-0 group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:justify-center">
+					@sidebar.Trigger()
+					<span class="font-heading text-[22px] font-semibold text-terracotta-700 group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">
+						Pigglet
+					</span>
+				</div>
+			}
+			@sidebar.Content() {
+				@sidebar.Group() {
+					@sidebar.Menu() {
+						@navItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-[18px]"}), active)
+						@navItem("transactions", "Transactions", icon.List(icon.Props{Class: "size-[18px]"}), active)
+						if AddOnEnabled(ctx, "paydown") {
+							@navItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-[18px]"}), active)
+						}
+					}
+				}
+				@sidebar.Separator(sidebar.SeparatorProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
+				@sidebar.Group(sidebar.GroupProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"}) {
+					@accountsPanel("sidebar-overview")
+				}
+			}
+			@sidebar.Footer() {
+				@sidebar.Menu() {
+					@sidebar.MenuItem() {
+						@userMenu()
+					}
+				}
+			}
+		}
+		@sidebar.Inset() {
+			// The sidebar is hidden below 768px, so the user menu needs a home on
+			// mobile or Settings, Billing, Theme and Log out become unreachable.
+			// The design specifies only three tabs, so it goes here rather than
+			// becoming a fourth. Not designed — confirm the placement.
+			<div class="flex items-center justify-between px-s3 pt-s3 md:hidden">
+				<span class="font-heading text-[22px] font-semibold text-terracotta-700">Pigglet</span>
+				@userMenu()
+			</div>
+			<main id="main" class="min-w-0 p-s3 pb-[96px] sm:p-s6 md:pb-s6">
+				{ children... }
+			</main>
+			<div id="modal" class="modal-mount"></div>
+			<div id="flash"></div>
+		}
+	}
+	@tabBar(active)
 }
 
-
-// navItem renders one primary-nav entry as a sidebar menu button. The icon stays
-// visible in the collapsed icon rail; the label truncates away and reappears as a
-// tooltip.
+// navItem is one primary-nav entry. Active is a solid terracotta pill with a
+// light label; inactive is plain text. The icon stays visible when the sidebar
+// collapses to the icon rail; the label truncates away and returns as a tooltip.
 templ navItem(slug string, label string, ic templ.Component, active string) {
 	@sidebar.MenuItem() {
 		@sidebar.MenuButton(sidebar.MenuButtonProps{
 			Href:     "/" + slug,
 			IsActive: slug == active,
 			Tooltip:  label,
+			Class:    navItemClass(slug == active),
+			Attributes: templ.Attributes{
+				"aria-current": templ.KV("page", slug == active),
+			},
 		}) {
 			@ic
 			<span>{ label }</span>
@@ -145,15 +161,80 @@ templ navItem(slug string, label string, ic templ.Component, active string) {
 	}
 }
 
-// userMenu renders the sidebar footer account control: a trigger showing the
-// signed-in email that opens a popover with a Theme submenu, Settings, and Log
-// out. The email comes from the request context (set by requireAuth).
+// navItemClass styles the nav pill. templUI's active state paints
+// sidebar-accent, which on the cream ground is nearly invisible, so the active
+// entry takes the accent fill outright.
+func navItemClass(isActive bool) string {
+	base := "rounded-pill h-10 gap-s2 px-s3 font-medium"
+	if isActive {
+		return base + " bg-primary text-primary-foreground hover:bg-terracotta-600 hover:text-primary-foreground active:bg-terracotta-700"
+	}
+	return base + " text-foreground hover:bg-primary/10"
+}
+
+// tabBar is the <768px counterpart to the rail. Three tabs only, per the design;
+// each meets the 48px minimum touch target. "Transactions" reads as "Activity"
+// here because the label sits under a 22px icon at 11px.
+templ tabBar(active string) {
+	<nav
+		aria-label="Primary"
+		class="fixed inset-x-0 bottom-0 z-40 flex justify-around rounded-t-[30px] bg-card px-s3 pt-s2 pb-s4 shadow-organic-lg md:hidden"
+	>
+		@tabItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-[22px]"}), active)
+		@tabItem("transactions", "Activity", icon.List(icon.Props{Class: "size-[22px]"}), active)
+		if AddOnEnabled(ctx, "paydown") {
+			@tabItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-[22px]"}), active)
+		}
+	</nav>
+}
+
+templ tabItem(slug string, label string, ic templ.Component, active string) {
+	<a
+		href={ templ.SafeURL("/" + slug) }
+		if slug == active {
+			aria-current="page"
+			class="flex min-h-[48px] min-w-[72px] flex-col items-center justify-center gap-1 rounded-sm text-terracotta-700"
+		} else {
+			class="flex min-h-[48px] min-w-[72px] flex-col items-center justify-center gap-1 rounded-sm text-foreground"
+		}
+	>
+		@ic
+		<span class="text-[11px] font-bold">{ label }</span>
+	</a>
+}
+
+// accountsPanel mounts the account list. It renders twice — in the desktop
+// sidebar and, because the sidebar is hidden below 768px, on the Budget page for
+// mobile — so the mount id is a parameter. Both fetch the same fragment and both
+// refresh on accountsChanged; the fragment itself carries no id (see
+// data-accounts-overview) so the duplication stays valid.
+templ accountsPanel(mountID string) {
+	<div
+		id={ mountID }
+		hx-get="/accounts/overview"
+		hx-trigger="load, accountsChanged from:body"
+		hx-swap="innerHTML"
+	>
+		<div class="w-full space-y-2">
+			@skeleton.Skeleton(skeleton.Props{Class: "h-4 w-full"})
+			@skeleton.Skeleton(skeleton.Props{Class: "h-4 w-2/3"})
+			@skeleton.Skeleton(skeleton.Props{Class: "h-4 w-1/3"})
+		</div>
+	</div>
+}
+
+// userMenu is the account control in the sidebar footer: the signed-in name and
+// email opening a popover with a Theme submenu, Settings, Billing and Log out.
+// The name and email come from the request context (set by requireAuth). When
+// the sidebar collapses to the icon rail the text drops away and only the avatar
+// remains; the same component also serves the mobile top bar, where there is no
+// collapsed sidebar ancestor so the text always shows.
 templ userMenu() {
 	@dropdown.Dropdown() {
 		@dropdown.Trigger(dropdown.TriggerProps{
-			Class: "flex h-12 w-full items-center gap-2 rounded-md px-1.5 text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+			Class: "flex h-12 w-full items-center gap-s2 rounded-pill px-1.5 text-sm hover:bg-primary/10 group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:w-auto group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:justify-center",
 		}) {
-			@userAvatar(UserNameFromContext(ctx), UserAvatarVersionFromContext(ctx), "size-8 rounded-lg text-xs")
+			@userAvatar(UserNameFromContext(ctx), UserAvatarVersionFromContext(ctx), "size-8 rounded-pill text-xs")
 			<div class="grid min-w-0 flex-1 text-left leading-tight group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">
 				<span class="truncate font-medium">{ UserNameFromContext(ctx) }</span>
 				<span class="truncate text-xs text-muted-foreground">{ UserEmailFromContext(ctx) }</span>

@@ -850,7 +850,7 @@ type AccountData struct {
 	AvatarVersion int64         // >0 renders the stored image; 0 renders the monogram
 	AddOns        []store.AddOn // the add-on catalog with this user's enabled state
 	ActiveTab     string        // "account" | "security" | "addons"
-	Collapsed     bool
+	Collapsed     bool          // render the sidebar collapsed to its icon rail
 	AvatarErr     string
 	AvatarOK      string
 	ProfileErr    string

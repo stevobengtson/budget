@@ -163,6 +163,11 @@
     color: var(--foreground);
     font-family: var(--font-sans);
   }
+  /* templUI's icon package hardcodes stroke-width="2" as an SVG presentation
+     attribute; the design calls for 2.75. Any CSS rule outranks a presentation
+     attribute, so this lifts every Lucide icon without forking the component. */
+  [data-lucide="icon"] { stroke-width: 2.75; }
+
   .htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
   .htmx-request .htmx-indicator,
   .htmx-request.htmx-indicator { opacity: 1; }

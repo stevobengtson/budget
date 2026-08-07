@@ -178,7 +178,10 @@ func TestBudgetTabAppearsInLayout(t *testing.T) {
 	}
 	resp, _ := client.Get(ts.URL + "/budget")
 	body := readAll(t, resp)
-	for _, marker := range []string{"Budget", "Paydown", `data-tui-sidebar-active="true"`} {
+	// Transactions joined the nav in the redesign; it was previously reachable
+	// only by clicking an account. aria-current marks the active entry now that
+	// the templUI sidebar (and its data-tui-sidebar-active) is gone.
+	for _, marker := range []string{"Budget", "Transactions", "Paydown", `aria-current="page"`} {
 		if !strings.Contains(body, marker) {
 			t.Errorf("missing %q in layout", marker)
 		}
@@ -231,7 +234,9 @@ func TestAccountsOverviewPartialRenders(t *testing.T) {
 	body := readAll(t, resp)
 	// The seeded user has no accounts, so the fragment shows the empty state (no
 	// net-worth line until an account exists).
-	for _, marker := range []string{`id="accounts-overview"`, "No accounts yet"} {
+	// The fragment is marked by an attribute, not an id: it mounts twice (desktop
+	// sidebar and the Budget page's mobile block), and duplicate ids are invalid.
+	for _, marker := range []string{"data-accounts-overview", "No accounts yet"} {
 		if !strings.Contains(body, marker) {
 			t.Errorf("overview fragment missing %q", marker)
 		}

@@ -33,7 +33,6 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 		month = store.MonthKey(time.Now())
 	}
 
-	collapsed := sidebarCollapsed(c)
 
 	data, rows, err := h.budgetData(ctx, currentUserID(c), month)
 	if err != nil {
@@ -42,7 +41,7 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 	}
 	_ = rows
 	setCollapseState(c, &data)
-	render(c, http.StatusOK, views.BudgetPage(data, collapsed))
+	render(c, http.StatusOK, views.BudgetPage(data, sidebarCollapsed(c)))
 }
 
 // setCollapseState fills the per-section collapse flags on data from their
