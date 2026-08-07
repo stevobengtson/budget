@@ -55,17 +55,17 @@
   }
 
   // availColor mirrors the Available column's coloring (see availColorClass in
-  // budget_table.templ): positive emerald, negative destructive, zero muted.
+  // budget_table.templ): positive sage, negative terracotta, zero warm neutral.
+  // The money-* tokens flip in .dark, so there is no dark: variant to juggle.
   function availColor(el, cents) {
     el.classList.remove(
-      "text-emerald-600",
-      "dark:text-emerald-400",
-      "text-destructive",
-      "text-muted-foreground"
+      "text-money-positive",
+      "text-money-negative",
+      "text-money-zero"
     );
-    if (cents > 0) el.classList.add("text-emerald-600", "dark:text-emerald-400");
-    else if (cents < 0) el.classList.add("text-destructive");
-    else el.classList.add("text-muted-foreground");
+    if (cents > 0) el.classList.add("text-money-positive");
+    else if (cents < 0) el.classList.add("text-money-negative");
+    else el.classList.add("text-money-zero");
   }
 
   function readGroups() {

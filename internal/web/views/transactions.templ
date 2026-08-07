@@ -193,12 +193,12 @@ templ TransactionRow(t store.Transaction, accts []store.AccountWithBalance, cats
 		}
 		@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
 			if t.OutflowCents > 0 {
-				<span class="text-destructive">{ money.Format(t.OutflowCents) }</span>
+				<span class="text-money-negative">{ money.Format(t.OutflowCents) }</span>
 			}
 		}
 		@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
 			if t.InflowCents > 0 {
-				<span class="text-emerald-600 dark:text-emerald-400">{ money.Format(t.InflowCents) }</span>
+				<span class="text-money-positive">{ money.Format(t.InflowCents) }</span>
 			}
 		}
 		@table.Cell(table.CellProps{Class: "text-center"}) {

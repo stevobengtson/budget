@@ -1,75 +1,209 @@
-/* shadcn preset: style=maia, theme=green, baseColor=mist, chartColor=lime,
-   radius=medium. Values captured from ui.shadcn.com/create preset b5r7QYNoAc. */
+/* "Organic" design system — warm, cream-grounded. Ported from the design
+   handoff in design_handoff_budget_redesign/ (styles.css is the token source of
+   truth there). Replaces the former shadcn maia/green/mist preset.
+
+   The shadcn token NAMES are kept deliberately: every vendored templUI
+   component (button, input, dialog, selectbox, sidebar, ...) reads --primary,
+   --card, --border, --ring and friends. Swapping the values re-skins the whole
+   component library at once; renaming them would break it. The Organic-specific
+   tokens (ramps, money semantics, shadows, density scale) are added alongside
+   and surfaced to Tailwind in input.css.
+
+   NAME COLLISION, worth knowing: shadcn's --accent is a subtle *hover surface*,
+   NOT the design's "accent". The design's accent (terracotta #c67139) maps to
+   --primary. The design's accent-2 (sage) has no shadcn equivalent and lives in
+   the ramp tokens below.
+
+   The .dark block is the designer's published dark role map (README "Dark
+   mode"), not a derivation. Three rules there are not plain colour swaps:
+   tinted fills invert across the ramp (100-200 fill -> 900, 700-800 text ->
+   400); shadows stop carrying elevation, so surfaces separate by lightness
+   (ground -> surface -> sunk) and only the screen container keeps a shadow; and
+   primary steps *down* to accent-500 with a dark label, because accent-400 text
+   on accent-500 would not hold. */
+
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.148 0.004 228.8);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.148 0.004 228.8);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.148 0.004 228.8);
-    --primary: oklch(0.527 0.154 150.069);
-    --primary-foreground: oklch(0.982 0.018 155.826);
-    --secondary: oklch(0.967 0.001 286.375);
-    --secondary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.963 0.002 197.1);
-    --muted-foreground: oklch(0.56 0.021 213.5);
-    --accent: oklch(0.963 0.002 197.1);
-    --accent-foreground: oklch(0.218 0.008 223.9);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.925 0.005 214.3);
-    --input: oklch(0.925 0.005 214.3);
-    --ring: oklch(0.723 0.014 214.4);
-    --radius: 0.625rem;
-    --chart-1: oklch(0.897 0.196 126.665);
-    --chart-2: oklch(0.768 0.233 130.85);
-    --chart-3: oklch(0.648 0.2 131.684);
-    --chart-4: oklch(0.532 0.157 131.589);
-    --chart-5: oklch(0.453 0.124 130.933);
-    --sidebar: oklch(0.987 0.002 197.1);
-    --sidebar-foreground: oklch(0.148 0.004 228.8);
-    --sidebar-primary: oklch(0.627 0.194 149.214);
-    --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
-    --sidebar-accent: oklch(0.963 0.002 197.1);
-    --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
-    --sidebar-border: oklch(0.925 0.005 214.3);
-    --sidebar-ring: oklch(0.723 0.014 214.4);
-    --selection: oklch(0.148 0.004 228.8);
-    --selection-foreground: oklch(1 0 0);
+    /* --- Neutral ramp (warm) --- */
+    --neutral-100: #f9f4ed;
+    --neutral-200: #eee7db;
+    --neutral-300: #dcd3c4;
+    --neutral-400: #c0b6a5;
+    --neutral-500: #a19786;
+    --neutral-600: #82796a;
+    --neutral-700: #645c50;
+    --neutral-800: #474238;
+    --neutral-900: #2e2b25;
+
+    /* --- Accent ramp (terracotta) --- */
+    --accent-100: #fff2eb;
+    --accent-200: #ffe1d0;
+    --accent-300: #ffc6a5;
+    --accent-400: #f6a06b;
+    --accent-500: #d67f48;
+    --accent-600: #b2622d;
+    --accent-700: #8c491a;
+    --accent-800: #643312;
+    --accent-900: #402310;
+
+    /* --- Accent-2 ramp (sage) --- */
+    --accent2-100: #f0fae1;
+    --accent2-200: #e1eecc;
+    --accent2-300: #ccdbb2;
+    --accent2-400: #aebf92;
+    --accent2-500: #8fa073;
+    --accent2-600: #728157;
+    --accent2-700: #56633f;
+    --accent2-800: #3d472b;
+    --accent2-900: #272e1b;
+
+    /* --- shadcn/templUI contract --- */
+    --background: #f5ead8;
+    --foreground: #201e1d;
+    --card: #ebddc5;
+    --card-foreground: #201e1d;
+    --popover: #ebddc5;
+    --popover-foreground: #201e1d;
+    --primary: #c67139;
+    --primary-foreground: #f5ead8;
+    /* The port table maps secondary, muted and accent all to neutral-200. */
+    --secondary: #eee7db;
+    --secondary-foreground: #201e1d;
+    --muted: #eee7db;
+    --muted-foreground: #645c50;
+    --accent: #eee7db;
+    --accent-foreground: #201e1d;
+    /* No red exists in this palette. Destructive is terracotta-700, the same
+       colour the design uses for "Archive category" and "Delete transaction". */
+    --destructive: #8c491a;
+    --border: #dcd3c4;
+    --input: #dcd3c4;
+    --ring: #c67139;
+    --selection: #c67139;
+    --selection-foreground: #f5ead8;
+
+    --sidebar: #ebddc5;
+    --sidebar-foreground: #201e1d;
+    --sidebar-primary: #c67139;
+    --sidebar-primary-foreground: #f5ead8;
+    --sidebar-accent: #fff2eb;
+    --sidebar-accent-foreground: #643312;
+    --sidebar-border: rgba(32, 30, 29, 0.16);
+    --sidebar-ring: #c67139;
+
+    --chart-1: #8fa073;
+    --chart-2: #aebf92;
+    --chart-3: #f6a06b;
+    --chart-4: #d67f48;
+    --chart-5: #b2622d;
+
+    /* --- Money semantics — the single source for every signed figure. Because
+       these flip in .dark, signedmoney needs no dark: variants. --- */
+    --money-positive: #56633f;
+    --money-negative: #8c491a;
+    --money-zero: #645c50;
+
+    /* --- Named surfaces from the design's semantic table --- */
+    --surface-ready: #f0fae1;
+    --surface-ready-fg: #56633f;
+    --surface-attention: #ffe1d0;
+    --surface-attention-fg: #643312;
+    --surface-quickadd: #fff2eb;
+    --surface-overspent: #ffe1d0;
+    /* "Sunk" — inputs and segmented-control tracks. In light mode it is the
+       page ground itself; dark mode gives it a step of its own, because that is
+       where elevation comes from once shadows stop reading. */
+    --surface-sunk: #f5ead8;
+
+    --progress-track: rgba(32, 30, 29, 0.12);
+    --progress-fill: #8fa073;
+    --progress-fill-over: #8c491a;
+
+    /* --- Radius is the one thing that cannot be value-swapped: templUI derives
+       sm/md/lg from a single --radius, so a 999px base would make cards
+       pill-shaped too. Keep 16px as templUI's base and give the pill shapes
+       their own token, applied explicitly on buttons, inputs, tags and
+       segmented controls. --- */
+    --radius: 16px;
+    --radius-pill: 999px;
+    --radius-card: 32.2px;
+
+    /* --- Density: 1.10x baked in. Use the scale, not round numbers. --- */
+    --space-1: 4.4px;
+    --space-2: 8.8px;
+    --space-3: 13.2px;
+    --space-4: 17.6px;
+    --space-6: 26.4px;
+    --space-8: 35.2px;
+
+    /* --- Elevation: screens md, cards inside them sm, sheets/dialogs/menus lg. --- */
+    --elevation-sm: 0 1px 2px rgba(46, 43, 37, 0.14);
+    --elevation-md: 0 3px 10px rgba(46, 43, 37, 0.16);
+    --elevation-lg: 0 12px 32px rgba(46, 43, 37, 0.22);
 }
 
 .dark {
-    --background: oklch(0.148 0.004 228.8);
-    --foreground: oklch(0.987 0.002 197.1);
-    --card: oklch(0.218 0.008 223.9);
-    --card-foreground: oklch(0.987 0.002 197.1);
-    --popover: oklch(0.218 0.008 223.9);
-    --popover-foreground: oklch(0.987 0.002 197.1);
-    --primary: oklch(0.448 0.119 151.328);
-    --primary-foreground: oklch(0.982 0.018 155.826);
-    --secondary: oklch(0.274 0.006 286.033);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.275 0.011 216.9);
-    --muted-foreground: oklch(0.723 0.014 214.4);
-    --accent: oklch(0.275 0.011 216.9);
-    --accent-foreground: oklch(0.987 0.002 197.1);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.56 0.021 213.5);
-    --radius: 0.625rem;
-    --chart-1: oklch(0.897 0.196 126.665);
-    --chart-2: oklch(0.768 0.233 130.85);
-    --chart-3: oklch(0.648 0.2 131.684);
-    --chart-4: oklch(0.532 0.157 131.589);
-    --chart-5: oklch(0.453 0.124 130.933);
-    --sidebar: oklch(0.218 0.008 223.9);
-    --sidebar-foreground: oklch(0.987 0.002 197.1);
-    --sidebar-primary: oklch(0.723 0.219 149.579);
-    --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
-    --sidebar-accent: oklch(0.275 0.011 216.9);
-    --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.56 0.021 213.5);
-    --selection: oklch(0.925 0.005 214.3);
-    --selection-foreground: oklch(0.218 0.008 223.9);
+    /* Ramps are hue-stable; only the role mappings below invert. A warm dark,
+       not a grey one — the ground stays on the same brown-cream axis. No new
+       hues: every accent here is a step of the same two ramps. */
+    --background: #1c1a17;
+    --foreground: #f5ead8;
+    --card: #2e2b25;
+    --card-foreground: #f5ead8;
+    --popover: #2e2b25;
+    --popover-foreground: #f5ead8;
+    /* Primary steps DOWN to accent-500 and keeps a dark label — accent-400 text
+       on an accent-500 fill would not hold. */
+    --primary: #d67f48;
+    --primary-foreground: #1c1a17;
+    /* Design calls for secondary/ghost buttons to be transparent with a 1px
+       rgba(245,234,216,0.22) border. That is a component change, not a value
+       swap: making --secondary transparent now would leave templUI's secondary
+       buttons invisible, since nothing draws the border yet. Held at the raised
+       surface until buttons are restyled in Phase 1. */
+    --secondary: #474238;
+    --secondary-foreground: #f5ead8;
+    --muted: #474238;
+    --accent: #474238;
+    --accent-foreground: #f5ead8;
+    --muted-foreground: #c0b6a5;
+    --destructive: #f6a06b;
+    --border: rgba(245, 234, 216, 0.14);
+    --input: rgba(245, 234, 216, 0.22);
+    --ring: #d67f48;
+    --selection: #d67f48;
+    --selection-foreground: #1c1a17;
+
+    --sidebar: #2e2b25;
+    --sidebar-foreground: #f5ead8;
+    --sidebar-primary: #d67f48;
+    --sidebar-primary-foreground: #1c1a17;
+    --sidebar-accent: #474238;
+    --sidebar-accent-foreground: #f5ead8;
+    --sidebar-border: rgba(245, 234, 216, 0.14);
+    --sidebar-ring: #d67f48;
+
+    --money-positive: #aebf92;
+    --money-negative: #f6a06b;
+    --money-zero: #c0b6a5;
+
+    /* Tinted fills invert across the ramp: the 100-200 fill becomes 900, and
+       its 700-800 text becomes 400. Never reuse a light-mode pair here. */
+    --surface-ready: #272e1b;
+    --surface-ready-fg: #aebf92;
+    --surface-attention: #402310;
+    --surface-attention-fg: #f6a06b;
+    --surface-quickadd: #2e2b25;
+    --surface-overspent: #402310;
+    --surface-sunk: #252220;
+
+    --progress-track: rgba(245, 234, 216, 0.14);
+    --progress-fill: #8fa073;
+    --progress-fill-over: #d67f48;
+
+    /* Shadows stop carrying elevation on a dark ground — surfaces separate by
+       lightness instead (ground -> surface -> sunk). Only the screen container
+       keeps one, so sm/md go flat and lg survives for sheets and menus. */
+    --elevation-sm: none;
+    --elevation-md: none;
+    --elevation-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
 }

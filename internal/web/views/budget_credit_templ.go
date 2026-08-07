@@ -205,7 +205,7 @@ func BudgetCreditSection(d BudgetData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums text-red-500"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums text-money-negative"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -236,7 +236,7 @@ func BudgetCreditSection(d BudgetData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums text-emerald-500"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums text-money-positive"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -257,14 +257,14 @@ func BudgetCreditSection(d BudgetData) templ.Component {
 						}
 						ctx = templ.InitializeContext(ctx)
 						if ca.OwingCents > 0 {
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<span class=\"text-red-500\">")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<span class=\"text-money-negative\">")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							var templ_7745c5c3_Var15 string
 							templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(ca.OwingCents))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_credit.templ`, Line: 54, Col: 63}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_credit.templ`, Line: 54, Col: 70}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 							if templ_7745c5c3_Err != nil {
@@ -275,14 +275,14 @@ func BudgetCreditSection(d BudgetData) templ.Component {
 								return templ_7745c5c3_Err
 							}
 						} else if ca.OwingCents < 0 {
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<span class=\"text-emerald-500\">")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<span class=\"text-money-positive\">")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							var templ_7745c5c3_Var16 string
 							templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(ca.OwingCents))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_credit.templ`, Line: 56, Col: 67}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_credit.templ`, Line: 56, Col: 70}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 							if templ_7745c5c3_Err != nil {
@@ -359,13 +359,15 @@ func creditOwingTotal(rows []store.CreditActivity) (total int64) {
 }
 
 // owingColor tints an owing figure like the per-card Owing cells: positive (you
-// owe) red, negative (overpaid/credit) emerald, zero muted.
+// owe) reads as negative money (terracotta), negative (overpaid/credit) as
+// positive money (sage), zero neutral. Note the inversion — owing is the one
+// place where a positive figure is the bad one.
 func owingColor(v int64) string {
 	switch {
 	case v > 0:
-		return "text-red-500"
+		return "text-money-negative"
 	case v < 0:
-		return "text-emerald-500"
+		return "text-money-positive"
 	default:
 		return "text-muted-foreground"
 	}

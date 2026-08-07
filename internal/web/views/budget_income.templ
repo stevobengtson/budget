@@ -45,7 +45,7 @@ templ incomeHeaderRow(d BudgetData) {
 					<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Income</span>
 				</button>
 				<div class="ml-auto flex items-center gap-2">
-					<span class="js-income-total-header text-sm font-semibold tabular-nums text-emerald-500">
+					<span class="js-income-total-header text-sm font-semibold tabular-nums text-money-positive">
 						{ money.Format(incomeTotal(d.IncomeRows)) }
 					</span>
 					@button.Button(button.Props{
@@ -99,7 +99,7 @@ templ IncomeTotalsRow(d BudgetData, oob bool) {
 			Total income
 		}
 		@table.Cell() {
-			<div class="js-income-total-value flex items-center justify-end px-2 py-1 text-sm font-semibold tabular-nums text-emerald-500">
+			<div class="js-income-total-value flex items-center justify-end px-2 py-1 text-sm font-semibold tabular-nums text-money-positive">
 				{ money.Format(incomeTotal(d.IncomeRows)) }
 			</div>
 		}
@@ -132,7 +132,7 @@ templ IncomeRow(month string, r store.Income) {
 		}
 		@table.Cell() {
 			<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="js-assign flex items-center justify-end">
-				<button type="button" class="js-assign-display cursor-text rounded-md px-2 py-1 text-right text-sm tabular-nums text-emerald-500 ring-1 ring-transparent hover:ring-border" title="Click to edit">
+				<button type="button" class="js-assign-display cursor-text rounded-md px-2 py-1 text-right text-sm tabular-nums text-money-positive ring-1 ring-transparent hover:ring-border" title="Click to edit">
 					{ money.Format(r.AmountCents) }
 				</button>
 				<input type="text" name="amount" value={ money.Format(r.AmountCents) } inputmode="decimal" autocomplete="off" class="js-assign-input hidden h-8 w-28 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>

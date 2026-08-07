@@ -60,8 +60,8 @@ templ PaydownPage(d PaydownData, collapsed bool) {
 			</form>
 		</div>
 		<div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-			@pdStat("Monthly outflow", money.Format(d.TotalMonthly), "text-emerald-500")
-			@pdStat("Total interest", money.Format(d.TotalInterest), "text-red-500")
+			@pdStat("Monthly outflow", money.Format(d.TotalMonthly), "text-money-positive")
+			@pdStat("Total interest", money.Format(d.TotalInterest), "text-money-negative")
 		</div>
 		if len(d.Plans) == 0 {
 			<p class="text-sm text-muted-foreground">
@@ -91,7 +91,7 @@ templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, pag
 					<span class="text-sm text-muted-foreground tabular-nums">{ fmt.Sprintf("%.2f%% APR", float64(p.AprBps)/100.0) }</span>
 					<span class="text-sm">
 						<span class="text-muted-foreground">payment</span>
-						<span class="ml-1 text-emerald-500 tabular-nums">{ money.Format(p.PaymentCents) }/mo</span>
+						<span class="ml-1 text-money-positive tabular-nums">{ money.Format(p.PaymentCents) }/mo</span>
 					</span>
 					<span class="text-sm">
 						<span class="text-muted-foreground">start</span>
@@ -217,10 +217,10 @@ templ PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) {
 					@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
 						{ r.Month.Format("Jan 2006") }
 					}
-					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-red-500"}) {
+					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-money-negative"}) {
 						{ money.Format(r.InterestCents) }
 					}
-					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-emerald-500"}) {
+					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-money-positive"}) {
 						{ money.Format(r.PaymentCents) }
 					}
 					@table.Cell(table.CellProps{Class: "hidden md:table-cell"}) {
@@ -289,11 +289,16 @@ templ paydownPagerLink(acctID int64, horizon, target int, enabled bool) {
 	}
 }
 
+// PaydownSource labels where a scheduled payment figure came from. These are
+// legend glyphs, not money, so they use the ramps rather than the money-*
+// tokens: sage for a confirmed actual, terracotta for a plan, neutral for the
+// fallback. The redesign replaces the glyphs with words ("spent in Credit Card
+// Payment"), which is the least legible part of the current screen.
 templ PaydownSource(s paydown.PaymentSource) {
 	if s == paydown.SourceSpent {
-		<span class="text-emerald-500">✓ spent</span>
+		<span class="text-sage-700">✓ spent</span>
 	} else if s == paydown.SourceAssigned {
-		<span class="text-amber-500">→ assigned</span>
+		<span class="text-primary">→ assigned</span>
 	} else {
 		<span class="text-muted-foreground">· default</span>
 	}

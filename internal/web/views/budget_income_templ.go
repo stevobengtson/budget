@@ -133,7 +133,7 @@ func incomeHeaderRow(d BudgetData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<span class=\"text-xs font-semibold uppercase tracking-wide text-muted-foreground\">Income</span></button><div class=\"ml-auto flex items-center gap-2\"><span class=\"js-income-total-header text-sm font-semibold tabular-nums text-emerald-500\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<span class=\"text-xs font-semibold uppercase tracking-wide text-muted-foreground\">Income</span></button><div class=\"ml-auto flex items-center gap-2\"><span class=\"js-income-total-header text-sm font-semibold tabular-nums text-money-positive\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -318,7 +318,7 @@ func IncomeTotalsRow(d BudgetData, oob bool) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div class=\"js-income-total-value flex items-center justify-end px-2 py-1 text-sm font-semibold tabular-nums text-emerald-500\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div class=\"js-income-total-value flex items-center justify-end px-2 py-1 text-sm font-semibold tabular-nums text-money-positive\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -542,7 +542,7 @@ func IncomeRow(month string, r store.Income) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" hx-swap=\"outerHTML\" class=\"js-assign flex items-center justify-end\"><button type=\"button\" class=\"js-assign-display cursor-text rounded-md px-2 py-1 text-right text-sm tabular-nums text-emerald-500 ring-1 ring-transparent hover:ring-border\" title=\"Click to edit\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" hx-swap=\"outerHTML\" class=\"js-assign flex items-center justify-end\"><button type=\"button\" class=\"js-assign-display cursor-text rounded-md px-2 py-1 text-right text-sm tabular-nums text-money-positive ring-1 ring-transparent hover:ring-border\" title=\"Click to edit\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

@@ -1192,7 +1192,7 @@ func budgetSummaryRows(d BudgetData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-medium text-emerald-600 dark:text-emerald-400"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var51), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-medium text-money-positive"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var51), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1357,16 +1357,18 @@ func groupAvailableTotal(rows []store.CategoryBudget) (total int64) {
 }
 
 // availColorClass tints an Available figure the same way the signedmoney
-// component tints the Available column: positive emerald, negative destructive,
-// zero muted. section-collapse.js mirrors this when it re-sums on collapse.
+// component tints the Available column, using the same money-* tokens: positive
+// sage, negative terracotta, zero warm neutral. The tokens flip in .dark, so no
+// dark: variant is needed. section-collapse.js mirrors this when it re-sums on
+// collapse — keep the three in step.
 func availColorClass(cents int64) string {
 	switch {
 	case cents > 0:
-		return "text-emerald-600 dark:text-emerald-400"
+		return "text-money-positive"
 	case cents < 0:
-		return "text-destructive"
+		return "text-money-negative"
 	default:
-		return "text-muted-foreground"
+		return "text-money-zero"
 	}
 }
 

@@ -1,6 +1,23 @@
 @import "tailwindcss";
 @import "./theme.css";
 
+/* Organic body face. Variable, latin subset, self-hosted (no Google CDN call). */
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("/static/fonts/figtree.woff2") format("woff2");
+}
+/* Organic heading face — a text serif. The design tested a display face
+   (Caprasimo) first and rejected it as hard to read. */
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/static/fonts/source-serif-4.woff2") format("woff2");
+}
 @font-face {
   font-family: "Source Sans 3";
   font-style: normal;
@@ -53,10 +70,78 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Money semantics — signedmoney is the only consumer, and the underlying
+     tokens flip in .dark, so no dark: variants are needed downstream. */
+  --color-money-positive: var(--money-positive);
+  --color-money-negative: var(--money-negative);
+  --color-money-zero: var(--money-zero);
+
+  /* Named surfaces from the design's semantic table. */
+  --color-surface-ready: var(--surface-ready);
+  --color-surface-ready-fg: var(--surface-ready-fg);
+  --color-surface-attention: var(--surface-attention);
+  --color-surface-attention-fg: var(--surface-attention-fg);
+  --color-surface-quickadd: var(--surface-quickadd);
+  --color-surface-overspent: var(--surface-overspent);
+  --color-surface-sunk: var(--surface-sunk);
+  --color-progress-track: var(--progress-track);
+  --color-progress-fill: var(--progress-fill);
+  --color-progress-fill-over: var(--progress-fill-over);
+
+  /* Ramps, for the cases the semantic names above don't cover. Prefer the
+     semantic name when one exists. The design calls the first ramp "neutral";
+     it is exposed as warm-* so it does not shadow Tailwind's built-in neutral
+     palette (which is grey, and would silently lose its 50/950 steps). */
+  --color-warm-100: var(--neutral-100);
+  --color-warm-200: var(--neutral-200);
+  --color-warm-300: var(--neutral-300);
+  --color-warm-400: var(--neutral-400);
+  --color-warm-500: var(--neutral-500);
+  --color-warm-600: var(--neutral-600);
+  --color-warm-700: var(--neutral-700);
+  --color-warm-800: var(--neutral-800);
+  --color-warm-900: var(--neutral-900);
+  --color-terracotta-100: var(--accent-100);
+  --color-terracotta-200: var(--accent-200);
+  --color-terracotta-300: var(--accent-300);
+  --color-terracotta-400: var(--accent-400);
+  --color-terracotta-500: var(--accent-500);
+  --color-terracotta-600: var(--accent-600);
+  --color-terracotta-700: var(--accent-700);
+  --color-terracotta-800: var(--accent-800);
+  --color-terracotta-900: var(--accent-900);
+  --color-sage-100: var(--accent2-100);
+  --color-sage-200: var(--accent2-200);
+  --color-sage-300: var(--accent2-300);
+  --color-sage-400: var(--accent2-400);
+  --color-sage-500: var(--accent2-500);
+  --color-sage-600: var(--accent2-600);
+  --color-sage-700: var(--accent2-700);
+  --color-sage-800: var(--accent2-800);
+  --color-sage-900: var(--accent2-900);
+
+  /* Explicit, not computed off --radius: the design's scale is 8/16/28 with a
+     32.2px card, which no single-offset formula produces. --radius itself stays
+     at templUI's 16px base so vendored components that read it directly keep
+     their intended shape. rounded-pill is the one to reach for on buttons,
+     inputs, tags and segmented controls. */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 28px;
+  --radius-xl: var(--radius-card);
+  --radius-pill: 999px;
+
+  /* 1.10x density scale, additive — the numeric p-4/gap-2 utilities still work. */
+  --spacing-s1: var(--space-1);
+  --spacing-s2: var(--space-2);
+  --spacing-s3: var(--space-3);
+  --spacing-s4: var(--space-4);
+  --spacing-s6: var(--space-6);
+  --spacing-s8: var(--space-8);
+
+  --shadow-organic-sm: var(--elevation-sm);
+  --shadow-organic-md: var(--elevation-md);
+  --shadow-organic-lg: var(--elevation-lg);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -64,8 +149,11 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
-  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
-  --font-heading: "Oxanium", "Source Sans 3", ui-sans-serif, sans-serif;
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Source Serif 4", Georgia, serif;
+  /* Headings are always 600 — the serif is a text face, not a display one, and
+     it was chosen precisely because the stock display face read poorly. */
+  --font-weight-heading: 600;
 }
 
 @layer base {

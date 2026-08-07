@@ -2,15 +2,20 @@ package signedmoney
 
 import "github.com/sbengtson/budget/internal/core/money"
 
-// Money colors an amount by sign: positive emerald, negative red, zero muted.
-// Replaces the former views.SignedMoney; a promoted, views-free primitive so
-// any page (and the future API views) can share it.
+// Money colors an amount by sign: positive sage, negative terracotta, zero the
+// warm neutral. There is no red in the Organic palette — overspending reads as
+// terracotta, and the screens that show it reinforce the sign with a tinted row
+// background and a worded note so it never relies on colour alone.
+//
+// The money-* tokens flip in .dark (see tailwind/theme.css), so this needs no
+// dark: variants. Replaces the former views.SignedMoney; a promoted, views-free
+// primitive so any page (and the future API views) can share it.
 templ Money(cents int64) {
 	if cents > 0 {
-		<span class="text-emerald-600 dark:text-emerald-400 tabular-nums">{ money.Format(cents) }</span>
+		<span class="text-money-positive tabular-nums">{ money.Format(cents) }</span>
 	} else if cents < 0 {
-		<span class="text-destructive tabular-nums">{ money.Format(cents) }</span>
+		<span class="text-money-negative tabular-nums">{ money.Format(cents) }</span>
 	} else {
-		<span class="text-muted-foreground tabular-nums">{ money.Format(cents) }</span>
+		<span class="text-money-zero tabular-nums">{ money.Format(cents) }</span>
 	}
 }
