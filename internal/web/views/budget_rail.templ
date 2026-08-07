@@ -1,0 +1,157 @@
+package views
+
+import (
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/templui/templui/components/icon"
+)
+
+// BudgetRail is the Budget screen's 300px summary column: month navigation, the
+// Ready-to-assign headline, the month's totals, and a "Needs attention" card
+// that appears only when something is wrong.
+//
+// It replaces the old footer total rows that lived inside the budget table, so
+// it is the out-of-band swap target for anything that moves money — see
+// BudgetAssignResult. Being a plain div, it needs none of the <template>
+// wrapping the table rows required to survive HTML table parsing.
+//
+// The account list is NOT here, though the design puts it in this rail: the app
+// keeps its sidebar, which carries accounts on desktop and is the single source
+// for them. See appShell.
+templ BudgetRail(d BudgetData, oob bool) {
+	{{ attrs := templ.Attributes{"id": "budget-rail"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	<aside class="flex w-full shrink-0 flex-col gap-s3 lg:w-[300px]" { attrs... }>
+		@railMonthNav(d)
+		@railReadyToAssign(d)
+		@railTotals(d)
+		@railNeedsAttention(d)
+	</aside>
+}
+
+// railMonthNav is the month stepper: two pill icon buttons with the month
+// centred between them. The "today" jump is kept as a quiet link beneath rather
+// than a third button — the design's rail shows only the two steppers, but
+// dropping the jump entirely would lose a control the app already had.
+templ railMonthNav(d BudgetData) {
+	<div class="flex flex-col gap-s1">
+		<div class="flex items-center gap-s2">
+			<a
+				href={ templ.SafeURL(bgMonthHref(d.PrevMonth)) }
+				aria-label="Previous month"
+				class="inline-flex size-9 shrink-0 items-center justify-center rounded-pill border border-border text-foreground hover:bg-foreground/[0.07] active:bg-foreground/[0.14]"
+			>
+				@icon.ChevronLeft(icon.Props{Class: "size-[18px]"})
+			</a>
+			<span class="flex-1 text-center font-heading text-[22px] font-semibold">
+				{ formatMonth(d.Month) }
+			</span>
+			<a
+				href={ templ.SafeURL(bgMonthHref(d.NextMonth)) }
+				aria-label="Next month"
+				class="inline-flex size-9 shrink-0 items-center justify-center rounded-pill border border-border text-foreground hover:bg-foreground/[0.07] active:bg-foreground/[0.14]"
+			>
+				@icon.ChevronRight(icon.Props{Class: "size-[18px]"})
+			</a>
+		</div>
+		if d.Month != nowMonth() {
+			<a href={ templ.SafeURL(bgMonthHref(nowMonth())) } class="text-center text-[13px] text-muted-foreground underline-offset-2 hover:underline">
+				back to this month
+			</a>
+		}
+	</div>
+}
+
+// railReadyToAssign is the headline figure. It stays sage even when negative —
+// the number itself carries the sign, and the wording below names the problem,
+// so an over-assigned month reads as a sentence rather than a colour.
+templ railReadyToAssign(d BudgetData) {
+	<div class="flex flex-col gap-s2 rounded-xl bg-surface-ready p-s3 shadow-organic-sm">
+		<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-surface-ready-fg">
+			Ready to assign
+		</span>
+		<span class="font-heading text-[40px] font-semibold leading-[1.1] tabular-nums text-surface-ready-fg">
+			{ money.Format(d.Remain) }
+		</span>
+		if d.Remain < 0 {
+			<span class="text-[13px] text-surface-ready-fg">
+				You have assigned more than you expect to earn this month.
+			</span>
+		}
+	</div>
+}
+
+// railTotals is the month at a glance. These four figures used to be footer rows
+// inside the table; pulling them out is what lets the category list drop to two
+// numbers per row.
+templ railTotals(d BudgetData) {
+	{{ assigned, spent, _ := budgetTotals(d.Groups) }}
+	{{ stillInEnvelopes := assigned - spent }}
+	<div class="flex flex-col gap-s2 rounded-xl bg-card p-s3 shadow-organic-sm">
+		@railTotalRow("Income", money.Format(d.Estimated), "")
+		@railTotalRow("Assigned", money.Format(assigned), "")
+		@railTotalRow("Spent", money.Format(spent), "")
+		<div class="h-px bg-border"></div>
+		@railTotalRow("Still in envelopes", money.Format(stillInEnvelopes), availColorClass(stillInEnvelopes))
+	</div>
+}
+
+templ railTotalRow(label, value, valueClass string) {
+	<div class="flex items-baseline justify-between gap-s2 text-[15px]">
+		<span class="text-muted-foreground">{ label }</span>
+		<span class={ "font-bold tabular-nums", valueClass }>{ value }</span>
+	</div>
+}
+
+// railNeedsAttention lists the month's actual problems — overspent categories
+// and cards carrying a balance — and renders nothing at all when there are none.
+// Overspending is terracotta here, but it is also worded ("overspent"), so the
+// meaning never rests on colour alone.
+templ railNeedsAttention(d BudgetData) {
+	{{ over := overspentRows(d.Groups) }}
+	{{ owing := owingRows(d.CreditRows) }}
+	if len(over) > 0 || len(owing) > 0 {
+		<div class="flex flex-col gap-s2 rounded-xl bg-surface-attention p-s3 text-surface-attention-fg shadow-organic-sm">
+			<span class="text-[12px] font-bold uppercase tracking-[0.08em]">Needs attention</span>
+			for _, r := range over {
+				<div class="flex items-baseline justify-between gap-s2 text-[14px]">
+					<span class="truncate">{ r.CategoryName } overspent</span>
+					<span class="shrink-0 font-bold tabular-nums">{ money.Format(r.AvailableCents) }</span>
+				</div>
+			}
+			for _, c := range owing {
+				<div class="flex items-baseline justify-between gap-s2 text-[14px]">
+					<span class="truncate">{ c.AccountName } owing</span>
+					<span class="shrink-0 font-bold tabular-nums">{ money.Format(c.OwingCents) }</span>
+				</div>
+			}
+		</div>
+	}
+}
+
+// overspentRows collects the categories that have gone negative, in list order.
+func overspentRows(groups []BudgetGroup) []store.CategoryBudget {
+	var out []store.CategoryBudget
+	for _, g := range groups {
+		for _, r := range g.Rows {
+			if r.AvailableCents < 0 {
+				out = append(out, r)
+			}
+		}
+	}
+	return out
+}
+
+// owingRows collects the cards actually carrying a balance. A zero or negative
+// owing figure is nothing to act on, so it never reaches the card.
+func owingRows(rows []store.CreditActivity) []store.CreditActivity {
+	var out []store.CreditActivity
+	for _, r := range rows {
+		if r.OwingCents > 0 {
+			out = append(out, r)
+		}
+	}
+	return out
+}

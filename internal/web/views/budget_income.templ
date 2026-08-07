@@ -7,107 +7,85 @@ import (
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
 	"github.com/templui/templui/components/icon"
-	"github.com/templui/templui/components/table"
 )
 
-// BudgetIncomeSection renders income as top-of-table sections that share the
-// main budget table's 6-column grid: a muted "Income" header row (with the
-// copy-from-prev + add controls inline), the income rows, and a totals row.
-// Amounts live in the Assigned column so they align with the expense rows
-// below. It is emitted from BudgetTable, above the Expenses divider.
-templ BudgetIncomeSection(d BudgetData) {
-	<tbody id="income-rows">
-		@incomeHeaderRow(d)
-		@subHeaderRow("Source", "Amount")
-		for _, r := range d.IncomeRows {
-			@IncomeRow(d.Month, r)
-		}
-	</tbody>
-	<tbody id="income-totals-body">
+// BudgetIncomePanel is the income source editor. Income used to be a collapsible
+// section at the top of the budget table, competing for width with the category
+// columns it shares nothing with. In the redesign the month's income total lives
+// in the summary rail and the sources are edited here, opened from the Income
+// button above the category list.
+//
+// Every mutation inside the panel refreshes the rail out of band, so the total
+// behind the panel stays honest while it is open.
+templ BudgetIncomePanel(d BudgetData) {
+	@dialogPanel("max-w-xl") {
+		<div class="flex items-center justify-between gap-s3">
+			<h2 class="font-heading text-[22px] font-semibold">Income for { formatMonth(d.Month) }</h2>
+			<button
+				type="button"
+				class="inline-flex size-9 items-center justify-center rounded-pill text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground"
+				aria-label="Close"
+				hx-on:click="document.getElementById('modal').innerHTML = ''"
+			>
+				@icon.X(icon.Props{Class: "size-[18px]"})
+			</button>
+		</div>
+		<p class="text-[14px] text-muted-foreground">
+			What you expect to earn this month. This is what Ready to assign is measured against.
+		</p>
+		<div id="income-rows" class="flex flex-col">
+			for _, r := range d.IncomeRows {
+				@IncomeRow(d.Month, r)
+			}
+		</div>
 		@IncomeTotalsRow(d, false)
-	</tbody>
-}
-
-// incomeHeaderRow is the muted "Income" section header, mirroring a category
-// group header. It carries the section's copy-from-prev and add-income controls.
-templ incomeHeaderRow(d BudgetData) {
-	@table.Row(table.RowProps{Class: "bg-muted hover:bg-muted", Attributes: templ.Attributes{"id": "income-header"}}) {
-		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
-			<div class="flex items-center gap-2">
-				<button
-					type="button"
-					class="flex items-center gap-1.5 rounded-md px-1 py-0.5 hover:text-foreground"
-					data-collapse="income"
-					title="Collapse or expand income"
-					aria-label="Toggle income section"
-				>
-					@icon.ChevronRight(icon.Props{Class: "js-income-caret size-3.5 text-muted-foreground transition-transform"})
-					<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Income</span>
-				</button>
-				<div class="ml-auto flex items-center gap-2">
-					<span class="js-income-total-header text-sm font-semibold tabular-nums text-money-positive">
-						{ money.Format(incomeTotal(d.IncomeRows)) }
-					</span>
-					@button.Button(button.Props{
-						Type:    "button",
-						Variant: button.VariantGhost,
-						Size:    button.SizeSm,
-						Class:   "text-muted-foreground hover:text-foreground",
-						Attributes: templ.Attributes{
-							"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
-							"hx-target":  "#budget-region",
-							"hx-swap":    "outerHTML",
-							"hx-confirm": "Copy all entries from the previous month into this one?",
-							"title":      "Copy every entry from the previous month",
-						},
-					}) {
-						← copy from prev
-					}
-					@button.Button(button.Props{
-						Type:    "button",
-						Variant: button.VariantOutline,
-						Size:    button.SizeSm,
-						Class:   "text-muted-foreground hover:text-foreground",
-						Attributes: templ.Attributes{
-							"hx-get":     "/budget/income/new?month=" + d.Month,
-							"hx-target":  "#income-rows",
-							"hx-swap":    "beforeend",
-							"title":      "Add income",
-							"hx-on:click": "document.getElementById('budget-table').classList.remove('income-collapsed')",
-						},
-					}) {
-						Add Income
-					}
-				</div>
-			</div>
-		}
+		<div class="flex items-center justify-end gap-s2">
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantGhost,
+				Size:    button.SizeSm,
+				Class:   "rounded-pill",
+				Attributes: templ.Attributes{
+					"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
+					"hx-target":  "#modal",
+					"hx-swap":    "innerHTML",
+					"hx-confirm": "Copy all entries from the previous month into this one?",
+					"title":      "Copy every entry from the previous month",
+				},
+			}) {
+				Same as last month
+			}
+			@button.Button(button.Props{
+				Type:    "button",
+				Size:    button.SizeSm,
+				Class:   "rounded-pill",
+				Attributes: templ.Attributes{
+					"hx-get":    "/budget/income/new?month=" + d.Month,
+					"hx-target": "#income-rows",
+					"hx-swap":   "beforeend",
+					"title":     "Add income",
+				},
+			}) {
+				Add a source
+			}
+		</div>
 	}
 }
 
-// IncomeTotalsRow is the income section's totals row, with a stable
-// #income-totals id so an income mutation can refresh just the total via an
-// out-of-band swap (oob=true) instead of re-rendering the section. When swapped
-// OOB it must be wrapped in a <template> by the caller, because the browser
-// strips a bare <tr> that isn't already inside a table.
+// IncomeTotalsRow is the panel's total, with a stable id so an income mutation
+// can refresh just this figure out of band (oob=true) rather than re-rendering
+// the panel. A div needs no <template> wrapper to survive an OOB swap.
 templ IncomeTotalsRow(d BudgetData, oob bool) {
 	{{ attrs := templ.Attributes{"id": "income-totals"} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
-	@table.Row(table.RowProps{Attributes: attrs}) {
-		@table.Cell(table.CellProps{Class: "pl-6 font-semibold"}) {
-			Total income
-		}
-		@table.Cell() {
-			<div class="js-income-total-value flex items-center justify-end px-2 py-1 text-sm font-semibold tabular-nums text-money-positive">
-				{ money.Format(incomeTotal(d.IncomeRows)) }
-			</div>
-		}
-		@table.Cell()
-		@table.Cell()
-		@table.Cell()
-		@table.Cell()
-	}
+	<div class="flex items-baseline justify-between gap-s2 border-t border-border pt-s3 text-[15px]" { attrs... }>
+		<span class="font-semibold">Total income</span>
+		<span class="js-income-total-value font-bold tabular-nums text-money-positive">
+			{ money.Format(incomeTotal(d.IncomeRows)) }
+		</span>
+	</div>
 }
 
 func incomeTotal(rows []store.Income) (total int64) {
@@ -117,104 +95,86 @@ func incomeTotal(rows []store.Income) (total int64) {
 	return
 }
 
-// IncomeRow renders one income entry as a main-table row: source in the
-// category column, amount in the Assigned column, the remaining expense columns
-// blank, and the delete control in the trailing actions column.
+// IncomeRow is one income source: an inline-editable name and amount, plus
+// delete. Both fields reuse the same js-name-* / js-assign-* click-to-edit
+// behaviour as the category rows, so inline-edit.js and name-edit.js drive them
+// unchanged.
 templ IncomeRow(month string, r store.Income) {
-	@table.Row(table.RowProps{Attributes: templ.Attributes{"id": fmt.Sprintf("income-%d", r.ID), "class": "group"}}) {
-		@table.Cell(table.CellProps{Class: "pl-6 font-medium"}) {
-			<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="flex items-center">
-				<button type="button" class="js-name-display cursor-text rounded-md px-1 py-0.5 text-sm ring-1 ring-transparent hover:ring-border" title="Click to rename">
-					{ r.Name }
-				</button>
-				<input type="text" name="name" value={ r.Name } autocomplete="off" class="js-name-input hidden h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
-			</form>
+	<div id={ fmt.Sprintf("income-%d", r.ID) } class="group flex items-center gap-s3 border-b border-border py-s2 last:border-b-0">
+		<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="flex min-w-0 flex-1 items-center">
+			<button type="button" class="js-name-display cursor-text truncate rounded-sm px-1 py-0.5 text-[15px] font-semibold ring-1 ring-transparent hover:ring-border" title="Click to rename">
+				{ r.Name }
+			</button>
+			<input type="text" name="name" value={ r.Name } autocomplete="off" class="js-name-input hidden h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+		</form>
+		<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="js-assign flex w-[140px] shrink-0 items-center justify-end">
+			<button type="button" class="js-assign-display h-9 w-full cursor-text rounded-pill bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums text-money-positive ring-1 ring-transparent hover:ring-border" title="Click to edit">
+				{ money.Format(r.AmountCents) }
+			</button>
+			<input type="text" name="amount" value={ money.Format(r.AmountCents) } inputmode="decimal" autocomplete="off" class="js-assign-input hidden h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+		</form>
+		@button.Button(button.Props{
+			Type:    "button",
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Class:   "shrink-0 rounded-pill text-muted-foreground hover:text-money-negative",
+			Attributes: templ.Attributes{
+				"hx-delete":  fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month),
+				"hx-target":  fmt.Sprintf("#income-%d", r.ID),
+				"hx-swap":    "outerHTML",
+				"hx-confirm": "Delete this income entry?",
+				"title":      "Delete",
+			},
+		}) {
+			@icon.X(icon.Props{Class: "size-4"})
 		}
-		@table.Cell() {
-			<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="js-assign flex items-center justify-end">
-				<button type="button" class="js-assign-display cursor-text rounded-md px-2 py-1 text-right text-sm tabular-nums text-money-positive ring-1 ring-transparent hover:ring-border" title="Click to edit">
-					{ money.Format(r.AmountCents) }
-				</button>
-				<input type="text" name="amount" value={ money.Format(r.AmountCents) } inputmode="decimal" autocomplete="off" class="js-assign-input hidden h-8 w-28 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
-			</form>
-		}
-		@table.Cell()
-		@table.Cell()
-		@table.Cell()
-		@table.Cell(table.CellProps{Class: "text-right"}) {
-			@button.Button(button.Props{
-				Type:    "button",
-				Variant: button.VariantGhost,
-				Size:    button.SizeSm,
-				Class:   "text-muted-foreground hover:text-destructive",
-				Attributes: templ.Attributes{
-					"hx-delete":  fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month),
-					"hx-target":  fmt.Sprintf("#income-%d", r.ID),
-					"hx-swap":    "outerHTML",
-					"hx-confirm": "Delete this income entry?",
-					"title":      "Delete",
-				},
-			}) {
-				×
-			}
-		}
-	}
+	</div>
 }
 
-// IncomeNewRow is the transient add-income row. Its fields sit in the same
-// columns as a saved IncomeRow (source, amount, then the actions column) so the
-// editor lines up with existing rows. The controls live in separate cells but
-// belong to one form via the HTML5 form="" attribute — a single <form> can't
-// legally wrap multiple <td>s. Multi-field -> explicit Save (like the goal
-// editor, not blur-save).
+// IncomeNewRow is the transient add-income row. Its two inputs belong to one
+// form and it saves explicitly rather than on blur, because two fields have no
+// obvious single commit point.
 templ IncomeNewRow(month string) {
-	@table.Row(table.RowProps{Attributes: templ.Attributes{"data-newrow": ""}}) {
-		@table.Cell(table.CellProps{Class: "pl-6 font-medium"}) {
-			<form id="income-new-form" hx-post={ "/budget/income?month=" + month } hx-target="closest tr" hx-swap="outerHTML" class="flex items-center">
-				<input type="text" name="name" autofocus placeholder="Source" autocomplete="off" class="h-8 w-48 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
-			</form>
-		}
-		@table.Cell() {
-			<div class="flex items-center justify-end">
-				<input type="text" form="income-new-form" name="amount" placeholder="0.00" inputmode="decimal" autocomplete="off" class="h-8 w-28 rounded-md border border-input bg-transparent px-2 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
-			</div>
-		}
-		@table.Cell()
-		@table.Cell()
-		@table.Cell()
-		@table.Cell(table.CellProps{Class: "text-right"}) {
-			<div class="flex items-center justify-end gap-2">
-				@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Attributes: templ.Attributes{"form": "income-new-form"}}) {
-					save
-				}
-				@button.Button(button.Props{
-					Type:       "button",
-					Variant:    button.VariantGhost,
-					Size:       button.SizeSm,
-					Attributes: templ.Attributes{"hx-on:click": "this.closest('tr').remove()"},
-				}) {
-					cancel
-				}
-			</div>
-		}
-	}
+	<div data-newrow class="flex items-center gap-s3 border-b border-border py-s2 last:border-b-0">
+		<form id="income-new-form" hx-post={ "/budget/income?month=" + month } hx-target="closest [data-newrow]" hx-swap="outerHTML" class="flex min-w-0 flex-1 items-center">
+			<input type="text" name="name" autofocus placeholder="Source" autocomplete="off" class="h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+		</form>
+		<input type="text" form="income-new-form" name="amount" placeholder="0.00" inputmode="decimal" autocomplete="off" class="h-9 w-[140px] shrink-0 rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+		<div class="flex shrink-0 items-center gap-s2">
+			@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Class: "rounded-pill", Attributes: templ.Attributes{"form": "income-new-form"}}) {
+				Save
+			}
+			@button.Button(button.Props{
+				Type:       "button",
+				Variant:    button.VariantGhost,
+				Size:       button.SizeSm,
+				Class:      "rounded-pill",
+				Attributes: templ.Attributes{"hx-on:click": "this.closest('[data-newrow]').remove()"},
+			}) {
+				Cancel
+			}
+		</div>
+	</div>
 }
 
-// BudgetIncomeRowResult refreshes one income row plus the OOB banner and income
-// total (income changes move Estimated / Remain and the footer sum).
+// BudgetIncomeRowResult refreshes one income row plus the panel total and the
+// summary rail behind it (income moves Estimated and Ready to assign).
 templ BudgetIncomeRowResult(month string, r store.Income, d BudgetData) {
 	@IncomeRow(month, r)
-	@BudgetSummary(d, true)
-	<template>
-		@IncomeTotalsRow(d, true)
-	</template>
+	@IncomeTotalsRow(d, true)
+	@BudgetRail(d, true)
 }
 
 // BudgetIncomeDeleteResult removes the income row (empty primary target) and
-// refreshes the banner + income total out of band.
+// refreshes the panel total and the rail out of band.
 templ BudgetIncomeDeleteResult(d BudgetData) {
-	@BudgetSummary(d, true)
-	<template>
-		@IncomeTotalsRow(d, true)
-	</template>
+	@IncomeTotalsRow(d, true)
+	@BudgetRail(d, true)
+}
+
+// BudgetIncomePanelResult re-renders the whole panel (for actions that change
+// several rows at once, like copy-from-last-month) and refreshes the rail.
+templ BudgetIncomePanelResult(d BudgetData) {
+	@BudgetIncomePanel(d)
+	@BudgetRail(d, true)
 }

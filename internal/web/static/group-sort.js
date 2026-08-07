@@ -1,15 +1,14 @@
 // Drag-to-reorder for expense category groups. Each group is a
-// <tbody data-group data-group-id> inside the budget table (#budget-table,
-// class js-group-sort). SortableJS is bound to the table itself because the
-// group tbodies' only shared parent is the table; the `draggable` selector +
-// grip handle make the group tbodies the sole draggable items, and onMove keeps
-// them inside their band (never above Uncategorized or below the totals).
+// <div data-group data-group-id> inside #budget-groups (class js-group-sort).
+// The `draggable` selector + grip handle make the group divs the sole draggable
+// items. Groups are the only children of that container now that income, credit
+// and the totals have moved out of the list, so no onMove guard is needed.
 // On drop we persist the new order via htmx (no swap — reordering changes no
 // money, so there's nothing to re-render).
 (function () {
   function persistOrder(table) {
     var ids = Array.prototype.map.call(
-      table.querySelectorAll("tbody[data-group]"),
+      table.querySelectorAll("[data-group]"),
       function (tb) {
         return tb.getAttribute("data-group-id");
       }
@@ -24,12 +23,10 @@
     if (!window.Sortable || table.dataset.sortableInit) return;
     table.dataset.sortableInit = "1";
     Sortable.create(table, {
-      draggable: "tbody[data-group]",
+      draggable: "[data-group]",
       handle: ".js-group-handle",
       animation: 150,
       ghostClass: "opacity-50",
-      // Only allow displacing another group, so a group can't be dropped among
-      // the income/credit/uncategorized/totals tbodies.
       onMove: function (evt) {
         return !!(evt.related && evt.related.hasAttribute("data-group"));
       },

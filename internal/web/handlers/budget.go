@@ -33,7 +33,6 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 		month = store.MonthKey(time.Now())
 	}
 
-
 	data, rows, err := h.budgetData(ctx, currentUserID(c), month)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "month budget: %v", err)
@@ -44,13 +43,11 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 	render(c, http.StatusOK, views.BudgetPage(data, sidebarCollapsed(c)))
 }
 
-// setCollapseState fills the per-section collapse flags on data from their
-// cookies, so a full render (page or #budget-region swap) reflects the user's
-// remembered collapse choices. Transient expansions override an individual flag
-// after calling this (e.g. copy-from-prev sets IncomeCollapsed=false).
+// setCollapseState fills the per-group collapse flags on data from their cookie,
+// so a full render (page or #budget-region swap) reflects the user's remembered
+// choices. Income and Credit are no longer collapsible sections — they are
+// panels — so only groups remain.
 func setCollapseState(c *gin.Context, data *views.BudgetData) {
-	data.IncomeCollapsed = incomeCollapsed(c)
-	data.CreditCollapsed = creditCollapsed(c)
 	collapsed := collapsedGroupSet(c)
 	for i := range data.Groups {
 		data.Groups[i].Collapsed = collapsed[data.Groups[i].ID]

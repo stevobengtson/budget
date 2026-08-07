@@ -5,293 +5,230 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/sbengtson/budget/internal/web/components/signedmoney"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
 	"github.com/templui/templui/components/icon"
-	"github.com/templui/templui/components/table"
 )
 
+// budgetGridCols is the shared four-column track for the column heads and every
+// category row: name, assigned, progress, available. Declared once so a head and
+// its rows can never drift apart.
+const budgetGridCols = "grid grid-cols-[1fr_140px_200px_140px] items-center gap-s4"
+
+// BudgetTable is the category list. It is a div grid rather than a <table>: the
+// redesign shows two numbers per row (Assigned as an editable field, Available
+// as the headline) with a progress bar between them, and every total has moved
+// out to BudgetRail.
+//
+// Income and Credit are no longer sections here — income's total lands in the
+// rail and its sources are edited in a panel; credit owing lands in "Needs
+// attention". Only per-group collapse survives.
 templ BudgetTable(d BudgetData) {
-	<div class="overflow-hidden rounded-xl border bg-card shadow-xs">
-		{{ tableClass := "js-group-sort" }}
-		if d.IncomeCollapsed {
-			{{ tableClass += " income-collapsed" }}
-		}
-		if d.CreditCollapsed {
-			{{ tableClass += " credit-collapsed" }}
-		}
-		@table.Table(table.Props{ID: "budget-table", Class: tableClass, Attributes: templ.Attributes{"data-month": d.Month}}) {
-		@BudgetIncomeSection(d)
-		@BudgetCreditSection(d)
-		<tbody id="budget-expenses-head">
-			@table.Row(table.RowProps{Class: "bg-muted hover:bg-muted"}) {
-				@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
-					<div class="flex items-center gap-2">
-						<span class="px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Expenses</span>
-						@button.Button(button.Props{
-							Type:    "button",
-							Variant: button.VariantOutline,
-							Size:    button.SizeSm,
-							Class:   "ml-auto text-muted-foreground hover:text-foreground",
-							Attributes: templ.Attributes{
-								"hx-get":    "/budget/group/new",
-								"hx-target": "#budget-expenses-head",
-								"hx-swap":   "afterend",
-								"title":     "Add category group",
-							},
-						}) {
-							Add Group
-						}
-					</div>
+	<div
+		id="budget-table"
+		class="js-group-sort flex min-w-0 flex-1 flex-col"
+		data-month={ d.Month }
+	>
+		<div class="flex items-center justify-between gap-s2 pb-s2">
+			<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">Categories</span>
+			<div class="flex items-center gap-s2">
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantOutline,
+					Size:    button.SizeSm,
+					Class:   "rounded-pill",
+					Attributes: templ.Attributes{
+						"hx-get":    "/budget/income/panel?month=" + d.Month,
+						"hx-target": "#modal",
+						"hx-swap":   "innerHTML",
+						"title":     "Manage income sources",
+					},
+				}) {
+					Income
 				}
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantOutline,
+					Size:    button.SizeSm,
+					Class:   "rounded-pill",
+					Attributes: templ.Attributes{
+						"hx-get":    "/budget/credit/panel?month=" + d.Month,
+						"hx-target": "#modal",
+						"hx-swap":   "innerHTML",
+						"title":     "Card activity this month",
+					},
+				}) {
+					Cards
+				}
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantOutline,
+					Size:    button.SizeSm,
+					Class:   "rounded-pill",
+					Attributes: templ.Attributes{
+						"hx-get":    "/budget/group/new",
+						"hx-target": "#budget-groups",
+						"hx-swap":   "afterbegin",
+						"title":     "Add category group",
+					},
+				}) {
+					Add group
+				}
+			</div>
+		</div>
+		@budgetColumnHeads()
+		<div id="budget-groups" class="flex flex-col">
+			for _, g := range d.Groups {
+				@BudgetGroupTbody(d.Month, g)
 			}
-			@subHeaderRow("Category", "Assigned", "Spent", "Available", "Goal")
-		</tbody>
-		<tbody id="budget-uncategorized-body">
-			@table.Row() {
-				@table.Cell(table.CellProps{Class: "pl-6 text-muted-foreground"}) { Uncategorized }
-				@table.Cell() {}
-				@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums"}) { { money.Format(d.UncategorizedSpent) } }
-				@table.Cell() {}
-				@table.Cell() {}
-				@table.Cell() {}
-			}
-		</tbody>
-		for _, g := range d.Groups {
-			@BudgetGroupTbody(d.Month, g)
-		}
-		@BudgetSummary(d, false)
+		</div>
+		if d.UncategorizedSpent != 0 {
+			<div class={ budgetGridCols, "px-s3 py-2 text-muted-foreground" }>
+				<span class="truncate text-[15px]">Uncategorized</span>
+				<span></span>
+				<span class="text-[13px]">spent { money.Format(d.UncategorizedSpent) }</span>
+				<span></span>
+			</div>
 		}
 	</div>
 }
 
-// subHeaderRow renders a section's column-label row (Income / Credit / Expenses
-// each get their own instead of one shared table header). The first column (the
-// name) carries the 34% width the old table header used and stays left-aligned;
-// the money columns (indexes 1–3: Amount/Assigned/Spent/Available, Purchases/
-// Payments/Owing) are right-aligned with a pr-4 inset so they line up with the
-// right-aligned figures below; any trailing text column (Goal) stays left.
-// Remaining columns are padded to the table's 6-column grid.
-templ subHeaderRow(labels ...string) {
-	@table.Row() {
-		for i, l := range labels {
-			if i == 0 {
-				@table.Cell(table.CellProps{Class: "w-[34%] pl-6 text-xs font-medium uppercase tracking-wide text-muted-foreground"}) {
-					{ l }
-				}
-			} else if i <= 3 {
-				@table.Cell(table.CellProps{Class: "text-right pr-4 text-xs font-medium uppercase tracking-wide text-muted-foreground"}) {
-					{ l }
-				}
-			} else {
-				@table.Cell(table.CellProps{Class: "text-xs font-medium uppercase tracking-wide text-muted-foreground"}) {
-					{ l }
-				}
-			}
-		}
-		for i := len(labels); i < 6; i++ {
-			@table.Cell()
-		}
-	}
+// budgetColumnHeads labels the four tracks. Assigned and Available are
+// right-aligned so the labels sit over their figures.
+templ budgetColumnHeads() {
+	<div class={ budgetGridCols, "px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground" }>
+		<span>Category</span>
+		<span class="text-right">Assigned</span>
+		<span>Progress</span>
+		<span class="text-right">Available</span>
+	</div>
 }
 
+// BudgetGroupTbody renders one group: its header plus its category rows. The
+// name is historical — it is a div now, not a <tbody> — but it stays because the
+// handlers and the drag-sort JS both address groups by it.
 templ BudgetGroupTbody(month string, g BudgetGroup) {
-	{{ tbodyClass := "" }}
+	{{ groupClass := "flex flex-col" }}
 	if g.Collapsed {
-		{{ tbodyClass = "group-collapsed" }}
+		{{ groupClass += " group-collapsed" }}
 	}
-	<tbody id={ fmt.Sprintf("group-%d", g.ID) } class={ tbodyClass } data-group data-group-id={ fmt.Sprintf("%d", g.ID) }>
+	<div id={ fmt.Sprintf("group-%d", g.ID) } class={ groupClass } data-group data-group-id={ fmt.Sprintf("%d", g.ID) }>
 		@BudgetGroupHeader(month, g)
 		for _, r := range g.Rows {
 			@BudgetRow(month, r)
 		}
-	</tbody>
+	</div>
 }
 
 templ BudgetGroupHeader(month string, g BudgetGroup) {
 	@budgetGroupHeader(month, g, false)
 }
 
-// budgetGroupHeader renders a group's header row. When oob is true the <tr>
-// carries hx-swap-oob so a response can refresh it out of band (used after
-// adding the first category to a group, to drop the "delete empty group"
-// control). An OOB bare <tr> must be wrapped in a <template> by the caller.
+// budgetGroupHeader renders a group's header. When oob is true it carries
+// hx-swap-oob so a response can refresh it out of band (used after adding the
+// first category to a group, to drop the "delete empty group" control). Unlike
+// the old <tr> version this needs no <template> wrapper — a div swaps in
+// directly.
 templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 	{{ attrs := templ.Attributes{"id": fmt.Sprintf("group-head-%d", g.ID), "data-group-head": ""} }}
 	if oob {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
-	@table.Row(table.RowProps{Class: "bg-muted/20 hover:bg-muted/20", Attributes: attrs}) {
-		@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2 align-middle"}}) {
-			<div class="flex items-center gap-2">
-				<span
-					class="js-group-handle inline-flex cursor-grab touch-none items-center text-muted-foreground/50 hover:text-foreground"
-					title="Drag to reorder group"
-					aria-hidden="true"
-				>
-					@icon.GripVertical(icon.Props{Class: "size-4"})
+	<div class="flex items-center gap-s2 px-s3 pb-s1 pt-s3" { attrs... }>
+		<span
+			class="js-group-handle inline-flex cursor-grab touch-none items-center text-warm-400 hover:text-foreground"
+			title="Drag to reorder group"
+			aria-hidden="true"
+		>
+			@icon.GripVertical(icon.Props{Class: "size-4"})
+		</span>
+		<button
+			type="button"
+			class="inline-flex items-center rounded-sm hover:text-foreground"
+			data-collapse-group={ fmt.Sprintf("%d", g.ID) }
+			title="Collapse or expand group"
+			aria-label="Toggle group"
+		>
+			@icon.ChevronRight(icon.Props{Class: "js-group-caret size-4 text-muted-foreground transition-transform"})
+		</button>
+		<form
+			hx-put={ fmt.Sprintf("/budget/group/%d?month=%s", g.ID, month) }
+			hx-target={ fmt.Sprintf("#group-head-%d", g.ID) }
+			hx-swap="outerHTML"
+			class="flex min-w-0 items-center"
+		>
+			<button
+				type="button"
+				class="js-name-display cursor-text truncate rounded-sm px-1 py-0.5 font-heading text-[17px] font-semibold ring-1 ring-transparent hover:ring-border"
+				title="Click to rename"
+			>
+				{ g.Name }
+			</button>
+			<input
+				type="text"
+				name="name"
+				value={ g.Name }
+				autocomplete="off"
+				class="js-name-input hidden h-9 w-[220px] rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			/>
+		</form>
+		<div class="ml-auto flex shrink-0 items-center gap-s2">
+			{{ avail := groupAvailableTotal(g.Rows) }}
+			<span class="js-group-total-header">
+				<span class={ "js-group-total-value text-[13px] font-bold tabular-nums", availColorClass(avail) }>
+					{ money.Format(avail) }
 				</span>
-				<button
-					type="button"
-					class="inline-flex items-center rounded-md hover:text-foreground"
-					data-collapse-group={ fmt.Sprintf("%d", g.ID) }
-					title="Collapse or expand group"
-					aria-label="Toggle group"
-				>
-					@icon.ChevronRight(icon.Props{Class: "js-group-caret size-3.5 text-muted-foreground transition-transform"})
-				</button>
-				<form
-					hx-put={ fmt.Sprintf("/budget/group/%d?month=%s", g.ID, month) }
-					hx-target={ fmt.Sprintf("#group-head-%d", g.ID) }
-					hx-swap="outerHTML"
-					class="flex items-center"
-				>
-					<button
-						type="button"
-						class="js-name-display cursor-text rounded-md px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground ring-1 ring-transparent hover:ring-border"
-						title="Click to rename"
-					>
-						{ g.Name }
-					</button>
-					<input
-						type="text"
-						name="name"
-						value={ g.Name }
-						autocomplete="off"
-						class="js-name-input hidden h-7 w-56 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					/>
-				</form>
-				<div class="ml-auto flex items-center gap-2">
-					{{ avail := groupAvailableTotal(g.Rows) }}
-					<span class="js-group-total-header flex items-baseline gap-1">
-						<span class="text-xs font-normal text-muted-foreground">avail</span>
-						<span class={ "js-group-total-value text-sm font-semibold tabular-nums " + availColorClass(avail) }>
-							{ money.Format(avail) }
-						</span>
-					</span>
-					@button.Button(button.Props{
-						Type:    "button",
-						Variant: button.VariantOutline,
-						Size:    button.SizeSm,
-						Class:   "text-muted-foreground hover:text-foreground",
-						Attributes: templ.Attributes{
-							"hx-get":      fmt.Sprintf("/budget/group/%d/category/new?month=%s", g.ID, month),
-							"hx-target":   fmt.Sprintf("#group-%d", g.ID),
-							"hx-swap":     "beforeend",
-							"title":       "Add category",
-							"hx-on:click": fmt.Sprintf("document.getElementById('group-%d').classList.remove('group-collapsed')", g.ID),
-						},
-					}) {
-						Add Category
-					}
-					if len(g.Rows) == 0 {
-						@button.Button(button.Props{
-							Type:    "button",
-							Variant: button.VariantGhost,
-							Size:    button.SizeSm,
-							Class:   "text-muted-foreground hover:text-destructive",
-							Attributes: templ.Attributes{
-								"hx-post":    fmt.Sprintf("/budget/group/%d/delete?month=%s", g.ID, month),
-								"hx-target":  "#budget-region",
-								"hx-swap":    "outerHTML",
-								"hx-confirm": "Delete this empty group?",
-								"title":      "Delete empty group",
-							},
-						}) {
-							@icon.X(icon.Props{Class: "size-4"})
-						}
-					}
-				</div>
-			</div>
-		}
-	}
+			</span>
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantGhost,
+				Size:    button.SizeSm,
+				Class:   "rounded-pill text-muted-foreground hover:text-foreground",
+				Attributes: templ.Attributes{
+					"hx-get":      fmt.Sprintf("/budget/group/%d/category/new?month=%s", g.ID, month),
+					"hx-target":   fmt.Sprintf("#group-%d", g.ID),
+					"hx-swap":     "beforeend",
+					"title":       "Add category",
+					"hx-on:click": fmt.Sprintf("document.getElementById('group-%d').classList.remove('group-collapsed')", g.ID),
+				},
+			}) {
+				Add category
+			}
+			if len(g.Rows) == 0 {
+				@button.Button(button.Props{
+					Type:    "button",
+					Variant: button.VariantGhost,
+					Size:    button.SizeSm,
+					Class:   "rounded-pill text-muted-foreground hover:text-money-negative",
+					Attributes: templ.Attributes{
+						"hx-post":    fmt.Sprintf("/budget/group/%d/delete?month=%s", g.ID, month),
+						"hx-target":  "#budget-region",
+						"hx-swap":    "outerHTML",
+						"hx-confirm": "Delete this empty group?",
+						"title":      "Delete empty group",
+					},
+				}) {
+					@icon.X(icon.Props{Class: "size-4"})
+				}
+			}
+		</div>
+	</div>
 }
 
-// BudgetGroupNewRow is the transient editable <tbody> inserted by "+ group".
+// BudgetGroupNewRow is the transient editable group inserted by "Add group".
 // name-edit.js submits it on Enter/blur or removes it if left empty.
 templ BudgetGroupNewRow() {
-	<tbody data-newrow>
-		@table.Row() {
-			@table.Cell(table.CellProps{Attributes: templ.Attributes{"colspan": "6", "class": "p-2"}}) {
-				<form hx-post="/budget/group" hx-target="closest tbody" hx-swap="outerHTML" class="flex items-center">
-					<input
-						type="text"
-						name="name"
-						autocomplete="off"
-						autofocus
-						placeholder="New group name"
-						class="js-name-new h-7 w-56 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					/>
-				</form>
-			}
-		}
-	</tbody>
-}
-
-// BudgetSummary is the footer "where you are" block, living inside the table's
-// #budget-totals-body tbody so it stays in the column grid. An assignment or
-// income change refreshes it
-// via an out-of-band swap of the whole tbody (oob=true); the tbody is wrapped in
-// a <template> so htmx's OOB swap survives the browser's table-parsing rules.
-templ BudgetSummary(d BudgetData, oob bool) {
-	if oob {
-		<template>
-			<tbody id="budget-totals-body" hx-swap-oob="true">
-				@budgetSummaryRows(d)
-			</tbody>
-		</template>
-	} else {
-		<tbody id="budget-totals-body">
-			@budgetSummaryRows(d)
-		</tbody>
-	}
-}
-
-// budgetSummaryRows lays out the totals and the "where you are" difference in
-// the table's columns: the Assigned/Spent/Available totals, then Income and
-// Left to assign (= income − budgeted) stacked under the Assigned column.
-templ budgetSummaryRows(d BudgetData) {
-	{{ assigned, spent, available := budgetTotals(d.Groups) }}
-	@table.Row(table.RowProps{Class: "border-t-4 border-double border-muted-foreground/40"}) {
-		@table.Cell(table.CellProps{Class: "font-semibold"}) {
-			Totals
-		}
-		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-semibold"}) {
-			{ money.Format(assigned) }
-		}
-		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-semibold"}) {
-			{ money.Format(spent) }
-		}
-		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-semibold"}) {
-			@signedmoney.Money(available)
-		}
-		@table.Cell()
-		@table.Cell()
-	}
-	@table.Row() {
-		@table.Cell(table.CellProps{Class: "font-medium"}) {
-			Income
-		}
-		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums font-medium text-money-positive"}) {
-			{ money.Format(d.Estimated) }
-		}
-		@table.Cell()
-		@table.Cell()
-		@table.Cell()
-		@table.Cell()
-	}
-	@table.Row() {
-		@table.Cell(table.CellProps{Class: "text-muted-foreground"}) {
-			Left to assign
-		}
-		@table.Cell(table.CellProps{Class: "text-right pr-4 tabular-nums"}) {
-			@signedmoney.Money(d.Remain)
-		}
-		@table.Cell()
-		@table.Cell()
-		@table.Cell()
-		@table.Cell()
-	}
+	<div data-newrow class="px-s3 py-s2">
+		<form hx-post="/budget/group" hx-target="closest [data-newrow]" hx-swap="outerHTML" class="flex items-center">
+			<input
+				type="text"
+				name="name"
+				autocomplete="off"
+				autofocus
+				placeholder="New group name"
+				class="js-name-new h-9 w-[220px] rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			/>
+		</form>
+	</div>
 }
 
 func budgetTotals(groups []BudgetGroup) (assigned, spent, available int64) {
@@ -306,7 +243,7 @@ func budgetTotals(groups []BudgetGroup) (assigned, spent, available int64) {
 }
 
 // groupAvailableTotal sums a group's category Available so a collapsed group
-// header can show one "avail" figure.
+// header can show one figure.
 func groupAvailableTotal(rows []store.CategoryBudget) (total int64) {
 	for _, r := range rows {
 		total += r.AvailableCents
@@ -315,10 +252,10 @@ func groupAvailableTotal(rows []store.CategoryBudget) (total int64) {
 }
 
 // availColorClass tints an Available figure the same way the signedmoney
-// component tints the Available column, using the same money-* tokens: positive
-// sage, negative terracotta, zero warm neutral. The tokens flip in .dark, so no
-// dark: variant is needed. section-collapse.js mirrors this when it re-sums on
-// collapse — keep the three in step.
+// component does, using the same money-* tokens: positive sage, negative
+// terracotta, zero warm neutral. The tokens flip in .dark, so no dark: variant
+// is needed. section-collapse.js mirrors this when it re-sums on collapse —
+// keep the two in step.
 func availColorClass(cents int64) string {
 	switch {
 	case cents > 0:

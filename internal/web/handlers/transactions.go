@@ -18,7 +18,6 @@ const txPageSize = 50
 func (h *Handlers) TransactionsIndex(c *gin.Context) {
 	ctx := c.Request.Context()
 
-
 	var acctPtr *int64
 	if a := c.Query("account"); a != "" {
 		if v, err := strconv.ParseInt(a, 10, 64); err == nil {

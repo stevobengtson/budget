@@ -19,13 +19,6 @@ type BudgetData struct {
 	IncomeRows         []store.Income
 	Accounts           []store.AccountWithBalance
 	UncategorizedSpent int64
-	// IncomeCollapsed renders the Income section collapsed (header + total only).
-	// Sourced from the budget_income_collapsed cookie for normal renders; forced
-	// false by copy-from-prev so that action expands without persisting.
-	IncomeCollapsed bool
-	// CreditCollapsed renders the Credit section collapsed (header + total owing
-	// only), from the budget_credit_collapsed cookie.
-	CreditCollapsed bool
 }
 
 // BudgetGroup is one category group plus its month rows, for rendering a
@@ -67,13 +60,15 @@ templ BudgetBody(d BudgetData) {
 // swap this whole region — they replace just the edited row and refresh the
 // banner + totals via out-of-band swaps (see BudgetAssignResult).
 templ BudgetRegion(d BudgetData) {
-	<div id="budget-region" class="flex flex-col gap-2">
-		@BudgetMonthSelector(d)
-		@BudgetTable(d)
+	<div id="budget-region" class="flex flex-col gap-s6">
+		<div class="flex flex-col gap-s6 lg:flex-row">
+			@BudgetRail(d, false)
+			@BudgetTable(d)
+		</div>
 		// Mobile only: the sidebar carries this list at >=768px but is hidden
 		// below it, and the design puts the account summary under the Budget tab
 		// on phones. Distinct mount id because both copies are server-rendered.
-		<div class="mt-s6 border-t border-border pt-s4 md:hidden">
+		<div class="border-t border-border pt-s4 md:hidden">
 			@accountsPanel("mobile-overview")
 		</div>
 	</div>

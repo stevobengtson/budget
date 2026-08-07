@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -778,65 +779,10 @@ func TestBudgetCategoriesReorder(t *testing.T) {
 	}
 }
 
-func TestIncomeCollapseRendering(t *testing.T) {
-	s := store.New(openTestDB(t))
-	ts, client, _ := serveAuthed(t, s)
-	u, _ := url.Parse(ts.URL)
-
-	// Without the cookie, the income section renders expanded.
-	resp0, err := client.Get(ts.URL + "/budget?month=2026-07")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if body := readAll(t, resp0); strings.Contains(body, "js-group-sort income-collapsed") {
-		t.Error("default page should render income expanded")
-	}
-
-	// budget_income_collapsed=true renders the table with the collapse class, so
-	// the section is collapsed on load with no flash.
-	client.Jar.SetCookies(u, []*http.Cookie{{Name: "budget_income_collapsed", Value: "true", Path: "/"}})
-	resp1, err := client.Get(ts.URL + "/budget?month=2026-07")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if body := readAll(t, resp1); !strings.Contains(body, "js-group-sort income-collapsed") {
-		t.Error("collapsed cookie should render income-collapsed on the table")
-	}
-
-	// copy-from-prev expands transiently even with the collapsed cookie set: the
-	// rendered region carries no collapse class (and the cookie is left as-is).
-	resp2, err := client.PostForm(ts.URL+"/budget/income/copy-prev?month=2026-07", url.Values{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Match on the table's class list ("js-group-sort ...") — the literal
-	// "income-collapsed" also appears in Add Income's hx-on:click, so a bare
-	// substring check would be a false positive.
-	if body := readAll(t, resp2); strings.Contains(body, "js-group-sort income-collapsed") {
-		t.Error("copy-from-prev should force-expand income, not render it collapsed")
-	}
-}
-
-func TestCreditCollapseRendering(t *testing.T) {
-	s := store.New(openTestDB(t))
-	ts, client, _ := serveAuthed(t, s)
-	u, _ := url.Parse(ts.URL)
-
-	// The credit collapse class is driven by its own cookie, independently of
-	// income and of whether there's credit activity to show.
-	client.Jar.SetCookies(u, []*http.Cookie{{Name: "budget_credit_collapsed", Value: "true", Path: "/"}})
-	resp, err := client.Get(ts.URL + "/budget?month=2026-07")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := readAll(t, resp)
-	if !strings.Contains(body, "js-group-sort credit-collapsed") {
-		t.Error("collapsed credit cookie should render credit-collapsed on the table")
-	}
-	if strings.Contains(body, "js-group-sort income-collapsed") {
-		t.Error("credit cookie should not collapse income")
-	}
-}
+// Income and Credit were collapsible sections inside the budget table until the
+// redesign moved them into panels (BudgetIncomePanel / BudgetCreditPanel). Their
+// collapse cookies and the tests covering them went with them; only per-group
+// collapse survives, covered below.
 
 func TestGroupCollapseRendering(t *testing.T) {
 	s := store.New(openTestDB(t))
@@ -858,14 +804,27 @@ func TestGroupCollapseRendering(t *testing.T) {
 	}
 	body := readAll(t, resp)
 
-	g1Collapsed := `id="group-` + strconv.FormatInt(g1, 10) + `" class="group-collapsed"`
-	g2Expanded := `id="group-` + strconv.FormatInt(g2, 10) + `" class=""`
-	if !strings.Contains(body, g1Collapsed) {
-		t.Errorf("group %d should render with the group-collapsed class", g1)
+	// Read each group's class attribute rather than matching the whole string:
+	// the group div carries layout classes alongside the collapse marker, so an
+	// exact-match assertion would break on any styling change.
+	if cls := groupClass(t, body, g1); !strings.Contains(cls, "group-collapsed") {
+		t.Errorf("group %d should render collapsed, class = %q", g1, cls)
 	}
-	if !strings.Contains(body, g2Expanded) {
-		t.Errorf("group %d should render expanded (empty class)", g2)
+	if cls := groupClass(t, body, g2); strings.Contains(cls, "group-collapsed") {
+		t.Errorf("group %d should render expanded, class = %q", g2, cls)
 	}
+}
+
+// groupClass extracts the class attribute of the budget group div with the
+// given id.
+func groupClass(t *testing.T, body string, gid int64) string {
+	t.Helper()
+	re := regexp.MustCompile(`id="group-` + strconv.FormatInt(gid, 10) + `" class="([^"]*)"`)
+	m := re.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("group %d not found in body", gid)
+	}
+	return m[1]
 }
 
 // findCatMode returns the rollover mode of the category with the given ID, or

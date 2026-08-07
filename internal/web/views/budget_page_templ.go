@@ -27,13 +27,6 @@ type BudgetData struct {
 	IncomeRows         []store.Income
 	Accounts           []store.AccountWithBalance
 	UncategorizedSpent int64
-	// IncomeCollapsed renders the Income section collapsed (header + total only).
-	// Sourced from the budget_income_collapsed cookie for normal renders; forced
-	// false by copy-from-prev so that action expands without persisting.
-	IncomeCollapsed bool
-	// CreditCollapsed renders the Credit section collapsed (header + total owing
-	// only), from the budget_credit_collapsed cookie.
-	CreditCollapsed bool
 }
 
 // BudgetGroup is one category group plus its month rows, for rendering a
@@ -123,7 +116,7 @@ func BudgetMonthSelector(d BudgetData) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(formatMonth(d.Month))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_page.templ`, Line: 51, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_page.templ`, Line: 44, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
@@ -204,11 +197,11 @@ func BudgetRegion(d BudgetData) templ.Component {
 			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div id=\"budget-region\" class=\"flex flex-col gap-2\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div id=\"budget-region\" class=\"flex flex-col gap-s6\"><div class=\"flex flex-col gap-s6 lg:flex-row\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = BudgetMonthSelector(d).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = BudgetRail(d, false).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -216,7 +209,7 @@ func BudgetRegion(d BudgetData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"mt-s6 border-t border-border pt-s4 md:hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><div class=\"border-t border-border pt-s4 md:hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

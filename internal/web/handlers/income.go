@@ -124,6 +124,32 @@ func (h *Handlers) BudgetIncomeDelete(c *gin.Context) {
 	render(c, http.StatusOK, views.BudgetIncomeDeleteResult(data))
 }
 
+// BudgetIncomePanel renders the income source editor into #modal. Income moved
+// out of the budget table in the redesign: its total lives in the summary rail
+// and its sources are edited here.
+func (h *Handlers) BudgetIncomePanel(c *gin.Context) {
+	ctx := c.Request.Context()
+	data, _, err := h.budgetData(ctx, currentUserID(c), monthOrNow(c))
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetIncomePanel(data))
+}
+
+// BudgetCreditPanel renders the month's per-card activity into #modal. The
+// owing figure also appears in the summary rail's "Needs attention" card; this
+// panel is where the purchases and payments detail lives.
+func (h *Handlers) BudgetCreditPanel(c *gin.Context) {
+	ctx := c.Request.Context()
+	data, _, err := h.budgetData(ctx, currentUserID(c), monthOrNow(c))
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetCreditPanel(data))
+}
+
 // BudgetIncomeCopyPrev copies the previous month's entries into this month and
 // re-renders the region. The (month, name) pair is unique, so entries already
 // present are updated to the previous month's amount/sort_order instead of
@@ -170,10 +196,8 @@ func (h *Handlers) BudgetIncomeCopyPrev(c *gin.Context) {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	// Keep the remembered collapse state for other sections, but expand Income so
-	// the copied entries are visible. This leaves the budget_income_collapsed
-	// cookie untouched — the expansion is transient and not remembered.
+	// The action fires from inside the income panel, so re-render the panel and
+	// refresh the summary rail behind it out of band.
 	setCollapseState(c, &data)
-	data.IncomeCollapsed = false
-	render(c, http.StatusOK, views.BudgetRegion(data))
+	render(c, http.StatusOK, views.BudgetIncomePanelResult(data))
 }

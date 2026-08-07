@@ -218,6 +218,8 @@ func (s *Server) routes(cfg config.Config) {
 	gated.GET("/budget/income", func(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/budget")
 	})
+	gated.GET("/budget/income/panel", hs.BudgetIncomePanel)
+	gated.GET("/budget/credit/panel", hs.BudgetCreditPanel)
 	gated.GET("/budget/income/new", hs.BudgetIncomeNew)
 	gated.POST("/budget/income", hs.BudgetIncomeCreate)
 	gated.POST("/budget/income/copy-prev", hs.BudgetIncomeCopyPrev)
