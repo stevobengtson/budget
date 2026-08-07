@@ -13,10 +13,14 @@ import (
 )
 
 // seedCategory creates one group + category with an assignment, so the budget
-// page has a real row to render.
+// page has a real row to render. It also creates an account: with none, /budget
+// renders the first-run screen instead of the budget.
 func seedCategory(t *testing.T, s *store.Store, uid int64, month string, cents int64) int64 {
 	t.Helper()
 	ctx := context.Background()
+	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: "checking"}); err != nil {
+		t.Fatal(err)
+	}
 	gid, err := s.CreateGroup(ctx, uid, "Living", 1)
 	if err != nil {
 		t.Fatal(err)
@@ -232,4 +236,88 @@ func accountFieldClass(t *testing.T, body string) string {
 		t.Fatal("quick-add account field not found")
 	}
 	return m[1]
+}
+
+// TestFirstRunShownUntilAnAccountExists covers the new empty state. Nothing can
+// be budgeted until money exists somewhere, so a user with no accounts gets the
+// first-run screen; adding one account replaces it with the real budget.
+func TestFirstRunShownUntilAnAccountExists(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget"))
+	if !strings.Contains(body, "Let&#39;s find out what your money is doing.") {
+		t.Error("a user with no accounts should see the first-run screen")
+	}
+	if strings.Contains(body, `id="budget-rail"`) {
+		t.Error("first run should not render the budget rail")
+	}
+
+	if _, err := s.CreateAccount(context.Background(), uid,
+		store.Account{Name: "Checking", Type: "checking"}); err != nil {
+		t.Fatal(err)
+	}
+	body = readAll(t, mustGetOK(t, client, ts.URL+"/budget"))
+	if !strings.Contains(body, `id="budget-rail"`) {
+		t.Error("once an account exists the budget should render")
+	}
+	if strings.Contains(body, "Let&#39;s find out what your money is doing.") {
+		t.Error("first-run screen should be gone once an account exists")
+	}
+}
+
+// TestFirstRunRedirectsIntoBudget checks the first-run form's distinct response:
+// there is no modal to close, so the handler sends the browser to /budget.
+func TestFirstRunRedirectsIntoBudget(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, _ := serveAuthed(t, s)
+
+	resp, err := client.PostForm(ts.URL+"/accounts", url.Values{
+		"first_run":        {"1"},
+		"name":             {"Main Checking"},
+		"type":             {"checking"},
+		"starting_balance": {"500.00"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if got := resp.Header.Get("HX-Redirect"); got != "/budget" {
+		t.Errorf("HX-Redirect = %q, want /budget", got)
+	}
+}
+
+// TestPaydownSourceIsWorded guards the redesign's most pointed copy change: the
+// schedule's source column said "✓ spent" / "→ assigned" / "· default", carrying
+// its meaning in a glyph and a colour. It now names the category in words.
+func TestPaydownSourceIsWorded(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	if err := s.SetAddOnEnabled(ctx, uid, "paydown", true); err != nil {
+		t.Fatal(err)
+	}
+	apr := int64(2124)
+	if _, err := s.CreateAccount(ctx, uid, store.Account{
+		Name: "Chase Sapphire", Type: "credit", StartingBalanceCents: -288661,
+		AprBps: &apr, IncludeInPaydown: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/paydown"))
+	if !strings.Contains(body, "default payment") {
+		t.Error("schedule should word the payment source")
+	}
+	for _, glyph := range []string{"✓ spent", "→ assigned", "· default"} {
+		if strings.Contains(body, glyph) {
+			t.Errorf("schedule still renders the old glyph %q", glyph)
+		}
+	}
+	// The three stat cards.
+	for _, m := range []string{"Going to debt each month", "Debt-free", "Interest over"} {
+		if !strings.Contains(body, m) {
+			t.Errorf("paydown page missing stat card %q", m)
+		}
+	}
 }

@@ -140,6 +140,13 @@ func (h *Handlers) upsertAccount(c *gin.Context, id int64) {
 			return
 		}
 	}
+	// The first-run screen has no modal to close and no sidebar to refresh — the
+	// whole page is about to become the budget — so send the browser there.
+	if c.PostForm("first_run") == "1" {
+		c.Header("HX-Redirect", "/budget")
+		c.Writer.WriteHeader(http.StatusOK)
+		return
+	}
 	// Close the modal (empty #modal) and let the sidebar overview + accounts
 	// table refresh via the accountsChanged event, keeping the user on the
 	// current page instead of redirecting to /accounts.

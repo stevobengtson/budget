@@ -739,6 +739,10 @@ func TestBudgetCategoriesReorder(t *testing.T) {
 	ts, client, uid := serveAuthed(t, s)
 	ctx := context.Background()
 
+	// An account is required, or /budget renders the first-run screen.
+	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: "checking"}); err != nil {
+		t.Fatal(err)
+	}
 	g1, _ := s.CreateGroup(ctx, uid, "G1", 1)
 	g2, _ := s.CreateGroup(ctx, uid, "G2", 2)
 	a, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: g1, Name: "A", SortOrder: 0})
@@ -790,6 +794,10 @@ func TestGroupCollapseRendering(t *testing.T) {
 	ctx := context.Background()
 	u, _ := url.Parse(ts.URL)
 
+	// An account is required, or /budget renders the first-run screen.
+	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: "checking"}); err != nil {
+		t.Fatal(err)
+	}
 	g1, _ := s.CreateGroup(ctx, uid, "G1", 1)
 	g2, _ := s.CreateGroup(ctx, uid, "G2", 2)
 

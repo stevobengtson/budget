@@ -3,24 +3,26 @@ package views
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/paydown"
 	"github.com/sbengtson/budget/internal/core/store"
-	"github.com/templui/templui/components/badge"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
-	"github.com/templui/templui/components/card"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/dropdown"
 	"github.com/templui/templui/components/input"
-	"github.com/templui/templui/components/label"
-	"github.com/templui/templui/components/table"
 )
 
 // PaydownPageSize is the number of schedule rows shown per paginated
 // section on the paydown page. Exported so the handler can use the same
 // value when rendering an htmx fragment.
 const PaydownPageSize = 5
+
+// pdGridCols is the schedule's shared column track, declared once so the head
+// row and the data rows cannot drift apart. The source column is the first to
+// go on narrow screens.
+const pdGridCols = "grid grid-cols-[1fr_110px_110px] md:grid-cols-[1fr_130px_130px_150px_150px] items-center gap-s4"
 
 type PaydownData struct {
 	Plans         []paydown.Plan
@@ -35,88 +37,114 @@ type PaydownData struct {
 
 templ PaydownPage(d PaydownData, collapsed bool) {
 	@Layout("Paydown", "paydown", collapsed) {
-		<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-			<h1 class="text-xl font-semibold tracking-tight sm:text-2xl">
-				Debt Paydown
-				<span class="ml-2 text-sm font-normal text-muted-foreground">{ strconv.Itoa(d.Horizon) } month horizon</span>
-			</h1>
-			<form method="get" action="/paydown" class="flex flex-wrap items-center gap-2">
-				@label.Label(label.Props{For: "pd-horizon", Class: "text-muted-foreground"}) {
-					Horizon (months)
-				}
-				<div class="w-24">
-					@input.Input(input.Props{
-						ID:         "pd-horizon",
-						Name:       "horizon",
-						Type:       input.TypeNumber,
-						Value:      strconv.Itoa(d.Horizon),
-						Class:      "w-full tabular-nums",
-						Attributes: templ.Attributes{"min": "12", "max": "360", "step": "12"},
-					})
-				</div>
-				@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline}) {
-					apply
-				}
-			</form>
-		</div>
-		<div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-			@pdStat("Monthly outflow", money.Format(d.TotalMonthly), "text-money-positive")
-			@pdStat("Total interest", money.Format(d.TotalInterest), "text-money-negative")
-		</div>
-		if len(d.Plans) == 0 {
-			<p class="text-sm text-muted-foreground">
-				No accounts in the paydown plan yet. Edit an account from the list on
-				the Budget page (the ✎ button), add its APR, and check
-				&#34;include in paydown&#34;.
-			</p>
-		}
-		for i, p := range d.Plans {
-			@PaydownSection(p, d.Accounts[i], d.Horizon, d.PageSize)
-		}
-	}
-}
-
-templ pdStat(label, value, valueClass string) {
-	@card.Card(card.Props{Class: "p-4"}) {
-		<div class="text-xs uppercase tracking-wide text-muted-foreground">{ label }</div>
-		<div class={ "mt-1 text-lg font-semibold tabular-nums " + valueClass }>{ value }</div>
-	}
-}
-
-templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, pageSize int) {
-	<section class="mb-8">
-		@card.Card(card.Props{Class: "mb-3"}) {
-			<div class="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:flex-wrap lg:gap-x-3 lg:gap-y-2">
-				<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-					<h3 class="text-base font-semibold">{ acct.Name }</h3>
-					<span class="text-sm text-muted-foreground tabular-nums">{ fmt.Sprintf("%.2f%% APR", float64(p.AprBps)/100.0) }</span>
-					<span class="text-sm">
-						<span class="text-muted-foreground">payment</span>
-						<span class="ml-1 text-money-positive tabular-nums">{ money.Format(p.PaymentCents) }/mo</span>
-					</span>
-					<span class="text-sm">
-						<span class="text-muted-foreground">start</span>
-						<span class="ml-1 tabular-nums">{ money.Format(p.StartCents) }</span>
-					</span>
-					if !p.PayoffMonth.IsZero() {
-						<span class="text-sm">
-							<span class="text-muted-foreground">clears</span>
-							<span class="ml-1">{ p.PayoffMonth.Format("Jan 2006") }</span>
-						</span>
+		<div class="flex flex-col gap-s4">
+			<div class="flex flex-wrap items-center justify-between gap-s3">
+				<h1 class="font-heading text-[28px] font-semibold">Debt paydown</h1>
+				<form method="get" action="/paydown" class="flex items-center gap-s2">
+					<label for="pd-horizon" class="text-[14px] text-muted-foreground">Project</label>
+					<input
+						id="pd-horizon"
+						type="number"
+						name="horizon"
+						value={ strconv.Itoa(d.Horizon) }
+						min="12"
+						max="360"
+						step="12"
+						class="h-9 w-[76px] rounded-pill border border-input bg-surface-sunk px-s3 text-right text-[15px] tabular-nums outline-none focus-visible:border-primary"
+					/>
+					<span class="text-[14px] text-muted-foreground">months</span>
+					@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline, Class: "rounded-pill"}) {
+						Apply
 					}
-					if p.Diverging {
-						@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
-							payment ≤ interest, debt grows
-						}
-					}
-				</div>
-				<div class="flex items-center lg:ml-auto">
-					@pdSectionMenu(acct)
-				</div>
+				</form>
 			</div>
+			<div class="grid grid-cols-1 gap-s3 sm:grid-cols-3">
+				@pdStat("Going to debt each month", money.Format(d.TotalMonthly), "bg-surface-ready", "text-surface-ready-fg")
+				@pdStat(fmt.Sprintf("Interest over %d months", d.Horizon), money.Format(d.TotalInterest), "bg-surface-attention", "text-surface-attention-fg")
+				@pdStat("Debt-free", debtFreeLabel(d.Plans), "bg-card", "text-foreground")
+			</div>
+			if len(d.Plans) == 0 {
+				<p class="text-[15px] text-muted-foreground">
+					Nothing is in the plan yet. Add an APR to an account — edit it from the
+					account list on the Budget page — to include it here.
+				</p>
+			}
+			for i, p := range d.Plans {
+				@PaydownSection(p, d.Accounts[i], d.Horizon, d.PageSize, PaymentCategoryName(d.Categories, d.Accounts[i]))
+			}
+		</div>
+	}
+}
+
+// debtFreeLabel is the month the last debt clears. "Not within the horizon"
+// when any plan never pays off — a date would be a lie there.
+func debtFreeLabel(plans []paydown.Plan) string {
+	if len(plans) == 0 {
+		return "—"
+	}
+	var latest time.Time
+	for _, p := range plans {
+		if p.PayoffMonth.IsZero() {
+			return "Not yet"
 		}
+		if p.PayoffMonth.After(latest) {
+			latest = p.PayoffMonth
+		}
+	}
+	return latest.Format("Jan 2006")
+}
+
+// PaymentCategoryName resolves the budget category feeding an account's
+// payment, so the schedule can name it in words. Exported because the schedule
+// fragment handler needs it too.
+func PaymentCategoryName(cats []store.Category, acct store.AccountWithBalance) string {
+	if acct.PaymentCategoryID == nil {
+		return ""
+	}
+	for _, c := range cats {
+		if c.ID == *acct.PaymentCategoryID {
+			return c.Name
+		}
+	}
+	return ""
+}
+
+templ pdStat(label, value, bgClass, textClass string) {
+	<div class={ "flex flex-col gap-s2 rounded-xl p-s3 shadow-organic-sm", bgClass, textClass }>
+		<span class="text-[12px] font-bold uppercase tracking-[0.08em]">{ label }</span>
+		<span class="font-heading text-[34px] font-semibold leading-[1.1] tabular-nums">{ value }</span>
+	</div>
+}
+
+templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, pageSize int, catName string) {
+	<section class="flex flex-col gap-s3 rounded-xl border border-border bg-background p-s3">
+		<div class="flex flex-wrap items-center gap-x-s3 gap-y-s2">
+			<h2 class="font-heading text-[20px] font-semibold">{ acct.Name }</h2>
+			<span class="rounded-pill bg-warm-200 px-2 py-0.5 text-[12px] font-semibold text-warm-700 tabular-nums">
+				{ fmt.Sprintf("%.2f%% APR", float64(p.AprBps)/100.0) }
+			</span>
+			<span class="text-[14px] text-muted-foreground">
+				payment <span class="font-bold tabular-nums text-money-positive">{ money.Format(p.PaymentCents) }/mo</span>
+			</span>
+			<span class="text-[14px] text-muted-foreground">
+				start <span class="font-bold tabular-nums text-foreground">{ money.Format(p.StartCents) }</span>
+			</span>
+			if !p.PayoffMonth.IsZero() {
+				<span class="text-[14px] text-muted-foreground">
+					clears <span class="font-bold text-foreground">{ p.PayoffMonth.Format("Jan 2006") }</span>
+				</span>
+			}
+			if p.Diverging {
+				<span class="rounded-pill bg-surface-attention px-2 py-0.5 text-[12px] font-semibold text-surface-attention-fg">
+					payment ≤ interest — debt grows
+				</span>
+			}
+			<div class="ml-auto">
+				@pdSectionMenu(acct)
+			</div>
+		</div>
 		<div id={ fmt.Sprintf("pd-rows-%d", acct.ID) } class="relative">
-			@PaydownScheduleBody(p, horizon, 1, pageSize)
+			@PaydownScheduleBody(p, horizon, 1, pageSize, catName)
 		</div>
 	</section>
 }
@@ -168,7 +196,7 @@ templ pdSectionMenu(acct store.AccountWithBalance) {
 // PaydownScheduleBody is one slice of a plan's monthly projection plus its
 // pager. Used both for the initial render (inside PaydownSection) and the
 // htmx fragment swap.
-templ PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) {
+templ PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int, catName string) {
 	{{
 		if pageSize <= 0 {
 			pageSize = PaydownPageSize
@@ -192,66 +220,84 @@ templ PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int) {
 		rows := p.Rows[start:end]
 	}}
 	@paydownSpinner(p.AccountID)
-	@table.Table() {
-		@table.Header() {
-			@table.Row() {
-				@table.Head() {
-					Month 
-				}
-				@table.Head(table.HeadProps{Class: "text-right"}) {
-					Interest 
-				}
-				@table.Head(table.HeadProps{Class: "text-right"}) {
-					Payment 
-				}
-				@table.Head(table.HeadProps{Class: "hidden md:table-cell"}) {
-					Source 
-				}
-				@table.Head(table.HeadProps{Class: "text-right"}) {
-					Balance 
-				}
-			}
-		}
-		@table.Body() {
-			for _, r := range rows {
-				@table.Row() {
-					@table.Cell(table.CellProps{Class: "whitespace-nowrap"}) {
-						{ r.Month.Format("Jan 2006") }
-					}
-					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-money-negative"}) {
-						{ money.Format(r.InterestCents) }
-					}
-					@table.Cell(table.CellProps{Class: "text-right tabular-nums text-money-positive"}) {
-						{ money.Format(r.PaymentCents) }
-					}
-					@table.Cell(table.CellProps{Class: "hidden md:table-cell"}) {
-						@PaydownSource(r.PaymentSource)
-					}
-					@table.Cell(table.CellProps{Class: "text-right tabular-nums"}) {
-						{ money.Format(r.BalanceCents) }
-					}
-				}
-			}
-		}
-	}
-	if pages > 1 {
-		<div class="mt-2 flex items-center justify-between gap-2 text-sm text-muted-foreground">
-			<span>page { strconv.Itoa(page) } of { strconv.Itoa(pages) } · { strconv.Itoa(total) } months</span>
-			<div class="flex items-center gap-2">
-				@paydownPagerLink(p.AccountID, horizon, page-1, page > 1) {
-					‹ prev
-				}
-				@paydownPagerLink(p.AccountID, horizon, page+1, page < pages) {
-					next ›
-				}
-			</div>
+	<div class="flex flex-col">
+		<div class={ pdGridCols, "px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground" }>
+			<span>Month</span>
+			<span class="text-right">Interest</span>
+			<span class="text-right">Payment</span>
+			<span class="hidden md:block">Where it comes from</span>
+			<span class="text-right">Balance</span>
 		</div>
+		for _, r := range rows {
+			<div class={ pdGridCols, "border-t border-border px-s3 py-2 text-[15px]" }>
+				<span class="whitespace-nowrap">{ r.Month.Format("Jan 2006") }</span>
+				<span class="text-right tabular-nums text-money-negative">{ money.Format(r.InterestCents) }</span>
+				<span class="text-right tabular-nums">{ money.Format(r.PaymentCents) }</span>
+				<span class="hidden truncate text-[14px] text-muted-foreground md:block">
+					@PaydownSource(r.PaymentSource, catName)
+				</span>
+				<span class="text-right font-bold tabular-nums">{ money.Format(r.BalanceCents) }</span>
+			</div>
+		}
+	</div>
+	<div class="flex items-center gap-s3 pt-s3 text-[13px] text-muted-foreground">
+		@button.Button(button.Props{
+			Type:     "button",
+			Variant:  button.VariantOutline,
+			Size:     button.SizeSm,
+			Class:    "rounded-pill",
+			Disabled: page <= 1,
+			Attributes: templ.Attributes{
+				"hx-get":       fmt.Sprintf("/paydown/%d/rows?horizon=%d&page=%d", p.AccountID, horizon, page-1),
+				"hx-target":    fmt.Sprintf("#pd-rows-%d", p.AccountID),
+				"hx-swap":      "innerHTML",
+				"hx-indicator": fmt.Sprintf("#pd-spin-%d", p.AccountID),
+			},
+		}) {
+			‹ prev
+		}
+		<span>
+			page { strconv.Itoa(page) } of { strconv.Itoa(pages) } · { strconv.Itoa(total) } months
+		</span>
+		@button.Button(button.Props{
+			Type:     "button",
+			Variant:  button.VariantOutline,
+			Size:     button.SizeSm,
+			Class:    "rounded-pill",
+			Disabled: page >= pages,
+			Attributes: templ.Attributes{
+				"hx-get":       fmt.Sprintf("/paydown/%d/rows?horizon=%d&page=%d", p.AccountID, horizon, page+1),
+				"hx-target":    fmt.Sprintf("#pd-rows-%d", p.AccountID),
+				"hx-swap":      "innerHTML",
+				"hx-indicator": fmt.Sprintf("#pd-spin-%d", p.AccountID),
+			},
+		}) {
+			next ›
+		}
+	</div>
+}
+
+// PaydownSource says in words where a projected payment came from. It replaces
+// the old ✓ spent / → assigned / · default colour glyphs, which carried the
+// meaning entirely in a symbol and a hue. Naming the category makes the sentence
+// answer the question the column actually asks.
+templ PaydownSource(s paydown.PaymentSource, catName string) {
+	if s == paydown.SourceSpent && catName != "" {
+		<span>spent in { catName }</span>
+	} else if s == paydown.SourceSpent {
+		<span>what you spent</span>
+	} else if s == paydown.SourceAssigned && catName != "" {
+		<span>assigned in { catName }</span>
+	} else if s == paydown.SourceAssigned {
+		<span>what you assigned</span>
+	} else {
+		<span>default payment</span>
 	}
 }
 
-// paydownSpinner renders an overlay that fades in while htmx is loading the
-// next page. The .htmx-indicator class is what htmx looks for; the
-// opacity transition is applied via the base layer in tailwind/input.css.
+// paydownSpinner is the overlay shown while a schedule page is fetched. It sits
+// inside the per-account rows wrapper (which is position:relative) and is driven
+// by htmx's .htmx-indicator fade.
 templ paydownSpinner(acctID int64) {
 	<div id={ fmt.Sprintf("pd-spin-%d", acctID) } class="htmx-indicator pointer-events-none absolute inset-0 z-10 flex items-start justify-center bg-background/60">
 		<svg class="mt-6 h-6 w-6 animate-spin text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -261,57 +307,13 @@ templ paydownSpinner(acctID int64) {
 	</div>
 }
 
-// paydownPagerLink is an outline button that hx-gets the schedule
-// fragment and swaps it into the per-account rows wrapper. Disabled when
-// the target page is out of range — that still renders the button (to
-// preserve layout) but suppresses the htmx attributes.
-templ paydownPagerLink(acctID int64, horizon, target int, enabled bool) {
-	if enabled {
-		@button.Button(button.Props{
-			Variant: button.VariantOutline,
-			Size:    button.SizeSm,
-			Attributes: templ.Attributes{
-				"hx-get":       fmt.Sprintf("/paydown/%d/rows?horizon=%d&page=%d", acctID, horizon, target),
-				"hx-target":    fmt.Sprintf("#pd-rows-%d", acctID),
-				"hx-swap":      "innerHTML",
-				"hx-indicator": fmt.Sprintf("#pd-spin-%d", acctID),
-			},
-		}) {
-			{ children... }
-		}
-	} else {
-		@button.Button(button.Props{
-			Variant:  button.VariantOutline,
-			Size:     button.SizeSm,
-			Disabled: true,
-		}) {
-			{ children... }
-		}
-	}
-}
-
-// PaydownSource labels where a scheduled payment figure came from. These are
-// legend glyphs, not money, so they use the ramps rather than the money-*
-// tokens: sage for a confirmed actual, terracotta for a plan, neutral for the
-// fallback. The redesign replaces the glyphs with words ("spent in Credit Card
-// Payment"), which is the least legible part of the current screen.
-templ PaydownSource(s paydown.PaymentSource) {
-	if s == paydown.SourceSpent {
-		<span class="text-sage-700">✓ spent</span>
-	} else if s == paydown.SourceAssigned {
-		<span class="text-primary">→ assigned</span>
-	} else {
-		<span class="text-muted-foreground">· default</span>
-	}
-}
-
 // PaymentModal renders a centered card with a single-input form for
 // updating the fallback monthly payment on an account.
 templ PaymentModal(acct store.AccountWithBalance) {
 	@dialogPanel("") {
 		@dialog.Header() {
 			@dialog.Title() {
-				Edit monthly payment — { acct.Name }
+				Monthly payment — { acct.Name }
 			}
 		}
 		<form hx-post={ fmt.Sprintf("/paydown/%d/payment", acct.ID) } hx-target="body" hx-swap="outerHTML" class="grid gap-4">
@@ -335,9 +337,12 @@ templ PaymentModal(acct store.AccountWithBalance) {
 					})
 				}
 			}
-			<p class="text-sm text-muted-foreground">
-				Leave blank to clear. The amount is used for any month that has no spent
-				or assigned data in the linked category.
+			<p class="text-[14px] text-muted-foreground">
+				For each projected month the plan uses what you actually
+				<strong class="font-semibold text-foreground">spent</strong> in the linked
+				category, then what you
+				<strong class="font-semibold text-foreground">assigned</strong>, and only
+				falls back to this figure if neither exists. Leave it blank to clear.
 			</p>
 			@dialog.Footer() {
 				@button.Button(button.Props{

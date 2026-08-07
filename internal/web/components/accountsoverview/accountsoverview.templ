@@ -121,7 +121,7 @@ templ acctMenu(a store.AccountWithBalance) {
 				Attributes: templ.Attributes{
 					"hx-post":    "/accounts/" + id + "/archive",
 					"hx-swap":    "none",
-					"hx-confirm": "Archive " + a.Name + "?",
+					"hx-confirm": archiveConfirm(a.Name),
 				},
 			}) {
 				Archive Account
@@ -172,4 +172,12 @@ func txHref(accountID int64, view ViewContext) string {
 		q.Set("category", strconv.FormatInt(*view.CategoryID, 10))
 	}
 	return "/transactions?" + q.Encode()
+}
+
+// archiveConfirm words the archive prompt so it states what actually happens.
+// Archiving is not a delete: the transactions stay put and still count in past
+// months — only the account's presence in the sidebar and the paydown plan
+// changes.
+func archiveConfirm(name string) string {
+	return "Archive " + name + "?\n\nIts transactions stay where they are and still count in past months. The account leaves the sidebar and the paydown plan."
 }

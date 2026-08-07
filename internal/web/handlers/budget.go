@@ -39,6 +39,12 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 		return
 	}
 	_ = rows
+	// Nothing can be budgeted until money exists somewhere, so a user with no
+	// accounts gets the first-run screen instead of an empty budget.
+	if len(data.Accounts) == 0 {
+		render(c, http.StatusOK, views.FirstRunPage(month, sidebarCollapsed(c)))
+		return
+	}
 	setCollapseState(c, &data)
 	render(c, http.StatusOK, views.BudgetPage(data, sidebarCollapsed(c)))
 }

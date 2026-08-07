@@ -98,7 +98,11 @@ func (h *Handlers) PaydownRows(c *gin.Context) {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	render(c, http.StatusOK, views.PaydownScheduleBody(p, horizon, page, views.PaydownPageSize))
+	// The schedule names the category a payment comes from in words ("spent in
+	// Credit Card Payment"), so the fragment needs the category list too.
+	cats, _ := h.store.ListCategories(ctx, uid, true)
+	catName := views.PaymentCategoryName(cats, *acct)
+	render(c, http.StatusOK, views.PaydownScheduleBody(p, horizon, page, views.PaydownPageSize, catName))
 }
 
 // computePlan runs the paydown projection for a single account. Shared by

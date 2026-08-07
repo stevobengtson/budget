@@ -6,6 +6,7 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/sbengtson/budget/internal/web/components/ui/buttongroup"
 	"github.com/templui/templui/components/checkbox"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/input"
@@ -52,11 +53,25 @@ templ AccountForm(d AccountFormData) {
 				@formRow("acct-name", "Name") {
 					@input.Input(input.Props{ID: "acct-name", Name: "name", Value: d.Name, Required: true})
 				}
-				@formRow("acct-type", "Type") {
-					@SelectField(SelectFieldProps{ID: "acct-type", Name: "type"}, accountTypeOptions(d.Type))
-				}
+				<div class="grid gap-1.5">
+					@label.Label(label.Props{For: "acct-type"}) {
+						Type
+					}
+					@buttongroup.ButtonGroup(buttongroup.Props{
+						ID:    "acct-type",
+						Name:  "type",
+						Value: accountTypeOrDefault(d.Type),
+						Class: "w-full rounded-pill",
+						Options: []buttongroup.Option{
+							{Value: "checking", Label: "Checking"},
+							{Value: "savings", Label: "Savings"},
+							{Value: "credit", Label: "Credit"},
+							{Value: "loan", Label: "Loan"},
+						},
+					})
+				</div>
 				<div class="grid grid-cols-2 gap-3">
-					@formRow("acct-start", "Starting balance") {
+					@formRow("acct-start", "Amount owed / balance") {
 						@input.Input(input.Props{ID: "acct-start", Name: "starting_balance", Value: d.StartingBalance, Placeholder: "0.00", Class: "tabular-nums"})
 					}
 					@formRow("acct-limit", "Credit limit") {
@@ -80,6 +95,10 @@ templ AccountForm(d AccountFormData) {
 						Include in paydown
 					}
 				</div>
+				<p class="text-[13px] text-muted-foreground">
+					On a card or loan, enter what you owe as a positive number — Pigglet
+					keeps the sign right.
+				</p>
 				@formRow("acct-paycat", "Payment category") {
 					@SelectField(SelectFieldProps{
 						ID:          "acct-paycat",
@@ -94,10 +113,10 @@ templ AccountForm(d AccountFormData) {
 					Type:    "button",
 					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
-					cancel
+					Cancel
 				}
 				@button.Button(button.Props{Type: "submit"}) {
-					save
+					Save account
 				}
 			}
 		</form>
@@ -127,4 +146,13 @@ func paymentCategoryOptions(cats []store.Category, selected *int64) []Opt {
 		})
 	}
 	return out
+}
+
+// accountTypeOrDefault defaults a new account to checking — the account most
+// people add first, and the one the first-run screen pre-selects.
+func accountTypeOrDefault(s string) string {
+	if s == "" {
+		return "checking"
+	}
+	return s
 }
