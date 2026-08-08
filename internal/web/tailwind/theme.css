@@ -64,7 +64,12 @@
     --popover: #ebddc5;
     --popover-foreground: #201e1d;
     --primary: #c67139;
-    --primary-foreground: #f5ead8;
+    /* Ink, not cream. The handoff pairs the accent fill with #f5ead8, which
+       measures 3.03:1 — below AA for the 14-15px labels primary buttons
+       actually use. Ink on the same fill is 4.60:1 and keeps the accent colour
+       untouched, and it matches what the dark map already does: there, primary
+       also takes a dark label. Deviation, flagged for design. */
+    --primary-foreground: #201e1d;
     /* The port table maps secondary, muted and accent all to neutral-200. */
     --secondary: #eee7db;
     --secondary-foreground: #201e1d;
@@ -79,12 +84,12 @@
     --input: #dcd3c4;
     --ring: #c67139;
     --selection: #c67139;
-    --selection-foreground: #f5ead8;
+    --selection-foreground: #201e1d;
 
     --sidebar: #ebddc5;
     --sidebar-foreground: #201e1d;
     --sidebar-primary: #c67139;
-    --sidebar-primary-foreground: #f5ead8;
+    --sidebar-primary-foreground: #201e1d;
     --sidebar-accent: #fff2eb;
     --sidebar-accent-foreground: #643312;
     --sidebar-border: rgba(32, 30, 29, 0.16);
@@ -113,6 +118,21 @@
        page ground itself; dark mode gives it a step of its own, because that is
        where elevation comes from once shadows stop reading. */
     --surface-sunk: #f5ead8;
+
+    /* Tags. Tinted fills invert across the ramp in dark mode (a 200 fill becomes
+       900, its 700 text becomes 400), so they are tokens rather than raw ramp
+       steps — consumers never need a dark: variant. */
+    --tag-neutral-bg: #eee7db;
+    --tag-neutral-fg: #645c50;
+    --tag-sage-bg: #e1eecc;
+    --tag-sage-fg: #56633f;
+
+    /* The brand mark, and the primary fill's hover/active steps. These step
+       DOWN the ramp on light and UP on dark — darkening a fill on a dark ground
+       reads as disabled, not pressed. */
+    --brand: #8c491a;
+    --primary-hover: #b2622d;
+    --primary-active: #8c491a;
 
     --progress-track: rgba(32, 30, 29, 0.12);
     --progress-fill: #8fa073;
@@ -195,6 +215,15 @@
     --surface-quickadd: #2e2b25;
     --surface-overspent: #402310;
     --surface-sunk: #252220;
+
+    --tag-neutral-bg: #474238;
+    --tag-neutral-fg: #dcd3c4;
+    --tag-sage-bg: #272e1b;
+    --tag-sage-fg: #aebf92;
+
+    --brand: #f6a06b;
+    --primary-hover: #f6a06b;
+    --primary-active: #ffc6a5;
 
     --progress-track: rgba(245, 234, 216, 0.14);
     --progress-fill: #8fa073;

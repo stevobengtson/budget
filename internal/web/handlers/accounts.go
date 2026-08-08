@@ -30,6 +30,8 @@ func (h *Handlers) AccountsOverviewPartial(c *gin.Context) {
 		Month:      q.Get("month"),
 		AccountID:  parseIDQuery(q.Get("account")),
 		CategoryID: parseIDQuery(q.Get("category")),
+
+		OnTransactions: currentURLPath(c) == "/transactions",
 	}
 	render(c, http.StatusOK, accountsoverview.AccountsOverview(accts, view))
 }

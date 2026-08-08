@@ -22,6 +22,11 @@ type ViewContext struct {
 	Month      string // "YYYY-MM"; empty omits the param and the page falls back to today
 	AccountID  *int64 // the account being viewed, highlighted in the list
 	CategoryID *int64 // the active category filter, preserved across account switches
+	// OnTransactions reports that the transactions page is what we are looking
+	// at. Needed to distinguish "viewing every account" — where the All accounts
+	// row is the active one — from being on some other page entirely, where
+	// nothing in this list is active. Both cases have a nil AccountID.
+	OnTransactions bool
 }
 
 // AccountsOverview renders a grouped account list (Cash/Credit/Loan) with an
@@ -36,6 +41,22 @@ type ViewContext struct {
 templ AccountsOverview(accts []store.AccountWithBalance, view ViewContext) {
 	{{ buckets, net := group(accts) }}
 	<div data-accounts-overview>
+		// "All accounts" is the unfiltered head of this same list rather than a
+		// separate nav entry: every row below links to the transactions page
+		// scoped to one account, so the zero-state of that choice belongs here.
+		{{ allActive := view.OnTransactions && view.AccountID == nil }}
+		<div class={ acctRowClass(allActive), "mb-2" }>
+			<a
+				href={ templ.URL(allAccountsHref(view)) }
+				class="flex flex-1 items-center justify-between rounded-md py-1 pl-2 pr-1 text-sm font-medium"
+				title="View transactions for every account"
+				if allActive {
+					aria-current="page"
+				}
+			>
+				<span class={ acctNameClass(allActive) }>All Accounts</span>
+			</a>
+		</div>
 		<div class="space-y-3">
 			if len(buckets) == 0 {
 				<p class="px-2 py-1 text-sm text-muted-foreground">
@@ -151,6 +172,21 @@ func acctNameClass(active bool) string {
 		return "truncate text-sidebar-accent-foreground"
 	}
 	return "truncate text-sidebar-foreground"
+}
+
+// allAccountsHref is txHref without the account param: the same view, unscoped.
+func allAccountsHref(view ViewContext) string {
+	q := url.Values{}
+	if view.Month != "" {
+		q.Set("month", view.Month)
+	}
+	if view.CategoryID != nil {
+		q.Set("category", strconv.FormatInt(*view.CategoryID, 10))
+	}
+	if len(q) == 0 {
+		return "/transactions"
+	}
+	return "/transactions?" + q.Encode()
 }
 
 // txHref builds a link to the transactions page for one account, carrying the

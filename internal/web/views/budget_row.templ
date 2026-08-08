@@ -378,12 +378,12 @@ func goalDueValue(r store.CategoryBudget) string {
 templ GoalCell(r store.CategoryBudget) {
 	if g, ok := format.GoalFor(r.GoalCents, r.GoalDueDate, r.MonthlyTarget); ok {
 		<span class="inline-flex flex-wrap items-center gap-1 text-[12px] text-muted-foreground">
-			<span class="rounded-pill bg-sage-200 px-2 py-0.5 font-semibold text-sage-700">goal { g.Amount }</span>
+			<span class="rounded-pill bg-tag-sage-bg px-2 py-0.5 font-semibold text-tag-sage-fg">goal { g.Amount }</span>
 			if g.Due != "" {
 				<span>by { g.Due }</span>
 			}
 			if g.Need != "" {
-				<span class="rounded-pill bg-warm-200 px-2 py-0.5 font-semibold">need { g.Need }</span>
+				<span class="rounded-pill bg-tag-neutral-bg px-2 py-0.5 font-semibold">need { g.Need }</span>
 			}
 		</span>
 	}

@@ -429,6 +429,21 @@ func currentURLQuery(c *gin.Context) url.Values {
 	return u.Query()
 }
 
+// currentURLPath is currentURLQuery's counterpart: the path the htmx request
+// came from. The accounts overview needs it to tell "viewing all accounts" from
+// "not on the transactions page at all" — both have no account filter.
+func currentURLPath(c *gin.Context) string {
+	currentURL := c.GetHeader("HX-Current-URL")
+	if currentURL == "" {
+		return ""
+	}
+	u, err := url.Parse(currentURL)
+	if err != nil {
+		return ""
+	}
+	return u.Path
+}
+
 // parseIDQuery converts a query-string id to a pointer, returning nil when the
 // value is absent or unparseable (an unusable filter is treated as no filter).
 func parseIDQuery(s string) *int64 {

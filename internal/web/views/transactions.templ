@@ -414,18 +414,18 @@ func txDisplayName(t store.Transaction, accts []store.AccountWithBalance) string
 templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats []store.Category) {
 	<span class="flex shrink-0 items-center gap-1">
 		if t.TransferAccountID != nil {
-			<span class="rounded-pill bg-warm-200 px-2 py-0.5 text-[12px] font-semibold text-warm-700">transfer</span>
+			<span class="rounded-pill bg-tag-neutral-bg px-2 py-0.5 text-[12px] font-semibold text-tag-neutral-fg">transfer</span>
 			if t.CategoryID != nil {
-				<span class="rounded-pill bg-sage-200 px-2 py-0.5 text-[12px] font-semibold text-sage-700">
+				<span class="rounded-pill bg-tag-sage-bg px-2 py-0.5 text-[12px] font-semibold text-tag-sage-fg">
 					{ categoryName(cats, *t.CategoryID) }
 				</span>
 			}
 		} else if t.CategoryID != nil {
-			<span class="rounded-pill bg-sage-200 px-2 py-0.5 text-[12px] font-semibold text-sage-700">
+			<span class="rounded-pill bg-tag-sage-bg px-2 py-0.5 text-[12px] font-semibold text-tag-sage-fg">
 				{ categoryName(cats, *t.CategoryID) }
 			</span>
 		} else {
-			<span class="rounded-pill bg-warm-200 px-2 py-0.5 text-[12px] font-semibold text-warm-700">uncategorized</span>
+			<span class="rounded-pill bg-tag-neutral-bg px-2 py-0.5 text-[12px] font-semibold text-tag-neutral-fg">uncategorized</span>
 		}
 	</span>
 }

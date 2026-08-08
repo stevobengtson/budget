@@ -1261,14 +1261,14 @@ func GoalCell(r store.CategoryBudget) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		if g, ok := format.GoalFor(r.GoalCents, r.GoalDueDate, r.MonthlyTarget); ok {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<span class=\"inline-flex flex-wrap items-center gap-1 text-[12px] text-muted-foreground\"><span class=\"rounded-pill bg-sage-200 px-2 py-0.5 font-semibold text-sage-700\">goal ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<span class=\"inline-flex flex-wrap items-center gap-1 text-[12px] text-muted-foreground\"><span class=\"rounded-pill bg-tag-sage-bg px-2 py-0.5 font-semibold text-tag-sage-fg\">goal ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var56 string
 			templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(g.Amount)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 381, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 381, Col: 103}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 			if templ_7745c5c3_Err != nil {
@@ -1298,14 +1298,14 @@ func GoalCell(r store.CategoryBudget) templ.Component {
 				}
 			}
 			if g.Need != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<span class=\"rounded-pill bg-warm-200 px-2 py-0.5 font-semibold\">need ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<span class=\"rounded-pill bg-tag-neutral-bg px-2 py-0.5 font-semibold\">need ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var58 string
 				templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(g.Need)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 386, Col: 82}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 386, Col: 88}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 				if templ_7745c5c3_Err != nil {

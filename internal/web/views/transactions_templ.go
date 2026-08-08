@@ -1185,12 +1185,12 @@ func TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats 
 			return templ_7745c5c3_Err
 		}
 		if t.TransferAccountID != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "<span class=\"rounded-pill bg-warm-200 px-2 py-0.5 text-[12px] font-semibold text-warm-700\">transfer</span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "<span class=\"rounded-pill bg-tag-neutral-bg px-2 py-0.5 text-[12px] font-semibold text-tag-neutral-fg\">transfer</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if t.CategoryID != nil {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "<span class=\"rounded-pill bg-sage-200 px-2 py-0.5 text-[12px] font-semibold text-sage-700\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "<span class=\"rounded-pill bg-tag-sage-bg px-2 py-0.5 text-[12px] font-semibold text-tag-sage-fg\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1209,7 +1209,7 @@ func TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats 
 				}
 			}
 		} else if t.CategoryID != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "<span class=\"rounded-pill bg-sage-200 px-2 py-0.5 text-[12px] font-semibold text-sage-700\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "<span class=\"rounded-pill bg-tag-sage-bg px-2 py-0.5 text-[12px] font-semibold text-tag-sage-fg\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1227,7 +1227,7 @@ func TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats 
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<span class=\"rounded-pill bg-warm-200 px-2 py-0.5 text-[12px] font-semibold text-warm-700\">uncategorized</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<span class=\"rounded-pill bg-tag-neutral-bg px-2 py-0.5 text-[12px] font-semibold text-tag-neutral-fg\">uncategorized</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

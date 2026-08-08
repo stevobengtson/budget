@@ -179,10 +179,12 @@ func TestBudgetTabAppearsInLayout(t *testing.T) {
 	}
 	resp, _ := client.Get(ts.URL + "/budget")
 	body := readAll(t, resp)
-	// Transactions joined the nav in the redesign; it was previously reachable
-	// only by clicking an account. aria-current marks the active entry now that
-	// the templUI sidebar (and its data-tui-sidebar-active) is gone.
-	for _, marker := range []string{"Budget", "Transactions", "Paydown", `aria-current="page"`} {
+	// The primary nav is Budget and Paydown. Transactions is reached through the
+	// account list ("All accounts" heads it), which loads as a separate htmx
+	// fragment, so it is not in this HTML — see
+	// TestAccountsOverviewHighlightsCurrentAccount. aria-current marks the active
+	// entry now that the templUI sidebar (and data-tui-sidebar-active) is gone.
+	for _, marker := range []string{"Budget", "Paydown", `aria-current="page"`} {
 		if !strings.Contains(body, marker) {
 			t.Errorf("missing %q in layout", marker)
 		}
@@ -282,9 +284,18 @@ func TestAccountsOverviewHighlightsCurrentAccount(t *testing.T) {
 	if body := get(ts.URL + "/budget"); strings.Contains(body, `aria-current="page"`) {
 		t.Error("no account should be highlighted on /budget")
 	}
-	// A category-only transactions view likewise selects no account.
-	if body := get(ts.URL + "/transactions?month=2026-07&category=3"); strings.Contains(body, `aria-current="page"`) {
-		t.Error("no account should be highlighted on a category-only view")
+	// An account-scoped view highlights that account, not the All accounts head.
+	if got := currentRowLabel(t, onAccount); got != "Chequing" {
+		t.Errorf("highlighted row = %q, want Chequing", got)
+	}
+	// A category-only transactions view IS the all-accounts view, so the head row
+	// is the active one — no individual account is.
+	catOnly := get(ts.URL + "/transactions?month=2026-07&category=3")
+	if got := strings.Count(catOnly, `aria-current="page"`); got != 1 {
+		t.Errorf("aria-current count = %d, want 1 (All accounts) on a category-only view", got)
+	}
+	if got := currentRowLabel(t, catOnly); got != "All accounts" {
+		t.Errorf("highlighted row = %q, want All accounts", got)
 	}
 	// Non-HTMX fetches (no header) must not error or guess.
 	if body := get(""); strings.Contains(body, `aria-current="page"`) {
@@ -821,6 +832,19 @@ func TestGroupCollapseRendering(t *testing.T) {
 	if cls := groupClass(t, body, g2); strings.Contains(cls, "group-collapsed") {
 		t.Errorf("group %d should render expanded, class = %q", g2, cls)
 	}
+}
+
+// currentRowLabel returns the visible text of the account-overview row carrying
+// aria-current, so a test can say which row is highlighted rather than only how
+// many are.
+func currentRowLabel(t *testing.T, body string) string {
+	t.Helper()
+	re := regexp.MustCompile(`(?s)aria-current="page"\s*>.*?<span[^>]*>([^<]*)</span>`)
+	m := re.FindStringSubmatch(body)
+	if m == nil {
+		return ""
+	}
+	return strings.TrimSpace(m[1])
 }
 
 // groupClass extracts the class attribute of the budget group div with the

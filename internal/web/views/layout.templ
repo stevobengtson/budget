@@ -95,7 +95,7 @@ templ appShell(active string, collapsed bool) {
 			@sidebar.Header() {
 				<div class="flex items-center gap-s2 px-s2 py-s1 group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:px-0 group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:justify-center">
 					@sidebar.Trigger()
-					<span class="font-heading text-[22px] font-semibold text-terracotta-700 group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">
+					<span class="font-heading text-[22px] font-semibold text-brand group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden">
 						Pigglet
 					</span>
 				</div>
@@ -104,14 +104,21 @@ templ appShell(active string, collapsed bool) {
 				@sidebar.Group() {
 					@sidebar.Menu() {
 						@navItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-[18px]"}), active)
-						@navItem("transactions", "Transactions", icon.List(icon.Props{Class: "size-[18px]"}), active)
+						// Transactions is reached through the account list below —
+						// "All accounts" heads it — rather than as its own nav entry,
+						// so the sidebar names places to be, not a second route to the
+						// same screen. That list is hidden in the collapsed icon rail
+						// though, so the rail keeps its own way in.
+						@collapsedOnlyNavItem("transactions", "All Accounts", icon.List(icon.Props{Class: "size-[18px]"}), active)
 						if AddOnEnabled(ctx, "paydown") {
 							@navItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-[18px]"}), active)
 						}
 					}
 				}
-				@sidebar.Separator(sidebar.SeparatorProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"})
 				@sidebar.Group(sidebar.GroupProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"}) {
+          @sidebar.GroupLabel() {
+              Accounts
+            }
 					@accountsPanel("sidebar-overview")
 				}
 			}
@@ -129,7 +136,7 @@ templ appShell(active string, collapsed bool) {
 			// The design specifies only three tabs, so it goes here rather than
 			// becoming a fourth. Not designed — confirm the placement.
 			<div class="flex items-center justify-between px-s3 pt-s3 md:hidden">
-				<span class="font-heading text-[22px] font-semibold text-terracotta-700">Pigglet</span>
+				<span class="font-heading text-[22px] font-semibold text-brand">Pigglet</span>
 				@userMenu()
 			</div>
 			<main id="main" class="min-w-0 p-s3 pb-[96px] sm:p-s6 md:pb-s6">
@@ -162,13 +169,35 @@ templ navItem(slug string, label string, ic templ.Component, active string) {
 	}
 }
 
+// collapsedOnlyNavItem appears solely in the collapsed icon rail. Expanded, the
+// account list carries "All accounts" and this would be a duplicate; collapsed,
+// that list is hidden and this is the only route to the transactions screen.
+templ collapsedOnlyNavItem(slug string, label string, ic templ.Component, active string) {
+	@sidebar.MenuItem(sidebar.MenuItemProps{
+		Class: "hidden group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:block",
+	}) {
+		@sidebar.MenuButton(sidebar.MenuButtonProps{
+			Href:     "/" + slug,
+			IsActive: slug == active,
+			Tooltip:  label,
+			Class:    navItemClass(slug == active),
+			Attributes: templ.Attributes{
+				"aria-current": templ.KV("page", slug == active),
+			},
+		}) {
+			@ic
+			<span>{ label }</span>
+		}
+	}
+}
+
 // navItemClass styles the nav pill. templUI's active state paints
 // sidebar-accent, which on the cream ground is nearly invisible, so the active
 // entry takes the accent fill outright.
 func navItemClass(isActive bool) string {
 	base := "rounded-pill h-10 gap-s2 px-s3 font-medium"
 	if isActive {
-		return base + " bg-primary text-primary-foreground hover:bg-terracotta-600 hover:text-primary-foreground active:bg-terracotta-700"
+		return base + " bg-primary text-primary-foreground hover:bg-primary-hover hover:text-primary-foreground active:bg-primary-active"
 	}
 	return base + " text-foreground hover:bg-primary/10"
 }
@@ -194,7 +223,7 @@ templ tabItem(slug string, label string, ic templ.Component, active string) {
 		href={ templ.SafeURL("/" + slug) }
 		if slug == active {
 			aria-current="page"
-			class="flex min-h-[48px] min-w-[72px] flex-col items-center justify-center gap-1 rounded-sm text-terracotta-700"
+			class="flex min-h-[48px] min-w-[72px] flex-col items-center justify-center gap-1 rounded-sm text-brand"
 		} else {
 			class="flex min-h-[48px] min-w-[72px] flex-col items-center justify-center gap-1 rounded-sm text-foreground"
 		}

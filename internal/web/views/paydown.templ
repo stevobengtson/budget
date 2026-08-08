@@ -120,7 +120,7 @@ templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, pag
 	<section class="flex flex-col gap-s3 rounded-xl border border-border bg-background p-s3">
 		<div class="flex flex-wrap items-center gap-x-s3 gap-y-s2">
 			<h2 class="font-heading text-[20px] font-semibold">{ acct.Name }</h2>
-			<span class="rounded-pill bg-warm-200 px-2 py-0.5 text-[12px] font-semibold text-warm-700 tabular-nums">
+			<span class="rounded-pill bg-tag-neutral-bg px-2 py-0.5 text-[12px] font-semibold text-tag-neutral-fg tabular-nums">
 				{ fmt.Sprintf("%.2f%% APR", float64(p.AprBps)/100.0) }
 			</span>
 			<span class="text-[14px] text-muted-foreground">

@@ -84,6 +84,13 @@
   --color-surface-quickadd: var(--surface-quickadd);
   --color-surface-overspent: var(--surface-overspent);
   --color-surface-sunk: var(--surface-sunk);
+  --color-tag-neutral-bg: var(--tag-neutral-bg);
+  --color-tag-neutral-fg: var(--tag-neutral-fg);
+  --color-tag-sage-bg: var(--tag-sage-bg);
+  --color-tag-sage-fg: var(--tag-sage-fg);
+  --color-brand: var(--brand);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
   --color-progress-track: var(--progress-track);
   --color-progress-fill: var(--progress-fill);
   --color-progress-fill-over: var(--progress-fill-over);
