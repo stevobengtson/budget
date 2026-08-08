@@ -175,11 +175,10 @@
        on an accent-500 fill would not hold. */
     --primary: #d67f48;
     --primary-foreground: #1c1a17;
-    /* Design calls for secondary/ghost buttons to be transparent with a 1px
-       rgba(245,234,216,0.22) border. That is a component change, not a value
-       swap: making --secondary transparent now would leave templUI's secondary
-       buttons invisible, since nothing draws the border yet. Held at the raised
-       surface until buttons are restyled in Phase 1. */
+    /* The design calls for transparent secondary/ghost buttons with a 1px
+       rgba(245,234,216,0.22) border. Kept as a raised surface instead, by
+       decision — it reads well against the warm ground and needs no per-variant
+       border work. Revisit only if the flatter treatment is wanted. */
     --secondary: #474238;
     --secondary-foreground: #f5ead8;
     --muted: #474238;

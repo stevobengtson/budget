@@ -115,7 +115,7 @@ func marketingHeader() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<span class=\"font-heading text-xl font-semibold tracking-tight\">Pigglet</span></a><nav class=\"hidden items-center gap-8 text-sm text-muted-foreground md:flex\"><a href=\"#features\" class=\"transition-colors hover:text-foreground\">Features</a> <a href=\"#privacy\" class=\"transition-colors hover:text-foreground\">Privacy</a> <a href=\"#pricing\" class=\"transition-colors hover:text-foreground\">Pricing</a></nav><div class=\"flex items-center gap-2 sm:gap-3\"><a href=\"/login\" class=\"hidden h-9 items-center rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline-flex\">Sign in</a> <a href=\"/signup\" class=\"inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90\">Start free trial</a></div></div></header>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<span class=\"font-heading text-xl font-semibold tracking-tight\">Pigglet</span></a><nav class=\"hidden items-center gap-8 text-sm text-muted-foreground md:flex\"><a href=\"#features\" class=\"transition-colors hover:text-foreground\">Features</a> <a href=\"#privacy\" class=\"transition-colors hover:text-foreground\">Privacy</a> <a href=\"#pricing\" class=\"transition-colors hover:text-foreground\">Pricing</a></nav><div class=\"flex items-center gap-2 sm:gap-3\"><a href=\"/login\" class=\"hidden h-9 items-center rounded-pill px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline-flex\">Sign in</a> <a href=\"/signup\" class=\"inline-flex h-9 items-center justify-center rounded-pill bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover\">Start free trial</a></div></div></header>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -282,7 +282,7 @@ func heroSection() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "Proudly built in Canada 🇨🇦 · priced in CAD</span><h1 class=\"mx-auto mt-6 max-w-3xl font-heading text-4xl font-semibold tracking-tight sm:text-6xl\">Budgeting that does exactly what it should — and nothing you didn't ask for.</h1><p class=\"mx-auto mt-6 max-w-2xl text-lg text-muted-foreground\">Pigglet is envelope budgeting stripped to the essentials. Plan where your money goes, see where it went, and switch on extra features only when you want them.</p><div class=\"mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row\"><a href=\"/signup\" class=\"inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:w-auto\">Start your 35-day free trial")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "Proudly built in Canada 🇨🇦 · priced in CAD</span><h1 class=\"mx-auto mt-6 max-w-3xl font-heading text-4xl font-semibold tracking-tight sm:text-6xl\">Budgeting that does exactly what it should — and nothing you didn't ask for.</h1><p class=\"mx-auto mt-6 max-w-2xl text-lg text-muted-foreground\">Pigglet is envelope budgeting stripped to the essentials. Plan where your money goes, see where it went, and switch on extra features only when you want them.</p><div class=\"mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row\"><a href=\"/signup\" class=\"inline-flex h-11 w-full items-center justify-center gap-2 rounded-pill bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover sm:w-auto\">Start your 35-day free trial")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -290,7 +290,7 @@ func heroSection() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</a> <a href=\"/login\" class=\"inline-flex h-11 w-full items-center justify-center rounded-md border border-input bg-background px-6 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground sm:w-auto\">Sign in</a></div><p class=\"mt-4 text-sm text-muted-foreground\">No payment information required. Cancel anytime.</p><div class=\"mx-auto mt-14 max-w-5xl\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</a> <a href=\"/login\" class=\"inline-flex h-11 w-full items-center justify-center rounded-pill border border-input bg-background px-6 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground sm:w-auto\">Sign in</a></div><p class=\"mt-4 text-sm text-muted-foreground\">No payment information required. Cancel anytime.</p><div class=\"mx-auto mt-14 max-w-5xl\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -518,7 +518,7 @@ func pricingSection() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<a href=\"/signup\" class=\"mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90\">Start your free trial")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<a href=\"/signup\" class=\"mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-pill bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover\">Start your free trial")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -555,7 +555,7 @@ func finalCTASection() templ.Component {
 			templ_7745c5c3_Var12 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<section class=\"border-t border-border/60 bg-muted/20\"><div class=\"mx-auto max-w-4xl px-4 py-20 text-center sm:px-6\"><h2 class=\"font-heading text-3xl font-semibold tracking-tight sm:text-4xl\">Manage your budget, simply</h2><p class=\"mx-auto mt-4 max-w-xl text-muted-foreground\">Try Pigglet free for 35 days. No card, no commitment — just a calmer way to handle your money.</p><div class=\"mt-8\"><a href=\"/signup\" class=\"inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90\">Start your 35-day free trial")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<section class=\"border-t border-border/60 bg-muted/20\"><div class=\"mx-auto max-w-4xl px-4 py-20 text-center sm:px-6\"><h2 class=\"font-heading text-3xl font-semibold tracking-tight sm:text-4xl\">Manage your budget, simply</h2><p class=\"mx-auto mt-4 max-w-xl text-muted-foreground\">Try Pigglet free for 35 days. No card, no commitment — just a calmer way to handle your money.</p><div class=\"mt-8\"><a href=\"/signup\" class=\"inline-flex h-11 items-center justify-center gap-2 rounded-pill bg-primary px-8 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover\">Start your 35-day free trial")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -596,14 +596,14 @@ func browserFrame(src, alt string) templ.Component {
 			templ_7745c5c3_Var13 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div class=\"overflow-hidden rounded-xl border border-border bg-card shadow-2xl\"><div class=\"flex items-center gap-1.5 border-b border-border bg-muted/40 px-4 py-2.5\"><span class=\"size-3 rounded-full bg-destructive/50\"></span> <span class=\"size-3 rounded-full bg-yellow-500/50\"></span> <span class=\"size-3 rounded-full bg-primary/50\"></span></div><img src=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div class=\"overflow-hidden rounded-xl border border-border bg-card shadow-2xl\"><div class=\"flex items-center gap-1.5 border-b border-border bg-muted/40 px-4 py-2.5\"><span class=\"size-3 rounded-full bg-money-negative/60\"></span> <span class=\"size-3 rounded-full bg-warm-400\"></span> <span class=\"size-3 rounded-full bg-money-positive/60\"></span></div><img src=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(src)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 272, Col: 16}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 275, Col: 16}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -616,7 +616,7 @@ func browserFrame(src, alt string) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(alt)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 272, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 275, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -666,7 +666,7 @@ func featureCard(ic templ.Component, title, body string) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 281, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 284, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -679,7 +679,7 @@ func featureCard(ic templ.Component, title, body string) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(body)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 282, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 285, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
@@ -729,7 +729,7 @@ func trustItem(ic templ.Component, title, body string) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 291, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 294, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -742,7 +742,7 @@ func trustItem(ic templ.Component, title, body string) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(body)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 292, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 295, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
@@ -792,7 +792,7 @@ func addOnPoint(text string) templ.Component {
 		var templ_7745c5c3_Var23 string
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 299, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 302, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
@@ -842,7 +842,7 @@ func pricingPoint(text string) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 306, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/marketing.templ`, Line: 309, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -881,7 +881,7 @@ func cookieNotice() templ.Component {
 			templ_7745c5c3_Var26 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<div id=\"cookie-notice\" class=\"fixed inset-x-0 bottom-0 z-50 hidden p-4 sm:p-6\"><div class=\"mx-auto flex max-w-3xl flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between\"><p class=\"text-sm text-muted-foreground\">We use only the cookies Pigglet needs to work — to keep you signed in and remember your layout. No advertising or tracking cookies, ever. <a href=\"/privacy\" class=\"font-medium text-foreground underline underline-offset-4\">Learn more</a>.</p><button type=\"button\" onclick=\"dismissCookieNotice()\" class=\"inline-flex h-9 shrink-0 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90\">Got it</button></div></div><script>\n\t\t(function () {\n\t\t\ttry {\n\t\t\t\tif (!localStorage.getItem(\"cookie-notice-dismissed\")) {\n\t\t\t\t\tvar el = document.getElementById(\"cookie-notice\");\n\t\t\t\t\tif (el) el.classList.remove(\"hidden\");\n\t\t\t\t}\n\t\t\t} catch (e) {}\n\t\t})();\n\t\tfunction dismissCookieNotice() {\n\t\t\ttry { localStorage.setItem(\"cookie-notice-dismissed\", \"1\"); } catch (e) {}\n\t\t\tvar el = document.getElementById(\"cookie-notice\");\n\t\t\tif (el) el.classList.add(\"hidden\");\n\t\t}\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<div id=\"cookie-notice\" class=\"fixed inset-x-0 bottom-0 z-50 hidden p-4 sm:p-6\"><div class=\"mx-auto flex max-w-3xl flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between\"><p class=\"text-sm text-muted-foreground\">We use only the cookies Pigglet needs to work — to keep you signed in and remember your layout. No advertising or tracking cookies, ever. <a href=\"/privacy\" class=\"font-medium text-foreground underline underline-offset-4\">Learn more</a>.</p><button type=\"button\" onclick=\"dismissCookieNotice()\" class=\"inline-flex h-9 shrink-0 items-center justify-center rounded-pill bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover\">Got it</button></div></div><script>\n\t\t(function () {\n\t\t\ttry {\n\t\t\t\tif (!localStorage.getItem(\"cookie-notice-dismissed\")) {\n\t\t\t\t\tvar el = document.getElementById(\"cookie-notice\");\n\t\t\t\t\tif (el) el.classList.remove(\"hidden\");\n\t\t\t\t}\n\t\t\t} catch (e) {}\n\t\t})();\n\t\tfunction dismissCookieNotice() {\n\t\t\ttry { localStorage.setItem(\"cookie-notice-dismissed\", \"1\"); } catch (e) {}\n\t\t\tvar el = document.getElementById(\"cookie-notice\");\n\t\t\tif (el) el.classList.add(\"hidden\");\n\t\t}\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

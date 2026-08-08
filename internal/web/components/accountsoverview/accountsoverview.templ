@@ -23,7 +23,7 @@ type ViewContext struct {
 	AccountID  *int64 // the account being viewed, highlighted in the list
 	CategoryID *int64 // the active category filter, preserved across account switches
 	// OnTransactions reports that the transactions page is what we are looking
-	// at. Needed to distinguish "viewing every account" — where the All accounts
+	// at. Needed to distinguish "viewing every account" — where the All Accounts
 	// row is the active one — from being on some other page entirely, where
 	// nothing in this list is active. Both cases have a nil AccountID.
 	OnTransactions bool
@@ -41,7 +41,7 @@ type ViewContext struct {
 templ AccountsOverview(accts []store.AccountWithBalance, view ViewContext) {
 	{{ buckets, net := group(accts) }}
 	<div data-accounts-overview>
-		// "All accounts" is the unfiltered head of this same list rather than a
+		// "All Accounts" is the unfiltered head of this same list rather than a
 		// separate nav entry: every row below links to the transactions page
 		// scoped to one account, so the zero-state of that choice belongs here.
 		{{ allActive := view.OnTransactions && view.AccountID == nil }}

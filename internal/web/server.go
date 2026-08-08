@@ -228,9 +228,9 @@ func (s *Server) routes(cfg config.Config) {
 	gated.DELETE("/budget/income/:id", hs.BudgetIncomeDelete)
 
 	gated.GET("/transactions", hs.TransactionsIndex)
-	gated.GET("/transactions/new", hs.TransactionsNew)
 	gated.POST("/transactions", hs.TransactionsCreate)
-	gated.GET("/transactions/:id/edit", hs.TransactionsEdit)
+	gated.GET("/transactions/:id/edit-row", hs.TransactionsEditRow)
+	gated.GET("/transactions/:id/row", hs.TransactionsRow)
 	gated.PUT("/transactions/:id", hs.TransactionsUpdate)
 	gated.DELETE("/transactions/:id", hs.TransactionsDelete)
 	gated.POST("/transactions/:id/cleared", hs.TransactionsToggleCleared)

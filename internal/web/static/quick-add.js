@@ -61,11 +61,15 @@
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
+  // Scoped to whichever transaction form the button sits in, so the same
+  // handler serves the quick-add row and the edit sheet.
   document.addEventListener("click", function (e) {
-    var swap = e.target.closest && e.target.closest("#qa-swap");
+    var swap = e.target.closest && e.target.closest("[data-tx-swap]");
     if (!swap) return;
-    var from = field("account_id");
-    var to = field("transfer_to");
+    var f = swap.closest("[data-tx-form]");
+    if (!f) return;
+    var from = f.elements["account_id"];
+    var to = f.elements["transfer_to"];
     if (!from || !to) return;
     var v = from.value;
     setSelectValue(from, to.value);

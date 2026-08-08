@@ -17,6 +17,13 @@ type Opt struct {
 	Value    string
 	Label    string
 	Selected bool
+	// Disabled renders the option unselectable — used when editing locks out an
+	// invalid type conversion.
+	Disabled bool
+	// Attributes are spread onto the rendered item. Used to hang data-* on an
+	// option so CSS can react to which one is selected — selectbox.js keeps
+	// data-tui-selectbox-selected current, so `:has()` can read both together.
+	Attributes templ.Attributes
 }
 
 // SelectFieldProps configures a SelectField.
@@ -143,7 +150,7 @@ func SelectField(p SelectFieldProps, opts []Opt) templ.Component {
 						var templ_7745c5c3_Var6 string
 						templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 59, Col: 14}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 66, Col: 14}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 						if templ_7745c5c3_Err != nil {
@@ -151,7 +158,7 @@ func SelectField(p SelectFieldProps, opts []Opt) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected, Disabled: o.Disabled, Attributes: o.Attributes}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var5), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -278,7 +285,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 						var templ_7745c5c3_Var12 string
 						templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 93, Col: 14}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 100, Col: 14}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 						if templ_7745c5c3_Err != nil {
@@ -286,7 +293,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected, Disabled: o.Disabled, Attributes: o.Attributes}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -319,7 +326,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 							var templ_7745c5c3_Var15 string
 							templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(g.Label)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 99, Col: 15}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 106, Col: 15}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 							if templ_7745c5c3_Err != nil {
@@ -347,7 +354,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 								var templ_7745c5c3_Var17 string
 								templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 103, Col: 16}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 110, Col: 16}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 								if templ_7745c5c3_Err != nil {
@@ -355,7 +362,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected, Disabled: o.Disabled, Attributes: o.Attributes}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}

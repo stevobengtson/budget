@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -93,51 +94,6 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 	render(c, http.StatusOK, views.TransactionsPage(data, sidebarCollapsed(c)))
 }
 
-func (h *Handlers) TransactionsNew(c *gin.Context) {
-	uid := currentUserID(c)
-	accts, _ := h.store.ListAccounts(c.Request.Context(), uid, false)
-	cats, _ := h.store.ListCategories(c.Request.Context(), uid, false)
-	d := views.TxFormData{
-		TxType:     "expense",
-		Date:       time.Now().Format("2006-01-02"),
-		Accounts:   accts,
-		Categories: cats,
-	}
-	if len(accts) > 0 {
-		d.AccountID = accts[0].ID
-	}
-	// Default to the currently filtered account, when one is selected and still
-	// present in the (non-archived) options.
-	if filtered := txAccountFromRequest(c); filtered != nil {
-		for _, a := range accts {
-			if a.ID == *filtered {
-				d.AccountID = *filtered
-				break
-			}
-		}
-	}
-	d.CategoryID = defaultCategoryForNewTx(c, cats)
-	render(c, http.StatusOK, views.TransactionForm(d))
-}
-
-// defaultCategoryForNewTx preselects the category a new transaction starts
-// with: the one the transactions view is filtered to, since adding from a
-// category view means the user is already working within that category. cats
-// holds the selectable (non-archived) categories, so a filter pointing at an
-// archived category falls through to no selection.
-func defaultCategoryForNewTx(c *gin.Context, cats []store.Category) *int64 {
-	filtered := txFilterFromRequest(c, "category")
-	if filtered == nil {
-		return nil
-	}
-	for _, cat := range cats {
-		if cat.ID == *filtered {
-			return filtered
-		}
-	}
-	return nil
-}
-
 func (h *Handlers) TransactionsCreate(c *gin.Context) {
 	if err := h.upsertTransaction(c, 0); err != nil {
 		c.String(http.StatusBadRequest, err.Error())
@@ -148,15 +104,14 @@ func (h *Handlers) TransactionsCreate(c *gin.Context) {
 	h.renderTxRows(c)
 }
 
-func (h *Handlers) TransactionsEdit(c *gin.Context) {
-	ctx := c.Request.Context()
-	uid := currentUserID(c)
-	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	t, err := h.store.GetTransaction(ctx, uid, id)
-	if err != nil {
-		c.String(http.StatusNotFound, "tx not found")
-		return
-	}
+// txFormData maps a stored transaction onto the single (type, amount) shape both
+// editors use. Shared by the side sheet and the inline transfer editor so the
+// two can never disagree about which leg is which.
+//
+// Transfers are always presented from the source's perspective — account is
+// "from", transfer_to is "to", the amount is the outflow — so editing the
+// inflow (destination) leg is normalized to keep the amount an outflow.
+func (h *Handlers) txFormData(ctx context.Context, uid int64, t *store.Transaction) views.TxFormData {
 	accts, _ := h.store.ListAccounts(ctx, uid, true)
 	cats, _ := h.store.ListCategories(ctx, uid, true)
 	d := views.TxFormData{
@@ -168,10 +123,6 @@ func (h *Handlers) TransactionsEdit(c *gin.Context) {
 		Accounts:   accts,
 		Categories: cats,
 	}
-	// Map the stored legs onto the single (type, amount) the form uses. Transfers
-	// are always shown from the source's perspective — Account = "from",
-	// Transfer to = "to", amount = the outflow — so editing the inflow
-	// (destination) leg is normalized to keep the amount an outflow.
 	switch {
 	case t.TransferAccountID != nil:
 		d.TxType = "transfer"
@@ -205,7 +156,38 @@ func (h *Handlers) TransactionsEdit(c *gin.Context) {
 	if t.Notes != nil {
 		d.Notes = *t.Notes
 	}
-	render(c, http.StatusOK, views.TransactionForm(d))
+	return d
+}
+
+// TransactionsEditRow renders the in-place editor that replaces a row. Every
+// transaction type edits this way: a transfer needs it (one record spanning two
+// accounts), and one editing idiom beats two in the same list.
+func (h *Handlers) TransactionsEditRow(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	tx, err := h.store.GetTransaction(ctx, uid, id)
+	if err != nil {
+		c.String(http.StatusNotFound, "tx not found")
+		return
+	}
+	render(c, http.StatusOK, views.TransactionEditRow(h.txFormData(ctx, uid, tx)))
+}
+
+// TransactionsRow re-renders a single row. It is what Cancel in the inline
+// editor swaps back, so leaving an edit costs no page reload.
+func (h *Handlers) TransactionsRow(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	tx, err := h.store.GetTransaction(ctx, uid, id)
+	if err != nil {
+		c.String(http.StatusNotFound, "tx not found")
+		return
+	}
+	accts, _ := h.store.ListAccounts(ctx, uid, true)
+	cats, _ := h.store.ListCategories(ctx, uid, true)
+	render(c, http.StatusOK, views.TransactionRow(*tx, accts, cats, false))
 }
 
 func (h *Handlers) TransactionsUpdate(c *gin.Context) {
@@ -270,8 +252,20 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 	}
 	acctID, _ := strconv.ParseInt(c.PostForm("account_id"), 10, 64)
 
+	// Both category fields live in the DOM at once — the plain one and the
+	// transfer-only one, each shown by CSS for its own transaction type — and a
+	// display:none select still posts. They therefore use distinct names, and the
+	// transfer field wins when the form is a transfer, so a category left over
+	// from expense mode cannot leak onto a transfer leg.
 	var catPtr *int64
-	if v := c.PostForm("category_id"); v != "" {
+	catField := "category_id"
+	if c.PostForm("tx_type") == "transfer" {
+		// Authoritative, not a fallback: an empty transfer category must mean no
+		// category, otherwise a value left in the hidden expense field leaks onto
+		// the transfer leg.
+		catField = "transfer_category_id"
+	}
+	if v := c.PostForm(catField); v != "" {
 		if cid, err := strconv.ParseInt(v, 10, 64); err == nil {
 			catPtr = &cid
 		}
@@ -395,20 +389,6 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = views.TxRows(rows, accts, cats, acctPtr).Render(ctx, c.Writer)
 	_, _ = c.Writer.WriteString(`<div id="modal" class="modal-mount" hx-swap-oob="true"></div>`)
-}
-
-// txAccountFromRequest returns the account filter reflected by the current
-// transactions view (from the HX-Current-URL header), or nil when no account
-// filter is active. Used to default a new transaction's account to the
-// filtered one.
-func txAccountFromRequest(c *gin.Context) *int64 {
-	return txFilterFromRequest(c, "account")
-}
-
-// txFilterFromRequest reads one id-valued filter (account, category) from the
-// query string of the transactions view the request came from.
-func txFilterFromRequest(c *gin.Context, param string) *int64 {
-	return parseIDQuery(currentURLQuery(c).Get(param))
 }
 
 // currentURLQuery returns the query string of the page an HTMX request came

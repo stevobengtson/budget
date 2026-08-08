@@ -79,7 +79,13 @@ templ Layout(title string, active string, collapsed bool) {
 // framing belongs to the canvas, not the product — a real full-viewport app has
 // nothing to float above — so the shell fills the window.
 templ appShell(active string, collapsed bool) {
-	@sidebar.Layout() {
+	// The id MUST be given to Layout as well as Sidebar, not just Sidebar.
+	// Layout is what publishes the sidebar id into the context, and Trigger reads
+	// it from there to build its data-tui-sidebar-target. Setting the id on only
+	// Sidebar renames the wrapper but leaves Layout's generated random id in the
+	// context, so the trigger points at an element that no longer exists and the
+	// collapse button silently does nothing.
+	@sidebar.Layout(sidebar.LayoutProps{ID: "app-rail"}) {
 		@sidebar.Sidebar(sidebar.Props{
 			ID:          "app-rail",
 			Collapsible: sidebar.CollapsibleIcon,
@@ -105,7 +111,7 @@ templ appShell(active string, collapsed bool) {
 					@sidebar.Menu() {
 						@navItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-[18px]"}), active)
 						// Transactions is reached through the account list below —
-						// "All accounts" heads it — rather than as its own nav entry,
+						// "All Accounts" heads it — rather than as its own nav entry,
 						// so the sidebar names places to be, not a second route to the
 						// same screen. That list is hidden in the collapsed icon rail
 						// though, so the rail keeps its own way in.
@@ -170,7 +176,7 @@ templ navItem(slug string, label string, ic templ.Component, active string) {
 }
 
 // collapsedOnlyNavItem appears solely in the collapsed icon rail. Expanded, the
-// account list carries "All accounts" and this would be a duplicate; collapsed,
+// account list carries "All Accounts" and this would be a duplicate; collapsed,
 // that list is hidden and this is the only route to the transactions screen.
 templ collapsedOnlyNavItem(slug string, label string, ic templ.Component, active string) {
 	@sidebar.MenuItem(sidebar.MenuItemProps{

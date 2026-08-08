@@ -180,7 +180,7 @@ func TestBudgetTabAppearsInLayout(t *testing.T) {
 	resp, _ := client.Get(ts.URL + "/budget")
 	body := readAll(t, resp)
 	// The primary nav is Budget and Paydown. Transactions is reached through the
-	// account list ("All accounts" heads it), which loads as a separate htmx
+	// account list ("All Accounts" heads it), which loads as a separate htmx
 	// fragment, so it is not in this HTML — see
 	// TestAccountsOverviewHighlightsCurrentAccount. aria-current marks the active
 	// entry now that the templUI sidebar (and data-tui-sidebar-active) is gone.
@@ -284,7 +284,7 @@ func TestAccountsOverviewHighlightsCurrentAccount(t *testing.T) {
 	if body := get(ts.URL + "/budget"); strings.Contains(body, `aria-current="page"`) {
 		t.Error("no account should be highlighted on /budget")
 	}
-	// An account-scoped view highlights that account, not the All accounts head.
+	// An account-scoped view highlights that account, not the All Accounts head.
 	if got := currentRowLabel(t, onAccount); got != "Chequing" {
 		t.Errorf("highlighted row = %q, want Chequing", got)
 	}
@@ -292,10 +292,10 @@ func TestAccountsOverviewHighlightsCurrentAccount(t *testing.T) {
 	// is the active one — no individual account is.
 	catOnly := get(ts.URL + "/transactions?month=2026-07&category=3")
 	if got := strings.Count(catOnly, `aria-current="page"`); got != 1 {
-		t.Errorf("aria-current count = %d, want 1 (All accounts) on a category-only view", got)
+		t.Errorf("aria-current count = %d, want 1 (All Accounts) on a category-only view", got)
 	}
-	if got := currentRowLabel(t, catOnly); got != "All accounts" {
-		t.Errorf("highlighted row = %q, want All accounts", got)
+	if got := currentRowLabel(t, catOnly); got != "All Accounts" {
+		t.Errorf("highlighted row = %q, want All Accounts", got)
 	}
 	// Non-HTMX fetches (no header) must not error or guess.
 	if body := get(""); strings.Contains(body, `aria-current="page"`) {
@@ -595,9 +595,11 @@ func TestTransactionsUnfilteredListsMonth(t *testing.T) {
 	}
 }
 
-// TestTransactionsNewPreselectsCategory checks that adding a transaction from a
-// category-filtered view starts with that category selected.
-func TestTransactionsNewPreselectsCategory(t *testing.T) {
+// TestQuickAddPreselectsFilteredCategory checks that entering a transaction from
+// a category-filtered view starts with that category selected. The behaviour
+// used to live in the "new transaction" sheet; the always-open quick-add row
+// replaced it, and the preselect has to come with it.
+func TestQuickAddPreselectsFilteredCategory(t *testing.T) {
 	s := store.New(openTestDB(t))
 	ts, client, uid := serveAuthed(t, s)
 	ctx := context.Background()
@@ -609,23 +611,35 @@ func TestTransactionsNewPreselectsCategory(t *testing.T) {
 	groceries, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Groceries"})
 	dining, _ := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Dining"})
 
-	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/transactions/new", nil)
-	req.Header.Set("HX-Current-URL", ts.URL+"/transactions?category="+strconv.FormatInt(groceries, 10)+"&month=2026-07")
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
-	}
-	body := readAll(t, resp)
+	body := readAll(t, mustGetOK(t, client,
+		ts.URL+"/transactions?category="+strconv.FormatInt(groceries, 10)+"&month=2026-07"))
 
-	if !strings.Contains(body, selectboxSelected(groceries)) {
-		t.Errorf("form did not preselect the filtered category %d", groceries)
+	// Scope to the quick-add's own category picker: the filter bar above it also
+	// marks the filtered category selected, so an unscoped match would pass even
+	// if the quick-add ignored the filter entirely.
+	qa := selectboxScope(t, body, "qa-category")
+	if !strings.Contains(qa, selectboxSelected(groceries)) {
+		t.Errorf("quick-add did not preselect the filtered category %d", groceries)
 	}
-	if strings.Contains(body, selectboxSelected(dining)) {
-		t.Errorf("form preselected category %d, which is not the filtered one", dining)
+	if strings.Contains(qa, selectboxSelected(dining)) {
+		t.Errorf("quick-add preselected category %d, which is not the filtered one", dining)
 	}
+}
+
+// selectboxScope returns just the markup of one selectbox — from its trigger id
+// up to the next selectbox container — so an assertion can target a single
+// picker on a page that renders several over the same option list.
+func selectboxScope(t *testing.T, body, id string) string {
+	t.Helper()
+	i := strings.Index(body, `id="`+id+`"`)
+	if i < 0 {
+		t.Fatalf("selectbox %q not found", id)
+	}
+	rest := body[i:]
+	if j := strings.Index(rest[1:], "select-container"); j >= 0 {
+		return rest[:j+1]
+	}
+	return rest
 }
 
 func TestTransactionEditTypeLock(t *testing.T) {

@@ -653,7 +653,7 @@ func TestUpdateTransaction(t *testing.T) {
 	// Seed a cleared expense, then edit its amount, payee, and category (clear it).
 	payee := "Old Store"
 	txID, err := st.CreateTransaction(ctx, uid, store.Transaction{
-		Date: time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC),
+		Date:      time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC),
 		AccountID: acctID, CategoryID: &catID, Payee: &payee, OutflowCents: 2500, Cleared: true,
 	})
 	if err != nil {

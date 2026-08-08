@@ -367,3 +367,177 @@ func TestBudgetRowHidesInlineAssignOnMobile(t *testing.T) {
 		t.Error("row should offer the assign sheet as the mobile path")
 	}
 }
+
+// TestSidebarTriggerTargetsItsWrapper guards a failure that produces no error at
+// all: templUI's sidebar Trigger reads the sidebar id from context (published by
+// sidebar.Layout) to build data-tui-sidebar-target, while the wrapper's
+// data-tui-sidebar-id comes from sidebar.Sidebar. Set an explicit ID on only one
+// of them and they disagree — toggleSidebar finds no wrapper, and the collapse
+// button silently does nothing.
+func TestSidebarTriggerTargetsItsWrapper(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	if _, err := s.CreateAccount(context.Background(), uid,
+		store.Account{Name: "Checking", Type: "checking"}); err != nil {
+		t.Fatal(err)
+	}
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget"))
+
+	wrapper := regexp.MustCompile(`data-tui-sidebar-id="([^"]*)"`).FindStringSubmatch(body)
+	if wrapper == nil {
+		t.Fatal("no sidebar wrapper rendered")
+	}
+	targets := regexp.MustCompile(`data-tui-sidebar-target="([^"]*)"`).FindAllStringSubmatch(body, -1)
+	if len(targets) == 0 {
+		t.Fatal("no sidebar trigger rendered")
+	}
+	for _, m := range targets {
+		if m[1] != wrapper[1] {
+			t.Errorf("trigger targets %q but the wrapper is %q — collapse would do nothing",
+				m[1], wrapper[1])
+		}
+	}
+}
+
+// TestTransferCategoryDoesNotCollide covers the two category fields that now
+// coexist in a transaction form — the plain one and the transfer-only one. Both
+// are always in the DOM (CSS shows one per type) and a display:none select still
+// posts, so they carry distinct names and the transfer field is authoritative on
+// a transfer. Without that, a category left over from expense mode lands on the
+// transfer leg.
+func TestTransferCategoryDoesNotCollide(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	chk, err := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: store.TypeChecking})
+	if err != nil {
+		t.Fatal(err)
+	}
+	card, err := s.CreateAccount(ctx, uid, store.Account{Name: "Visa", Type: store.TypeCredit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gid, _ := s.CreateGroup(ctx, uid, "Living", 1)
+	cat, err := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Card Payment"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	post := func(day, amount string, plain, transferCat string) {
+		t.Helper()
+		if _, err := client.PostForm(ts.URL+"/transactions", url.Values{
+			"tx_type": {"transfer"}, "date": {day}, "amount": {amount},
+			"account_id": {itoa(chk)}, "transfer_to": {itoa(card)},
+			"category_id": {plain}, "transfer_category_id": {transferCat},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Tagged deliberately: the category is stored.
+	post("2026-07-04", "120.00", "", itoa(cat))
+	// Stale expense value, no transfer category chosen: must NOT be stored.
+	post("2026-07-05", "10.00", itoa(cat), "")
+
+	rows, err := s.ListTransactions(ctx, uid, store.TxFilter{Month: "2026-07"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tagged, leaked int
+	for _, r := range rows {
+		if r.CategoryID == nil {
+			continue
+		}
+		if r.Date.Day() == 4 {
+			tagged++
+		}
+		if r.Date.Day() == 5 {
+			leaked++
+		}
+	}
+	if tagged != 1 {
+		t.Errorf("tagged legs = %d, want 1 (the spending leg)", tagged)
+	}
+	if leaked != 0 {
+		t.Errorf("a stale expense category leaked onto %d transfer leg(s)", leaked)
+	}
+}
+
+// TestTransferEditsInline covers the 4b interaction: a transfer edits in place
+// with both accounts on show, because a side sheet would hide the list that
+// gives a two-account record its context. Ordinary transactions still open the
+// sheet, so the row menu has to choose the right editor per record.
+func TestTransferEditsInline(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	from, err := s.CreateAccount(ctx, uid, store.Account{Name: "Main Checking", Type: store.TypeChecking})
+	if err != nil {
+		t.Fatal(err)
+	}
+	to, err := s.CreateAccount(ctx, uid, store.Account{Name: "High-Yield Savings", Type: store.TypeSavings})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.PostForm(ts.URL+"/transactions", url.Values{
+		"tx_type": {"transfer"}, "date": {"2026-07-04"}, "amount": {"300.00"},
+		"account_id": {itoa(from)}, "transfer_to": {itoa(to)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := s.ListTransactions(ctx, uid, store.TxFilter{Month: "2026-07"})
+	var leg store.Transaction
+	for _, r := range rows {
+		if r.OutflowCents > 0 {
+			leg = r
+		}
+	}
+
+	// The row menu offers the inline editor for a transfer, not the sheet.
+	list := readAll(t, mustGetOK(t, client, ts.URL+"/transactions?month=2026-07"))
+	if !strings.Contains(list, "/edit-row") {
+		t.Error("transfer row should offer the inline editor")
+	}
+
+	// Opening it yields a form carrying the row's own id, so Cancel can swap the
+	// row back into the same place.
+	editor := readAll(t, mustGetOK(t, client, ts.URL+"/transactions/"+itoa(leg.ID)+"/edit-row"))
+	for _, m := range []string{
+		"Editing a transfer", `id="tx-` + itoa(leg.ID) + `"`,
+		`name="account_id"`, `name="transfer_to"`, "data-tx-swap",
+		"/transactions/" + itoa(leg.ID) + "/row", // Cancel
+	} {
+		if !strings.Contains(editor, m) {
+			t.Errorf("inline transfer editor missing %q", m)
+		}
+	}
+
+	// Cancel restores the plain row.
+	row := readAll(t, mustGetOK(t, client, ts.URL+"/transactions/"+itoa(leg.ID)+"/row"))
+	if !strings.Contains(row, `id="tx-`+itoa(leg.ID)+`"`) || strings.Contains(row, "Editing a transfer") {
+		t.Error("row endpoint should return the plain row")
+	}
+
+	// Ordinary transactions edit inline too — one idiom for the whole list.
+	acct2, _ := s.CreateAccount(ctx, uid, store.Account{Name: "Cash", Type: store.TypeChecking})
+	if _, err := client.PostForm(ts.URL+"/transactions", url.Values{
+		"tx_type": {"expense"}, "date": {"2026-07-06"}, "amount": {"5.00"},
+		"account_id": {itoa(acct2)}, "payee": {"Kiosk"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows2, _ := s.ListTransactions(ctx, uid, store.TxFilter{Month: "2026-07"})
+	for _, r := range rows2 {
+		if r.TransferAccountID != nil || r.Payee == nil {
+			continue
+		}
+		resp, err := client.Get(ts.URL + "/transactions/" + itoa(r.ID) + "/edit-row")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("edit-row on an ordinary transaction = %d, want 200", resp.StatusCode)
+		}
+	}
+}

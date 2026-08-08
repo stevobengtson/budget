@@ -9,6 +9,13 @@ type Opt struct {
 	Value    string
 	Label    string
 	Selected bool
+	// Disabled renders the option unselectable — used when editing locks out an
+	// invalid type conversion.
+	Disabled bool
+	// Attributes are spread onto the rendered item. Used to hang data-* on an
+	// option so CSS can react to which one is selected — selectbox.js keeps
+	// data-tui-selectbox-selected current, so `:has()` can read both together.
+	Attributes templ.Attributes
 }
 
 // SelectFieldProps configures a SelectField.
@@ -55,7 +62,7 @@ templ SelectField(p SelectFieldProps, opts []Opt) {
 		}
 		@selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch}) {
 			for _, o := range opts {
-				@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected}) {
+				@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected, Disabled: o.Disabled, Attributes: o.Attributes}) {
 					{ o.Label }
 				}
 			}
@@ -89,7 +96,7 @@ templ SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) {
 		}
 		@selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch}) {
 			for _, o := range lead {
-				@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected}) {
+				@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected, Disabled: o.Disabled, Attributes: o.Attributes}) {
 					{ o.Label }
 				}
 			}
@@ -99,7 +106,7 @@ templ SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) {
 						{ g.Label }
 					}
 					for _, o := range g.Opts {
-						@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected}) {
+						@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected, Disabled: o.Disabled, Attributes: o.Attributes}) {
 							{ o.Label }
 						}
 					}

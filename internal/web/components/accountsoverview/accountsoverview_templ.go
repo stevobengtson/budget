@@ -31,7 +31,7 @@ type ViewContext struct {
 	AccountID  *int64 // the account being viewed, highlighted in the list
 	CategoryID *int64 // the active category filter, preserved across account switches
 	// OnTransactions reports that the transactions page is what we are looking
-	// at. Needed to distinguish "viewing every account" — where the All accounts
+	// at. Needed to distinguish "viewing every account" — where the All Accounts
 	// row is the active one — from being on some other page entirely, where
 	// nothing in this list is active. Both cases have a nil AccountID.
 	OnTransactions bool

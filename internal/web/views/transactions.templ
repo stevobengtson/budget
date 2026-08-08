@@ -9,12 +9,9 @@ import (
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/monthselector"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
-	"github.com/sbengtson/budget/internal/web/components/ui/buttongroup"
 	"github.com/templui/templui/components/datepicker"
-	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/dropdown"
 	"github.com/templui/templui/components/icon"
-	"github.com/templui/templui/components/input"
 	"github.com/templui/templui/components/label"
 )
 
@@ -80,7 +77,7 @@ templ TransactionsBody(d TransactionsData) {
 // what makes a transfer render as its own account's leg (see TxRows).
 templ TxAccountFilter(d TransactionsData) {
 	<div class="flex max-w-full items-center gap-1 overflow-x-auto rounded-pill bg-muted p-1">
-		@txAccountChip(txAccountHref(d, nil), "All accounts", d.FilterAccount == nil)
+		@txAccountChip(txAccountHref(d, nil), "All Accounts", d.FilterAccount == nil)
 		for _, a := range d.Accounts {
 			@txAccountChip(txAccountHref(d, &a.ID), a.Name, d.FilterAccount != nil && *d.FilterAccount == a.ID)
 		}
@@ -181,7 +178,7 @@ templ TxQuickAdd(d TransactionsData) {
 						Placeholder:  "(none)",
 						Class:        "w-full",
 						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
-					}, categoryOptions(d.Categories, nil))
+					}, categoryOptions(d.Categories, d.FilterCategory))
 				}
 			</div>
 			// When the list is already scoped to one account, the Account field is
@@ -212,14 +209,30 @@ templ TxQuickAdd(d TransactionsData) {
 						ID:           "qa-transfer",
 						Name:         "transfer_to",
 						Placeholder:  "(none)",
-						Class:        "w-full",
+						Class:        "tx-to-select w-full",
 						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
 					}, transferOptions(d.Accounts, nil))
+				}
+			</div>
+			// Paying down a card or loan is spending, so it can be tagged to an
+			// envelope; moving cash between your own accounts cannot. The field
+			// therefore appears only when the destination is a debt account —
+			// read straight from the selected option's type in CSS.
+			<div class="tx-transfer-category w-full md:w-[210px]">
+				@quickField("qa-transfer-category", "Budget category", "w-full") {
+					@SelectField(SelectFieldProps{
+						ID:           "qa-transfer-category",
+						Name:         "transfer_category_id",
+						Placeholder:  "(none)",
+						Class:        "w-full",
+						TriggerClass: "h-9 rounded-pill border-primary bg-surface-sunk text-[15px]",
+					}, categoryOptions(d.Categories, nil))
 				}
 			</div>
 			<button
 				type="button"
 				id="qa-swap"
+				data-tx-swap
 				aria-label="Swap From and To"
 				title="Swap From and To"
 				class="tx-transfer-only h-9 w-9 shrink-0 items-center justify-center rounded-pill border border-border text-foreground hover:bg-foreground/[0.07]"
@@ -230,6 +243,11 @@ templ TxQuickAdd(d TransactionsData) {
 				Add
 			}
 		</div>
+		<p class="tx-transfer-category text-[13px] text-muted-foreground">
+			The destination is a card you owe on, so you can tag this payment with a
+			budget category. The money then shows as spent in that envelope without
+			the arriving side counting as income.
+		</p>
 	</form>
 }
 
@@ -455,6 +473,163 @@ templ txClearCell(t store.Transaction) {
 	</button>
 }
 
+// TransactionEditRow edits a transaction in place: the row is replaced by this
+// card. Every type edits the same way — a transfer needs it (one record spanning
+// two accounts, where a side sheet would hide the list that gives it context)
+// and consistency argues the rest should follow rather than having two editing
+// idioms in one list.
+//
+// It carries the row's own id so Cancel can put the row back, and it is a
+// [data-tx-form], so the shared CSS drives the type-dependent fields, the
+// From/To labelling and the debt-destination Budget category.
+templ TransactionEditRow(d TxFormData) {
+	<form
+		id={ fmt.Sprintf("tx-%d", d.ID) }
+		data-tx-form
+		hx-put={ fmt.Sprintf("/transactions/%d", d.ID) }
+		hx-target="#tx-rows"
+		hx-swap="innerHTML"
+		class="flex flex-col gap-s3 rounded-md bg-surface-quickadd p-s3 shadow-organic-sm"
+	>
+		<div class="flex items-baseline gap-s2">
+			<span class="font-heading text-[17px] font-semibold">
+				if d.TxType == "transfer" {
+					Editing a transfer
+				} else {
+					Editing a transaction
+				}
+			</span>
+			if d.TxType == "transfer" {
+				<span class="text-[13px] text-muted-foreground">1 record · 2 accounts</span>
+			}
+		</div>
+		<div class="flex flex-wrap items-end gap-s2">
+			@quickField("tx-edit-type", "Type", "w-full md:w-[140px]") {
+				// A transfer cannot become an expense, or vice versa — the stored
+				// shape differs (two linked legs vs one row). txTypeOptions disables
+				// the conversions rather than hiding them, so the constraint is
+				// visible instead of mysterious.
+				@SelectField(SelectFieldProps{
+					ID:           "tx-edit-type",
+					Name:         "tx_type",
+					Class:        "tx-type-select w-full",
+					TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+					NoSearch:     true,
+				}, txTypeOptions(d))
+			}
+			@quickField("tx-edit-date", "Date", "w-full md:w-[170px]") {
+				@datepicker.DatePicker(datepicker.Props{
+					ID:    "tx-edit-date",
+					Name:  "date",
+					Value: txDate(d.Date),
+					Class: "w-full",
+				})
+			}
+			@quickField("tx-edit-amount", "Amount", "w-full md:w-[124px]") {
+				<input
+					id="tx-edit-amount"
+					type="text"
+					name="amount"
+					value={ d.Amount }
+					inputmode="decimal"
+					autocomplete="off"
+					class="h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				/>
+			}
+			<div class="tx-plain-only w-full min-w-[150px] md:flex-1">
+				@quickField("tx-edit-payee", "Payee", "w-full") {
+					<input
+						id="tx-edit-payee"
+						type="text"
+						name="payee"
+						value={ d.Payee }
+						autocomplete="off"
+						class="h-9 w-full rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary"
+					/>
+				}
+			</div>
+			<div class="tx-plain-only w-full md:w-[170px]">
+				@quickField("tx-edit-category", "Category", "w-full") {
+					@SelectField(SelectFieldProps{
+						ID:           "tx-edit-category",
+						Name:         "category_id",
+						Placeholder:  "(none)",
+						Class:        "w-full",
+						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+					}, categoryOptions(d.Categories, d.CategoryID))
+				}
+			</div>
+			@quickField("tx-edit-from", "Account", "w-full md:w-[180px]") {
+				@SelectField(SelectFieldProps{
+					ID:           "tx-edit-from",
+					Name:         "account_id",
+					Class:        "w-full",
+					TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+				}, accountOptions(d.Accounts, d.AccountID))
+			}
+			<div class="tx-transfer-only w-full md:w-[180px]">
+				@quickField("tx-edit-to", "To", "w-full") {
+					@SelectField(SelectFieldProps{
+						ID:           "tx-edit-to",
+						Name:         "transfer_to",
+						Placeholder:  "(none)",
+						Class:        "tx-to-select w-full",
+						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+					}, transferOptions(d.Accounts, d.TransferAccountID))
+				}
+			</div>
+			<button
+				type="button"
+				data-tx-swap
+				aria-label="Swap From and To"
+				title="Swap From and To"
+				class="tx-transfer-only size-9 shrink-0 items-center justify-center rounded-pill border border-border text-foreground hover:bg-foreground/[0.07]"
+			>
+				@icon.ArrowLeftRight(icon.Props{Class: "size-[18px]"})
+			</button>
+			<div class="tx-transfer-category w-full md:w-[210px]">
+				@quickField("tx-edit-transfer-category", "Budget category", "w-full") {
+					@SelectField(SelectFieldProps{
+						ID:           "tx-edit-transfer-category",
+						Name:         "transfer_category_id",
+						Placeholder:  "(none)",
+						Class:        "w-full",
+						TriggerClass: "h-9 rounded-pill border-primary bg-surface-sunk text-[15px]",
+					}, categoryOptions(d.Categories, d.CategoryID))
+				}
+			</div>
+			@quickField("tx-edit-notes", "Notes", "w-full md:w-[200px]") {
+				<input
+					id="tx-edit-notes"
+					type="text"
+					name="notes"
+					value={ d.Notes }
+					autocomplete="off"
+					class="h-9 w-full rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary"
+				/>
+			}
+		</div>
+		<div class="flex items-center justify-end gap-s2">
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantGhost,
+				Size:    button.SizeSm,
+				Class:   "rounded-pill",
+				Attributes: templ.Attributes{
+					"hx-get":    fmt.Sprintf("/transactions/%d/row", d.ID),
+					"hx-target": fmt.Sprintf("#tx-%d", d.ID),
+					"hx-swap":   "outerHTML",
+				},
+			}) {
+				Cancel
+			}
+			@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Class: "rounded-pill"}) {
+				Save
+			}
+		</div>
+	</form>
+}
+
 // txRowMenu renders the per-row actions menu.
 templ txRowMenu(t store.Transaction) {
 	@dropdown.Dropdown() {
@@ -467,9 +642,9 @@ templ txRowMenu(t store.Transaction) {
 		@dropdown.Content(dropdown.ContentProps{Class: "w-[260px]"}) {
 			@dropdown.Item(dropdown.ItemProps{
 				Attributes: templ.Attributes{
-					"hx-get":    fmt.Sprintf("/transactions/%d/edit", t.ID),
-					"hx-target": "#modal",
-					"hx-swap":   "innerHTML",
+					"hx-get":    fmt.Sprintf("/transactions/%d/edit-row", t.ID),
+					"hx-target": fmt.Sprintf("#tx-%d", t.ID),
+					"hx-swap":   "outerHTML",
 				},
 			}) {
 				Edit transaction
@@ -535,88 +710,6 @@ func todayISO() string {
 	return time.Now().Format("2006-01-02")
 }
 
-templ TransactionForm(d TxFormData) {
-	@sheetPanel("") {
-		<form
-			id="tx-form-inner"
-			data-tx-form
-			if d.Editing {
-				hx-put={ fmt.Sprintf("/transactions/%d", d.ID) }
-			} else {
-				hx-post="/transactions"
-			}
-			hx-target="#tx-rows"
-			hx-swap="innerHTML"
-			class="grid gap-4"
-		>
-			@dialog.Header() {
-				@dialog.Title() {
-					if d.Editing {
-						Edit transaction
-					} else {
-						New transaction
-					}
-				}
-			}
-			<div class="grid gap-3">
-				@buttongroup.ButtonGroup(buttongroup.Props{
-					ID:      "tx-type",
-					Name:    "tx_type",
-					Value:   txTypeOrDefault(d.TxType),
-					Class:   "w-full",
-					Options: txTypeOptions(d),
-				})
-				@formRow("tx-date", "Date") {
-					@datepicker.DatePicker(datepicker.Props{
-						ID:          "tx-date",
-						Name:        "date",
-						Value:       txDate(d.Date),
-						Placeholder: "Select a date",
-					})
-				}
-				@formRow("tx-account", "Account") {
-					@SelectField(SelectFieldProps{ID: "tx-account", Name: "account_id", Required: true}, accountOptions(d.Accounts, d.AccountID))
-				}
-				<div class="tx-transfer-field">
-					@formRow("tx-transfer", "Transfer to") {
-						@SelectField(SelectFieldProps{ID: "tx-transfer", Name: "transfer_to", Placeholder: "(none)"}, transferOptions(d.Accounts, d.TransferAccountID))
-					}
-				</div>
-				<div class="grid gap-1.5">
-					@label.Label(label.Props{For: "tx-amount"}) {
-						<span class="tx-amount-outflow">Outflow</span>
-						<span class="tx-amount-inflow">Inflow</span>
-					}
-					<div class="[&>input]:w-full">
-						@input.Input(input.Props{ID: "tx-amount", Name: "amount", Value: d.Amount, Placeholder: "0.00", Class: "tabular-nums"})
-					</div>
-				</div>
-				@formRow("tx-category", "Category") {
-					@SelectField(SelectFieldProps{ID: "tx-category", Name: "category_id", Placeholder: "(none)"}, categoryOptions(d.Categories, d.CategoryID))
-				}
-				@formRow("tx-payee", "Payee") {
-					@input.Input(input.Props{ID: "tx-payee", Name: "payee", Value: d.Payee})
-				}
-				@formRow("tx-notes", "Notes") {
-					@input.Input(input.Props{ID: "tx-notes", Name: "notes", Value: d.Notes})
-				}
-			</div>
-			@dialog.Footer() {
-				@button.Button(button.Props{
-					Variant:    button.VariantOutline,
-					Type:       "button",
-					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
-				}) {
-					cancel
-				}
-				@button.Button(button.Props{Type: "submit"}) {
-					save
-				}
-			}
-		</form>
-	}
-}
-
 templ formRow(id, text string) {
 	<div class="grid gap-1.5">
 		@label.Label(label.Props{For: id}) {
@@ -667,13 +760,18 @@ func categoryOptions(cats []store.Category, selected *int64) []Opt {
 	return out
 }
 
+// transferOptions lists the accounts a transfer can arrive in, each tagged with
+// its account type. The type drives the Budget category field: money moving to a
+// card or loan is paying down a debt, which belongs in an envelope, whereas
+// moving cash between your own accounts does not.
 func transferOptions(accts []store.AccountWithBalance, selected *int64) []Opt {
 	out := make([]Opt, 0, len(accts))
 	for _, a := range accts {
 		out = append(out, Opt{
-			Value:    strconv.FormatInt(a.ID, 10),
-			Label:    a.Name,
-			Selected: selected != nil && *selected == a.ID,
+			Value:      strconv.FormatInt(a.ID, 10),
+			Label:      a.Name,
+			Selected:   selected != nil && *selected == a.ID,
+			Attributes: templ.Attributes{"data-acct-type": string(a.Type)},
 		})
 	}
 	return out
@@ -747,13 +845,14 @@ func txTypeOrDefault(t string) string {
 // deletes and recreates instead), so the invalid types are disabled: editing a
 // transfer locks out Expense/Income; editing a regular transaction locks out
 // Transfer. Expense↔Income stays allowed either way.
-func txTypeOptions(d TxFormData) []buttongroup.Option {
+func txTypeOptions(d TxFormData) []Opt {
 	lockPlain := d.Editing && d.TxType == "transfer"
 	lockTransfer := d.Editing && d.TxType != "transfer"
-	return []buttongroup.Option{
-		{Value: "expense", Label: "Expense", Disabled: lockPlain},
-		{Value: "income", Label: "Income", Disabled: lockPlain},
-		{Value: "transfer", Label: "Transfer", Disabled: lockTransfer},
+	sel := txTypeOrDefault(d.TxType)
+	return []Opt{
+		{Value: "expense", Label: "Expense", Selected: sel == "expense", Disabled: lockPlain},
+		{Value: "income", Label: "Income", Selected: sel == "income", Disabled: lockPlain},
+		{Value: "transfer", Label: "Transfer", Selected: sel == "transfer", Disabled: lockTransfer},
 	}
 }
 

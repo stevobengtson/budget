@@ -252,6 +252,18 @@
   [data-tx-form]:has(input[name="tx_type"][value="transfer"]:checked) .tx-plain-only,
   [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="transfer"][data-tui-selectbox-selected="true"]) .tx-plain-only { display: none; }
 
+  /* Budget category on a transfer: shown only when the form is a transfer AND
+     the destination is a debt account. Two chained :has() — one per condition —
+     because a category left selected in expense mode must not drag the field
+     into view after switching type. The destination's type rides on the option
+     itself (data-acct-type, see transferOptions), and selectbox.js keeps
+     data-tui-selectbox-selected current, so the pair is readable in CSS. */
+  .tx-transfer-category { display: none; }
+  [data-tx-form]:has(input[name="tx_type"][value="transfer"]:checked):has(.tx-to-select [data-tui-selectbox-selected="true"][data-acct-type="credit"]) .tx-transfer-category,
+  [data-tx-form]:has(input[name="tx_type"][value="transfer"]:checked):has(.tx-to-select [data-tui-selectbox-selected="true"][data-acct-type="loan"]) .tx-transfer-category,
+  [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="transfer"][data-tui-selectbox-selected="true"]):has(.tx-to-select [data-tui-selectbox-selected="true"][data-acct-type="credit"]) .tx-transfer-category,
+  [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="transfer"][data-tui-selectbox-selected="true"]):has(.tx-to-select [data-tui-selectbox-selected="true"][data-acct-type="loan"]) .tx-transfer-category { display: grid; }
+
   .tx-label-from { display: none; }
   [data-tx-form]:has(input[name="tx_type"][value="transfer"]:checked) .tx-label-account,
   [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="transfer"][data-tui-selectbox-selected="true"]) .tx-label-account { display: none; }
