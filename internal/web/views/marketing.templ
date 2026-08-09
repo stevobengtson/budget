@@ -21,8 +21,8 @@ templ marketingLayout(title string) {
 					}
 				})();
 			</script>
-			<link rel="stylesheet" href="/static/app.css"/>
-			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
+			<link rel="stylesheet" href={ Asset("/static/app.css") }/>
+			<link rel="icon" type="image/svg+xml" href={ Asset("/static/favicon.svg") }/>
 		</head>
 		<body class="min-h-screen bg-background text-foreground antialiased">
 			@marketingHeader()
@@ -272,7 +272,7 @@ templ browserFrame(src, alt string) {
 			<span class="size-3 rounded-full bg-warm-400"></span>
 			<span class="size-3 rounded-full bg-money-positive/60"></span>
 		</div>
-		<img src={ src } alt={ alt } loading="lazy" class="block w-full"/>
+		<img src={ Asset(src) } alt={ alt } loading="lazy" class="block w-full"/>
 	</div>
 }
 

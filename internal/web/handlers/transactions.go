@@ -55,6 +55,9 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Collapse each transfer's two stored legs to the one that will be rendered
+	// BEFORE paginating, so the pager counts rows the user can actually see.
+	rows = views.VisibleTxRows(rows, acctPtr)
 	total := len(rows)
 	start := (page - 1) * txPageSize
 	end := start + txPageSize

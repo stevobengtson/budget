@@ -32,8 +32,8 @@ templ authLayout(title string) {
 					}
 				})();
 			</script>
-			<link rel="stylesheet" href="/static/app.css"/>
-			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
+			<link rel="stylesheet" href={ Asset("/static/app.css") }/>
+			<link rel="icon" type="image/svg+xml" href={ Asset("/static/favicon.svg") }/>
 			<script>
 				function togglePw(btn) {
 					var i = btn.parentNode.querySelector("input");

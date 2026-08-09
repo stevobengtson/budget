@@ -3,7 +3,9 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -22,6 +24,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/apiv1"
 	"github.com/sbengtson/budget/internal/web/handlers"
+	"github.com/sbengtson/budget/internal/web/views"
 )
 
 //go:embed static
@@ -59,7 +62,18 @@ func NewServer(s *store.Store, cfg config.Config) *Server {
 	srv := &Server{store: s, engine: r, auth: authSvc, billing: billingSvc}
 
 	staticSub, _ := fs.Sub(staticFS, "static")
-	r.StaticFS("/static", http.FS(staticSub))
+	views.SetAssetHashes(assetHashes(staticSub))
+	// Cache hard, but only for a request that names a version. A versioned URL
+	// can never go stale — its content hash changes with the bytes — while a
+	// bare /static/x request might be anything, so it revalidates.
+	r.GET("/static/*filepath", func(c *gin.Context) {
+		if c.Query("v") != "" {
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			c.Header("Cache-Control", "no-cache")
+		}
+		http.FileServer(http.FS(staticSub)).ServeHTTP(c.Writer, requestWithPath(c.Request, c.Param("filepath")))
+	})
 
 	// templUI component scripts (input/checkbox/dialog/label/popover/selectbox)
 	// are referenced by each component's Script() as /templui/js/<name>.min.js.
@@ -71,6 +85,44 @@ func NewServer(s *store.Store, cfg config.Config) *Server {
 
 	srv.routes(cfg)
 	return srv
+}
+
+// requestWithPath rewrites a request's URL path, so the /static/*filepath route
+// can hand the wildcard remainder to http.FileServer, which serves relative to
+// its own FS root.
+func requestWithPath(r *http.Request, p string) *http.Request {
+	r2 := r.Clone(r.Context())
+	r2.URL.Path = p
+	return r2
+}
+
+// assetHashes walks the embedded static files once and returns a map of request
+// path to a short content hash, e.g. "/static/app.css" -> "1f3c9a2b". Views
+// append it as ?v= so a changed file busts the browser cache and an unchanged
+// one keeps it (see views.Asset).
+//
+// Hashing at startup rather than at build time keeps it honest with whatever is
+// actually embedded — there is no manifest to regenerate and forget.
+func assetHashes(dir fs.FS) map[string]string {
+	out := map[string]string{}
+	err := fs.WalkDir(dir, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := fs.ReadFile(dir, p)
+		if err != nil {
+			// A file we cannot read simply goes unversioned; it is still served.
+			slog.Warn("asset hash: read failed", "path", p, "err", err)
+			return nil
+		}
+		sum := sha256.Sum256(b)
+		out["/static/"+p] = hex.EncodeToString(sum[:])[:8]
+		return nil
+	})
+	if err != nil {
+		slog.Warn("asset hash: walk failed", "err", err)
+	}
+	return out
 }
 
 // serveTemplUIScript serves a templUI component's embedded JavaScript by file
@@ -205,6 +257,7 @@ func (s *Server) routes(cfg config.Config) {
 	gated.POST("/budget/assign/:catID/copy-prev", hs.BudgetAssignCopyPrev)
 	gated.POST("/budget/goal/:catID", hs.BudgetGoal)
 	gated.GET("/budget/goal/:catID/edit", hs.BudgetGoalEdit)
+	gated.POST("/budget/goal/:catID/preview", hs.BudgetGoalPreview)
 	gated.GET("/budget/group/new", hs.BudgetGroupNew)
 	gated.POST("/budget/group", hs.BudgetGroupCreate)
 	gated.POST("/budget/groups/reorder", hs.BudgetGroupsReorder)

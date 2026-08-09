@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"html"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -651,4 +652,351 @@ func TestRailSeparatesOverspendFromCardBalances(t *testing.T) {
 	if a, c := state(); !a || !c {
 		t.Errorf("overspent + card: attention=%v cards=%v, want both true", a, c)
 	}
+}
+
+// TestPagerCountsVisibleTransferRows guards the interaction between one-row
+// transfers and pagination. A transfer is stored as two legs but rendered as
+// one, so the legs must be collapsed BEFORE the page is sliced — otherwise the
+// pager counts rows nobody can see and a page of 50 stored rows renders however
+// many of them happen to survive the filter.
+func TestPagerCountsVisibleTransferRows(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	a, err := s.CreateAccount(ctx, uid, store.Account{Name: "A", Type: store.TypeChecking})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.CreateAccount(ctx, uid, store.Account{Name: "B", Type: store.TypeSavings})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 30 transfers = 60 stored legs, which straddles the 50-row page size while
+	// the 30 visible rows fit comfortably on one page.
+	const n = 30
+	for i := 0; i < n; i++ {
+		if _, err := client.PostForm(ts.URL+"/transactions", url.Values{
+			"tx_type": {"transfer"}, "date": {"2026-07-04"}, "amount": {"10.00"},
+			"account_id": {itoa(a)}, "transfer_to": {itoa(b)},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored, err := s.ListTransactions(ctx, uid, store.TxFilter{Month: "2026-07"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored) != 2*n {
+		t.Fatalf("stored legs = %d, want %d — transfers should still be two rows", len(stored), 2*n)
+	}
+
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/transactions?month=2026-07"))
+	// Count row ids specifically — `id="tx-` alone also matches tx-quickadd and
+	// tx-rows.
+	if got := len(regexp.MustCompile(`id="tx-\d+"`).FindAllString(body, -1)); got != n {
+		t.Errorf("page renders %d rows, want %d (one per transfer)", got, n)
+	}
+	if strings.Contains(body, "page 1 of") {
+		t.Error("pager shown for 30 visible rows; the page holds 50")
+	}
+}
+
+// TestStillInEnvelopesCountsRollover is the rail's counterpart to the progress
+// bar's envelope arithmetic. Available is carryover + assigned − spent, so
+// "Still in envelopes" is the sum of Available — computing assigned − spent
+// instead silently omits every dollar rolled over from earlier months.
+func TestStillInEnvelopesCountsRollover(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	acct, err := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gid, _ := s.CreateGroup(ctx, uid, "Transportation", 1)
+	cat, err := s.CreateCategory(ctx, uid, store.Category{
+		GroupID: gid, Name: "Parking", RolloverMode: store.RolloverCarry,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAssigned(ctx, uid, "2026-06", cat, 6000); err != nil { // carries forward
+		t.Fatal(err)
+	}
+	if err := s.SetAssigned(ctx, uid, "2026-07", cat, 500); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := time.Parse("2006-01-02", "2026-07-03")
+	payee := "Meter"
+	if _, err := s.CreateTransaction(ctx, uid, store.Transaction{
+		Date: d, AccountID: acct, CategoryID: &cat, Payee: &payee, OutflowCents: 100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget?month=2026-07"))
+	i := strings.Index(body, "Still in envelopes")
+	if i < 0 {
+		t.Fatal("rail is missing the Still in envelopes row")
+	}
+	row := body[i:min(i+300, len(body))]
+	if !strings.Contains(row, "$64.00") {
+		t.Errorf("Still in envelopes should be $64.00 (carryover included); row was %q", row)
+	}
+	if strings.Contains(row, "$4.00") {
+		t.Error("Still in envelopes is computing assigned − spent, dropping the carryover")
+	}
+}
+
+// TestGoalColumnShowsTargetAndMonthlyNeed restores visibility the redesign had
+// dropped: the old table had a Goal column, and after the rewrite a goal could
+// be set from the row menu but never seen on the row. The column is read-only —
+// editing stays in the menu's "Set a goal" panel.
+func TestGoalColumnShowsTargetAndMonthlyNeed(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking}); err != nil {
+		t.Fatal(err)
+	}
+	gid, _ := s.CreateGroup(ctx, uid, "Savings Goals", 1)
+	withGoal, err := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Vacation"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Rainy Day"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cats, _ := s.ListCategories(ctx, uid, false)
+	for _, c := range cats {
+		if c.ID != withGoal {
+			continue
+		}
+		goal := int64(300000)
+		due := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+		c.GoalCents, c.GoalDueDate = &goal, &due
+		if err := s.UpdateCategory(ctx, uid, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget?month=2026-07"))
+
+	// The column exists, between Category and Assigned.
+	heads := body[strings.Index(body, ">Category<"):]
+	gi, ai := strings.Index(heads, ">Goal<"), strings.Index(heads, ">Assigned<")
+	if gi < 0 || ai < 0 || gi > ai {
+		t.Errorf("Goal head should sit between Category and Assigned (goal=%d assigned=%d)", gi, ai)
+	}
+
+	goalRow := rowMarkup(t, body, withGoal)
+	for _, want := range []string{"$3,000.00", "by Dec 2026", "/mo"} {
+		if !strings.Contains(goalRow, want) {
+			t.Errorf("goal row missing %q", want)
+		}
+	}
+	// A category without a goal shows an empty cell, not a stray amount.
+	if got := rowMarkup(t, body, plain); strings.Contains(got, "/mo") {
+		t.Error("a category with no goal should show nothing in the Goal column")
+	}
+}
+
+// rowMarkup returns the markup of one budget row, from its data-category-id.
+func rowMarkup(t *testing.T, body string, catID int64) string {
+	t.Helper()
+	i := strings.Index(body, `data-category-id="`+itoa(catID)+`"`)
+	if i < 0 {
+		t.Fatalf("row for category %d not rendered", catID)
+	}
+	return body[i:min(i+2500, len(body))]
+}
+
+// TestGoalDueDateIsOptionalAndUsesThePicker covers the goal editor's date field:
+// it uses templUI's calendar rather than the browser's native date input, starts
+// empty, round-trips a chosen date, and can be cleared back to none — the
+// picker has no clear of its own, so the editor supplies one.
+func TestGoalDueDateIsOptionalAndUsesThePicker(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking}); err != nil {
+		t.Fatal(err)
+	}
+	gid, _ := s.CreateGroup(ctx, uid, "Savings Goals", 1)
+	cat, err := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Vacation"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	editor := func() string {
+		return readAll(t, mustGetOK(t, client,
+			ts.URL+"/budget/goal/"+itoa(cat)+"/edit?month=2026-07"))
+	}
+	// Match the whole tag: templ orders attributes alphabetically, so anchoring
+	// on one attribute and scanning forward can miss the others.
+	hiddenTag := regexp.MustCompile(`<input[^>]*data-tui-datepicker-hidden-input[^>]*>`)
+	dueValue := func(body string) string {
+		m := regexp.MustCompile(`name="goal_due" value="([^"]*)"`).FindStringSubmatch(hiddenTag.FindString(body))
+		if m == nil {
+			t.Fatal("goal_due hidden input not found")
+		}
+		return m[1]
+	}
+
+	first := editor()
+	if strings.Contains(first, `type="date"`) {
+		t.Error("goal editor should use the templUI calendar, not a native date input")
+	}
+	if !strings.Contains(first, "data-tui-datepicker") {
+		t.Error("goal editor is missing the templUI datepicker")
+	}
+	if got := dueValue(first); got != "" {
+		t.Errorf("a new goal should start with no date, got %q", got)
+	}
+
+	// A date is stored and comes back when the editor reopens.
+	if _, err := client.PostForm(ts.URL+"/budget/goal/"+itoa(cat)+"?month=2026-07",
+		url.Values{"goal_cents": {"3000.00"}, "goal_due": {"2026-12-01"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := dueValue(editor()); got != "2026-12-01" {
+		t.Errorf("reopened editor shows due %q, want 2026-12-01", got)
+	}
+
+	// Clearing the date keeps the goal — this is what the clear button posts.
+	if _, err := client.PostForm(ts.URL+"/budget/goal/"+itoa(cat)+"?month=2026-07",
+		url.Values{"goal_cents": {"3000.00"}, "goal_due": {""}}); err != nil {
+		t.Fatal(err)
+	}
+	cats, _ := s.ListCategories(ctx, uid, false)
+	for _, c := range cats {
+		if c.ID != cat {
+			continue
+		}
+		if c.GoalDueDate != nil {
+			t.Errorf("due date should be cleared, got %v", c.GoalDueDate)
+		}
+		if c.GoalCents == nil || *c.GoalCents != 300000 {
+			t.Error("clearing the date should not clear the goal amount")
+		}
+	}
+}
+
+// TestGoalNeedPreviewsBeforeSaving covers the goal editor's "to arrive on time"
+// figure. It used to render only once a goal had been saved, so setting a new
+// one gave no feedback until after the fact. It is now always present and
+// refreshed from the server as the target and date change — computed by the same
+// store.MonthlyTarget the saved row uses, so preview and result agree.
+func TestGoalNeedPreviewsBeforeSaving(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking}); err != nil {
+		t.Fatal(err)
+	}
+	gid, _ := s.CreateGroup(ctx, uid, "Entertainment", 1)
+	cat, err := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Streaming"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The block is there before anything is saved, showing a dash rather than a
+	// misleading $0.00/mo — and "/mo" is not doubled (format.GoalFor supplies it).
+	editor := readAll(t, mustGetOK(t, client,
+		ts.URL+"/budget/goal/"+itoa(cat)+"/edit?month=2026-08"))
+	if !strings.Contains(editor, "To arrive on time") {
+		t.Error("editor should always show the to-arrive-on-time block")
+	}
+	if strings.Contains(editor, "/mo/mo") {
+		t.Error(`"/mo" is doubled — format.GoalFor already appends it`)
+	}
+
+	amount := regexp.MustCompile(`\$[\d,.]+/mo|—`)
+	preview := func(goal, due string) string {
+		t.Helper()
+		resp, err := client.PostForm(ts.URL+"/budget/goal/"+itoa(cat)+"/preview?month=2026-08",
+			url.Values{"goal_cents": {goal}, "goal_due": {due}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return amount.FindString(readAll(t, resp))
+	}
+
+	got := preview("149.99", "2027-08-01")
+	if got == "" || got == "—" {
+		t.Fatalf("preview with a goal and a date should compute a figure, got %q", got)
+	}
+	// No deadline means nothing to pace against; no amount means no goal.
+	if p := preview("149.99", ""); p != "—" {
+		t.Errorf("preview without a date = %q, want a dash", p)
+	}
+	if p := preview("", "2027-08-01"); p != "—" {
+		t.Errorf("preview without an amount = %q, want a dash", p)
+	}
+
+	// Saving the previewed goal produces the same figure on the row.
+	if _, err := client.PostForm(ts.URL+"/budget/goal/"+itoa(cat)+"?month=2026-08",
+		url.Values{"goal_cents": {"149.99"}, "goal_due": {"2027-08-01"}}); err != nil {
+		t.Fatal(err)
+	}
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget?month=2026-08"))
+	if saved := amount.FindString(rowMarkup(t, body, cat)); saved != got {
+		t.Errorf("saved row shows %q but the preview said %q — they must agree", saved, got)
+	}
+}
+
+// TestGoalEditorPreviewTargetsItself guards an htmx inheritance trap. hx-target
+// is inherited from ancestors, and the goal editor's form targets the whole
+// panel — so the live preview, sitting inside that form, must set hx-target
+// itself or its response replaces the editor with the bare figure.
+func TestGoalEditorPreviewTargetsItself(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	cat := seedGoalCategory(t, s, uid)
+
+	editor := readAll(t, mustGetOK(t, client,
+		ts.URL+"/budget/goal/"+itoa(cat)+"/edit?month=2026-08"))
+	tag := regexp.MustCompile(`<div[^>]*id="goal-need-\d+"[^>]*>`).FindString(editor)
+	if tag == "" {
+		t.Fatal("preview element not rendered")
+	}
+	if !strings.Contains(tag, `hx-target="this"`) {
+		t.Errorf("preview must set hx-target explicitly or it inherits the form's; got %s", tag)
+	}
+}
+
+// TestSetAGoalIsIdempotent covers re-opening the editor. The menu inserts with
+// afterend, so without a guard choosing "Set a goal" twice stacks two editors
+// under the row.
+func TestSetAGoalIsIdempotent(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	cat := seedGoalCategory(t, s, uid)
+
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget?month=2026-08"))
+	item := regexp.MustCompile(`<button[^>]*goal/` + itoa(cat) + `/edit[^>]*>`).FindString(body)
+	if item == "" {
+		t.Fatal("Set a goal menu item not rendered")
+	}
+	// Attribute values are HTML-escaped, so compare the decoded form.
+	decoded := html.UnescapeString(item)
+	if !strings.Contains(decoded, "getElementById('goal-edit-"+itoa(cat)+"')?.remove()") {
+		t.Errorf("Set a goal should drop any open editor before inserting; got %s", decoded)
+	}
+}
+
+func seedGoalCategory(t *testing.T, s *store.Store, uid int64) int64 {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking}); err != nil {
+		t.Fatal(err)
+	}
+	gid, _ := s.CreateGroup(ctx, uid, "Entertainment", 1)
+	cat, err := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Streaming"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cat
 }

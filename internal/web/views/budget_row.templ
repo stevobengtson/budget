@@ -2,11 +2,13 @@ package views
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/sbengtson/budget/internal/core/format"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/templui/templui/components/datepicker"
 	"github.com/templui/templui/components/dropdown"
 	"github.com/templui/templui/components/icon"
 )
@@ -61,6 +63,7 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 				/>
 			</form>
 		</div>
+		@GoalCell(r)
 		<form
 			hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
 			hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
@@ -84,7 +87,7 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 			/>
 		</form>
 		@budgetProgress(r)
-		<div class="col-start-2 row-start-1 row-span-2 flex items-center justify-end gap-1 md:col-start-4 md:row-span-1">
+		<div class="col-start-2 row-start-1 row-span-2 flex items-center justify-end gap-1 md:col-start-5 md:row-span-1">
 			// Below 768px Available doubles as the assign control: a 36px number
 			// field cannot survive the reflow, so tapping the figure opens the
 			// assign sheet instead of editing in place.
@@ -117,7 +120,7 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 templ budgetProgress(r store.CategoryBudget) {
 	{{ pct, over := progressPct(r.SpentCents, r.AvailableCents) }}
 	{{ envelope := r.SpentCents + r.AvailableCents }}
-	<div class="col-start-1 row-start-2 flex flex-col gap-1 md:col-start-3 md:row-start-1">
+	<div class="col-start-1 row-start-2 flex flex-col gap-1 md:col-start-4 md:row-start-1">
 		<div class="h-[7px] w-full overflow-hidden rounded-pill bg-progress-track md:h-2">
 			<div
 				class={ "h-full rounded-pill", templ.KV("bg-progress-fill-over", over), templ.KV("bg-progress-fill", !over) }
@@ -225,6 +228,10 @@ templ rowMenu(month string, r store.CategoryBudget) {
 					"hx-get":    fmt.Sprintf("/budget/goal/%d/edit?month=%s", r.CategoryID, month),
 					"hx-target": fmt.Sprintf("#cat-%d", r.CategoryID),
 					"hx-swap":   "afterend",
+					// afterend inserts, so choosing "Set a goal" again would stack a
+					// second editor under the row. Drop any open one first, making the
+					// action idempotent.
+					"hx-on:click": fmt.Sprintf("document.getElementById('goal-edit-%d')?.remove()", r.CategoryID),
 				},
 			}) {
 				Set a goal
@@ -332,16 +339,53 @@ templ BudgetGoalEditor(month string, r store.CategoryBudget) {
 					<label class="text-[12px] font-semibold text-muted-foreground">Target amount</label>
 					<input type="text" name="goal_cents" value={ goalCentsValue(r) } inputmode="decimal" placeholder="(optional)" autocomplete="off" class="h-9 w-[160px] rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
 				</div>
-				<div class="grid gap-1">
+				<div class="grid gap-1" data-goal-due>
 					<label class="text-[12px] font-semibold text-muted-foreground">Needed by</label>
-					<input type="date" name="goal_due" value={ goalDueValue(r) } class="h-9 w-[200px] rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
-				</div>
-				if g, ok := format.GoalFor(r.GoalCents, r.GoalDueDate, r.MonthlyTarget); ok && g.Need != "" {
-					<div class="grid gap-1">
-						<span class="text-[12px] font-semibold text-muted-foreground">To arrive on time</span>
-						<span class="font-heading text-[22px] font-semibold tabular-nums text-surface-attention-fg">{ g.Need }/mo</span>
+					<div class="flex items-center gap-s2">
+						@datepicker.DatePicker(datepicker.Props{
+							Name:        "goal_due",
+							Value:       goalDueTime(r),
+							Placeholder: "No date",
+							Class:       "w-[200px]",
+						})
+						// A due date is optional, and templUI's datepicker has no clear
+						// of its own — once picked there would be no way back. Emptying
+						// the hidden input and firing `input` is what the component
+						// itself listens for, so the display falls back to the
+						// placeholder.
+						<button
+							type="button"
+							title="Clear the date"
+							class="shrink-0 rounded-pill px-2 py-1 text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+							onclick="const i=this.closest('[data-goal-due]').querySelector('[data-tui-datepicker-hidden-input]'); if(i){i.value='';i.dispatchEvent(new Event('input',{bubbles:true}));}"
+						>
+							clear
+						</button>
 					</div>
-				}
+				</div>
+				// hx-target on the preview MUST be explicit: htmx inherits hx-target
+				// from ancestors, and the enclosing form targets the whole editor
+				// panel, so without it the preview swap replaces the editor itself
+				// with the figure.
+				//
+				// Always present, and refreshed from the server as the target or date
+				// changes — it used to appear only once a goal had been saved, so
+				// setting a new one gave no feedback until after the fact. The figure
+				// is computed by the same store.MonthlyTarget the saved row uses, so
+				// the preview and the result cannot disagree.
+				<div class="grid gap-1">
+					<span class="text-[12px] font-semibold text-muted-foreground">To arrive on time</span>
+					<div
+						id={ fmt.Sprintf("goal-need-%d", r.CategoryID) }
+						hx-post={ fmt.Sprintf("/budget/goal/%d/preview?month=%s", r.CategoryID, month) }
+						hx-trigger={ fmt.Sprintf("change from:#goal-edit-%d, keyup changed delay:400ms from:#goal-edit-%d", r.CategoryID, r.CategoryID) }
+						hx-include={ fmt.Sprintf("#goal-edit-%d", r.CategoryID) }
+						hx-target="this"
+						hx-swap="innerHTML"
+					>
+						@GoalNeed(r.MonthlyTarget)
+					</div>
+				</div>
 				<div class="ml-auto flex items-center gap-s2">
 					@button.Button(button.Props{
 						Type:    "button",
@@ -376,25 +420,60 @@ func goalCentsValue(r store.CategoryBudget) string {
 	return ""
 }
 
-func goalDueValue(r store.CategoryBudget) string {
-	if r.GoalDueDate != nil {
-		return r.GoalDueDate.Format("2006-01-02")
+// GoalNeed is the "to arrive on time" figure, on its own so the goal editor can
+// swap just this fragment while the target and date are being edited. A zero
+// target means the goal is already met, has no date, or is not set yet — all of
+// which read better as a dash than as $0.00/mo.
+templ GoalNeed(monthlyTarget int64) {
+	if monthlyTarget > 0 {
+		<span class="font-heading text-[22px] font-semibold tabular-nums text-surface-attention-fg">
+			{ money.Format(monthlyTarget) }/mo
+		</span>
+	} else {
+		<span class="font-heading text-[22px] font-semibold text-muted-foreground">—</span>
 	}
-	return ""
 }
 
-// GoalCell renders a category's goal as a short tag. Kept for the API views and
-// any caller that wants the goal wording without the editor.
-templ GoalCell(r store.CategoryBudget) {
-	if g, ok := format.GoalFor(r.GoalCents, r.GoalDueDate, r.MonthlyTarget); ok {
-		<span class="inline-flex flex-wrap items-center gap-1 text-[12px] text-muted-foreground">
-			<span class="rounded-pill bg-tag-sage-bg px-2 py-0.5 font-semibold text-tag-sage-fg">goal { g.Amount }</span>
-			if g.Due != "" {
-				<span>by { g.Due }</span>
-			}
-			if g.Need != "" {
-				<span class="rounded-pill bg-tag-neutral-bg px-2 py-0.5 font-semibold">need { g.Need }</span>
-			}
-		</span>
+// goalDueTime is the goal's due date for the picker. The zero time means "no
+// date", which the picker renders as its placeholder and posts as empty — the
+// handler then stores a nil due date.
+func goalDueTime(r store.CategoryBudget) time.Time {
+	if r.GoalDueDate != nil {
+		return *r.GoalDueDate
 	}
+	return time.Time{}
+}
+
+// GoalCell shows a category's goal at a glance: the target, and what has to go
+// in each month to reach it in time. Read-only — the goal is edited from the row
+// menu's "Set a goal", which opens the editor panel beneath the row — so this
+// column stays a statement of where the category stands rather than another
+// control competing with the Assigned field beside it.
+//
+// Hidden below 768px, like the Assigned field: the reflow gives each row two
+// columns, and the goal is still reachable through the row menu.
+templ GoalCell(r store.CategoryBudget) {
+	<div class="col-start-2 row-start-1 hidden min-w-0 flex-col items-start gap-0.5 md:flex">
+		if g, ok := format.GoalFor(r.GoalCents, r.GoalDueDate, r.MonthlyTarget); ok {
+			// The tag holds the target and nothing else. Putting the deadline in it
+			// too made one pill carry two facts, which filled the column edge to
+			// edge however wide it was; the deadline belongs with the monthly
+			// figure, since together they are the one sentence — this much a month,
+			// until then.
+			<span class="max-w-full truncate rounded-pill bg-tag-sage-bg px-2 py-0.5 text-[12px] font-semibold text-tag-sage-fg">
+				{ g.Amount }
+			</span>
+			if g.Need != "" || g.Due != "" {
+				<span class="max-w-full truncate text-[12px] text-muted-foreground">
+					if g.Need != "" && g.Due != "" {
+						{ g.Need } · by { g.Due }
+					} else if g.Need != "" {
+						{ g.Need }
+					} else {
+						by { g.Due }
+					}
+				</span>
+			}
+		}
+	</div>
 }

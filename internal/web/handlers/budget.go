@@ -310,6 +310,36 @@ func (h *Handlers) BudgetGoalEdit(c *gin.Context) {
 	render(c, http.StatusOK, views.BudgetGoalEditor(month, findCatRow(rows, catID)))
 }
 
+// BudgetGoalPreview computes the "to arrive on time" figure for the goal
+// currently typed into the editor, before it is saved. It reads the same
+// store.MonthlyTarget the saved row uses rather than mirroring the arithmetic in
+// JavaScript, so the preview and the result cannot drift apart.
+func (h *Handlers) BudgetGoalPreview(c *gin.Context) {
+	ctx := c.Request.Context()
+	month := monthOrNow(c)
+	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
+
+	goalCents, err := money.Parse(strings.TrimSpace(c.PostForm("goal_cents")))
+	if err != nil || goalCents <= 0 {
+		render(c, http.StatusOK, views.GoalNeed(0))
+		return
+	}
+	due, err := time.Parse("2006-01-02", strings.TrimSpace(c.PostForm("goal_due")))
+	if err != nil {
+		// No date means no deadline to pace against.
+		render(c, http.StatusOK, views.GoalNeed(0))
+		return
+	}
+
+	_, rows, err := h.budgetData(ctx, currentUserID(c), month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	row := findCatRow(rows, catID)
+	render(c, http.StatusOK, views.GoalNeed(store.MonthlyTarget(goalCents, row.AvailableCents, due, month)))
+}
+
 // BudgetGoal saves (or clears) a category's goal and refreshes its row.
 // Blank Goal $ clears goal_cents; blank Goal due clears goal_due_date.
 func (h *Handlers) BudgetGoal(c *gin.Context) {

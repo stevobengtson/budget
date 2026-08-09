@@ -36,15 +36,15 @@ templ Layout(title string, active string, collapsed bool) {
 					}
 				})();
 			</script>
-			<link rel="stylesheet" href="/static/app.css"/>
-			<link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-			<script src="/static/htmx.min.js"></script>
-			<script src="/static/sortable.min.js"></script>
-			<script src="/static/inline-edit.js"></script>
-			<script src="/static/name-edit.js"></script>
-			<script src="/static/group-sort.js"></script>
-			<script src="/static/category-sort.js"></script>
-			<script src="/static/quick-add.js" defer></script>
+			<link rel="stylesheet" href={ Asset("/static/app.css") }/>
+			<link rel="icon" type="image/svg+xml" href={ Asset("/static/favicon.svg") }/>
+			<script src={ Asset("/static/htmx.min.js") }></script>
+			<script src={ Asset("/static/sortable.min.js") }></script>
+			<script src={ Asset("/static/inline-edit.js") }></script>
+			<script src={ Asset("/static/name-edit.js") }></script>
+			<script src={ Asset("/static/group-sort.js") }></script>
+			<script src={ Asset("/static/category-sort.js") }></script>
+			<script src={ Asset("/static/quick-add.js") } defer></script>
 			@input.Script()
 			@checkbox.Script()
 			@dialog.Script()
@@ -57,9 +57,9 @@ templ Layout(title string, active string, collapsed bool) {
 			@sheet.Script()
 			@tooltip.Script()
 			@tabs.Script()
-			<script src="/static/collapsible-persist.js"></script>
-			<script src="/static/section-collapse.js"></script>
-			<script src="/static/theme-toggle.js"></script>
+			<script src={ Asset("/static/collapsible-persist.js") }></script>
+			<script src={ Asset("/static/section-collapse.js") }></script>
+			<script src={ Asset("/static/theme-toggle.js") }></script>
 		</head>
 		<body class="min-h-screen bg-background text-foreground">
 			@appShell(active, collapsed) {

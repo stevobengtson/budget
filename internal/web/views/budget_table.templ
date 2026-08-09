@@ -15,7 +15,7 @@ import (
 // collapse to two: the name and its progress bar stack in the first, and
 // Available spans both rows in the second. Children place themselves explicitly
 // (col-start/row-start) so one DOM order serves both layouts.
-const budgetGridCols = "grid grid-cols-[1fr_auto] items-center gap-x-s3 gap-y-1 md:grid-cols-[1fr_140px_200px_140px] md:gap-s4"
+const budgetGridCols = "grid grid-cols-[1fr_auto] items-center gap-x-s3 gap-y-1 md:grid-cols-[1fr_190px_140px_200px_140px] md:gap-s4"
 
 // BudgetTable is the category list. It is a div grid rather than a <table>: the
 // redesign shows two numbers per row (Assigned as an editable field, Available
@@ -98,6 +98,7 @@ templ BudgetTable(d BudgetData) {
 templ budgetColumnHeads() {
 	<div class={ budgetGridCols, "hidden px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:grid" }>
 		<span>Category</span>
+		<span>Goal</span>
 		<span class="text-right">Assigned</span>
 		<span>Progress</span>
 		<span class="text-right">Available</span>

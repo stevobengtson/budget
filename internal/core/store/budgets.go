@@ -194,6 +194,14 @@ func nextMonth(m string) string {
 
 // monthlyTarget = max(0, (goal − available) / months_left), where months_left
 // is at least 1. Calculated from the first day of the requested month.
+// MonthlyTarget is what has to go into a category each month to reach its goal
+// by its due date, given what is already in it. Exported so the goal editor can
+// preview the figure while it is being typed, without a second implementation
+// of the arithmetic drifting from this one.
+func MonthlyTarget(goalCents, availableCents int64, due time.Time, month string) int64 {
+	return monthlyTarget(goalCents, availableCents, due, month)
+}
+
 func monthlyTarget(goalCents, availableCents int64, due time.Time, month string) int64 {
 	monthStart, _ := time.Parse("2006-01", month)
 	monthsLeft := monthsBetween(monthStart, due)

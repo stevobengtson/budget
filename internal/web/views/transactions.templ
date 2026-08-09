@@ -324,7 +324,7 @@ func categoryFilterOptions(cats []store.Category, selected *int64) []Opt {
 // carrying that day's net. Shared by the initial page render and the htmx
 // refresh after a create/update so both produce identical markup.
 templ TxRows(rows []store.Transaction, accts []store.AccountWithBalance, cats []store.Category, filterAccount *int64) {
-	{{ days := groupTxByDay(visibleTxRows(rows, filterAccount)) }}
+	{{ days := groupTxByDay(VisibleTxRows(rows, filterAccount)) }}
 	if len(days) == 0 {
 		<p class="px-s3 py-s6 text-[15px] text-muted-foreground">
 			Nothing here yet. Add your first transaction in the row above.
@@ -366,7 +366,7 @@ func groupTxByDay(rows []store.Transaction) []txDay {
 	return days
 }
 
-// visibleTxRows collapses a transfer's two stored legs into the one row that
+// VisibleTxRows collapses a transfer's two stored legs into the one row that
 // makes sense for the current view. The pair is still stored and still edited as
 // two legs — only the rendering changes.
 //
@@ -374,7 +374,13 @@ func groupTxByDay(rows []store.Transaction) []txDay {
 // leg, so everything passes through and the transfer reads from that account's
 // point of view. Unscoped, the arriving leg is dropped so money always reads as
 // leaving and a transfer never appears twice in one list.
-func visibleTxRows(rows []store.Transaction, filterAccount *int64) []store.Transaction {
+//
+// Exported because pagination has to count what will actually be rendered: the
+// index handler filters before slicing, or the pager counts hidden legs and a
+// page of 50 stored rows renders however many of them survive.
+//
+// Idempotent, so the render path can filter again without harm.
+func VisibleTxRows(rows []store.Transaction, filterAccount *int64) []store.Transaction {
 	if filterAccount != nil {
 		return rows
 	}

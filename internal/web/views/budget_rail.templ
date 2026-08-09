@@ -94,14 +94,17 @@ templ railReadyToAssign(d BudgetData) {
 // inside the table; pulling them out is what lets the category list drop to two
 // numbers per row.
 templ railTotals(d BudgetData) {
-	{{ assigned, spent, _ := budgetTotals(d.Groups) }}
-	{{ stillInEnvelopes := assigned - spent }}
+	// "Still in envelopes" is the sum of every category's Available, NOT
+	// assigned − spent. Available is carryover + assigned − spent, so subtracting
+	// alone silently drops money rolled over from earlier months: a category with
+	// $60 carried in and $5 assigned reported $4 left when it held $64.
+	{{ assigned, spent, available := budgetTotals(d.Groups) }}
 	<div class="flex flex-col gap-s2 rounded-xl bg-card p-s4 shadow-organic-sm">
 		@railTotalRow("Income", money.Format(d.Estimated), "")
 		@railTotalRow("Assigned", money.Format(assigned), "")
 		@railTotalRow("Spent", money.Format(spent), "")
 		<div class="h-px bg-border"></div>
-		@railTotalRow("Still in envelopes", money.Format(stillInEnvelopes), availColorClass(stillInEnvelopes))
+		@railTotalRow("Still in envelopes", money.Format(available), availColorClass(available))
 	</div>
 }
 
