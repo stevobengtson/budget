@@ -353,20 +353,28 @@ func TestAssignSheetOpensAndSaves(t *testing.T) {
 	}
 }
 
-// TestBudgetRowHidesInlineAssignOnMobile is the structural half of the same
+// TestBudgetRowHidesInlineAssignOnNarrowTable is the structural half of the same
 // change: the inline field and the sheet trigger must both exist, each scoped to
-// its own breakpoint, or one viewport ends up with no way to assign at all.
-func TestBudgetRowHidesInlineAssignOnMobile(t *testing.T) {
+// its own tier, or one layout ends up with no way to assign at all.
+//
+// The scoping moved from a viewport breakpoint to a container query when the
+// grid started sizing itself against the table rather than the window, so this
+// asserts the two halves rather than one exact class string — the surrounding
+// utility classes are free to change, the pairing is not.
+func TestBudgetRowHidesInlineAssignOnNarrowTable(t *testing.T) {
 	s := store.New(openTestDB(t))
 	ts, client, uid := serveAuthed(t, s)
 	cid := seedCategory(t, s, uid, "2026-07", 10000)
 
 	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget?month=2026-07"))
-	if !strings.Contains(body, `class="js-assign hidden items-center justify-end md:flex"`) {
-		t.Error("inline assign form should be desktop-only")
+	if !strings.Contains(body, `class="js-assign col-start-3 row-start-1 hidden`) {
+		t.Error("inline assign form should be hidden until its tier reveals it")
+	}
+	if !strings.Contains(body, "@min-[660px]:flex") {
+		t.Error("inline assign form should appear at the tier that gives it a column")
 	}
 	if !strings.Contains(body, "/budget/assign/"+itoa(cid)+"/sheet") {
-		t.Error("row should offer the assign sheet as the mobile path")
+		t.Error("row should offer the assign sheet as the narrow-table path")
 	}
 }
 

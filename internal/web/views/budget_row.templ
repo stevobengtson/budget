@@ -68,7 +68,7 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 			hx-post={ fmt.Sprintf("/budget/assign/%d?month=%s", r.CategoryID, month) }
 			hx-target={ fmt.Sprintf("#cat-%d", r.CategoryID) }
 			hx-swap="outerHTML"
-			class="js-assign hidden items-center justify-end md:flex"
+			class="js-assign col-start-3 row-start-1 hidden items-center justify-end @min-[660px]:flex"
 		>
 			<button
 				type="button"
@@ -87,13 +87,14 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 			/>
 		</form>
 		@budgetProgress(r)
-		<div class="col-start-2 row-start-1 row-span-2 flex items-center justify-end gap-1 md:col-start-5 md:row-span-1">
-			// Below 768px Available doubles as the assign control: a 36px number
-			// field cannot survive the reflow, so tapping the figure opens the
-			// assign sheet instead of editing in place.
+		<div class="col-start-2 row-start-1 row-span-2 flex items-center justify-end gap-1 @min-[660px]:col-start-4 @min-[660px]:row-span-1 @min-[950px]:col-start-5">
+			// At tier 1 Available doubles as the assign control: the Assigned column
+			// is not rendered and a 36px number field could not survive the reflow,
+			// so tapping the figure opens the assign sheet instead of editing in
+			// place. It hands over at the same width the Assigned field appears.
 			<button
 				type="button"
-				class={ "flex min-h-[44px] items-center gap-1 rounded-md px-1 text-[19px] font-bold tabular-nums md:hidden", availColorClass(r.AvailableCents) }
+				class={ "flex min-h-[44px] items-center gap-1 rounded-md px-1 text-[19px] font-bold tabular-nums @min-[660px]:hidden", availColorClass(r.AvailableCents) }
 				aria-label={ "Assign to " + r.CategoryName }
 				hx-get={ fmt.Sprintf("/budget/assign/%d/sheet?month=%s", r.CategoryID, month) }
 				hx-target="#modal"
@@ -102,7 +103,7 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 				{ money.Format(r.AvailableCents) }
 				@icon.ChevronRight(icon.Props{Class: "size-4 text-muted-foreground"})
 			</button>
-			<span class={ "hidden text-[17px] font-bold tabular-nums md:inline", availColorClass(r.AvailableCents) }>
+			<span class={ "hidden text-[17px] font-bold tabular-nums @min-[660px]:inline", availColorClass(r.AvailableCents) }>
 				{ money.Format(r.AvailableCents) }
 			</span>
 			// Hover-reveal is a pointer affordance; on touch the menu must simply
@@ -120,8 +121,8 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 templ budgetProgress(r store.CategoryBudget) {
 	{{ pct, over := progressPct(r.SpentCents, r.AvailableCents) }}
 	{{ envelope := r.SpentCents + r.AvailableCents }}
-	<div class="col-start-1 row-start-2 flex flex-col gap-1 md:col-start-4 md:row-start-1">
-		<div class="h-[7px] w-full overflow-hidden rounded-pill bg-progress-track md:h-2">
+	<div class="col-start-1 row-start-2 flex flex-col gap-1 @min-[950px]:col-start-4 @min-[950px]:row-start-1">
+		<div class="h-[7px] w-full overflow-hidden rounded-pill bg-progress-track @min-[950px]:h-2">
 			<div
 				class={ "h-full rounded-pill", templ.KV("bg-progress-fill-over", over), templ.KV("bg-progress-fill", !over) }
 				style={ fmt.Sprintf("width:%d%%", pct) }
@@ -450,10 +451,16 @@ func goalDueTime(r store.CategoryBudget) time.Time {
 // column stays a statement of where the category stands rather than another
 // control competing with the Assigned field beside it.
 //
-// Hidden below 768px, like the Assigned field: the reflow gives each row two
+// Hidden at tier 1, like the Assigned field: the reflow gives each row two
 // columns, and the goal is still reachable through the row menu.
+//
+// Stays on the first grid row at every tier. At tier 2 the progress bar sits
+// beneath the name, so the row is two lines tall — but spanning both and
+// centring against them left the name riding the top line alone while every
+// figure floated in the middle. Name, goal, assigned and available all read as
+// one line, with the bar hanging below it.
 templ GoalCell(r store.CategoryBudget) {
-	<div class="col-start-2 row-start-1 hidden min-w-0 flex-col items-start gap-0.5 md:flex">
+	<div class="col-start-2 row-start-1 hidden min-w-0 flex-col items-start gap-0.5 @min-[660px]:flex">
 		if g, ok := format.GoalFor(r.GoalCents, r.GoalDueDate, r.MonthlyTarget); ok {
 			// The tag holds the target and nothing else. Putting the deadline in it
 			// too made one pill carry two facts, which filled the column edge to

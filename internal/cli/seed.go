@@ -132,11 +132,30 @@ func seed(ctx context.Context, s *store.Store, uid int64) error {
 			{name: "Rent", order: 0, goalCents: ptr64(cents(1850))},
 			{name: "Electricity", order: 1},
 			{name: "Internet", order: 2},
-			{name: "Renter's Insurance", order: 3},
+			// The policy is billed annually, so nothing is spent here in any
+			// seeded month — the $18/mo assignment is the contribution and the
+			// balance just accumulates. That makes it the clearest sinking fund in
+			// the demo, and it is the first group on the page, so the "what has to
+			// go in each month" line is visible without scrolling.
+			//
+			// The due date is relative to the seed run (9 months out), not a fixed
+			// month: 3 months of contributions leaves $162 of the $216 to find, so
+			// the row always asks for exactly the $18/mo it is already assigned.
+			// A fixed date would creep toward the seeded months as real time
+			// passed and eventually demand an absurd catch-up figure.
+			{
+				name:      "Renter's Insurance",
+				order:     3,
+				goalCents: ptr64(cents(216)),
+				goalDue:   ptrTime(time.Date(now.Year(), now.Month()+9, 1, 0, 0, 0, 0, time.UTC)),
+			},
 		}},
 		{name: "Food", order: 1, cats: []catDef{
-			{name: "Groceries", order: 0},
-			{name: "Restaurants", order: 1},
+			// Plain monthly funding targets, matching what these categories are
+			// assigned below. With no due date the goal renders as the amount
+			// alone — the same shape as Rent.
+			{name: "Groceries", order: 0, goalCents: ptr64(cents(400))},
+			{name: "Restaurants", order: 1, goalCents: ptr64(cents(150))},
 			{name: "Coffee & Drinks", order: 2},
 		}},
 		{name: "Transportation", order: 2, cats: []catDef{
@@ -146,19 +165,38 @@ func seed(ctx context.Context, s *store.Store, uid int64) error {
 		}},
 		{name: "Health & Fitness", order: 3, cats: []catDef{
 			{name: "Gym", order: 0},
-			{name: "Medical", order: 1},
+			// A sinking fund for the year's deductible. Nothing is spent on
+			// Medical in any seeded month, so a goal is the only thing that gives
+			// this category a reason to exist — without one it renders as a row of
+			// zeroes.
+			{
+				name:      "Medical",
+				order:     1,
+				goalCents: ptr64(cents(1200)),
+				goalDue:   ptrTime(time.Date(now.Year()+1, 6, 1, 0, 0, 0, 0, time.UTC)),
+			},
 		}},
 		{name: "Entertainment", order: 4, cats: []catDef{
 			{name: "Streaming", order: 0},
 			{name: "Fun Money", order: 1},
 		}},
+		// Sinking funds, the case a due date exists for: the row shows what has to
+		// go in each month to arrive on time. Keep each due date far enough out
+		// that the monthly figure reads plausibly beside what the category is
+		// assigned below — the target is (goal − saved) / months left, so a near
+		// deadline produces a number nobody would ever budget.
 		{name: "Savings Goals", order: 5, cats: []catDef{
-			{name: "Emergency Fund", order: 0, goalCents: ptr64(cents(15000))},
+			{
+				name:      "Emergency Fund",
+				order:     0,
+				goalCents: ptr64(cents(15000)),
+				goalDue:   ptrTime(time.Date(now.Year()+5, 1, 1, 0, 0, 0, 0, time.UTC)),
+			},
 			{
 				name:      "Vacation",
 				order:     1,
 				goalCents: ptr64(cents(3000)),
-				goalDue:   ptrTime(time.Date(now.Year(), 9, 1, 0, 0, 0, 0, time.UTC)),
+				goalDue:   ptrTime(time.Date(now.Year()+2, 7, 1, 0, 0, 0, 0, time.UTC)),
 			},
 		}},
 		{name: "Personal", order: 6, cats: []catDef{
@@ -326,10 +364,9 @@ func seed(ctx context.Context, s *store.Store, uid int64) error {
 				d: 5, acct: checkingID, cat: catID["Housing/Internet"],
 				payee: "Comcast", out: 55,
 			},
-			txDef{
-				d: 12, acct: checkingID, cat: catID["Housing/Renter's Insurance"],
-				payee: "State Farm", out: 18,
-			},
+			// No Renter's Insurance charge: the premium is annual and falls outside
+			// the seeded months, which is what lets that category demonstrate a
+			// sinking fund filling up.
 			txDef{
 				d: 15, acct: checkingID, cat: catID["Debt/Car Loan Payment"],
 				payee: "Honda Financial Services", out: 285,

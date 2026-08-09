@@ -18,12 +18,38 @@ import (
 )
 
 // budgetGridCols is the shared column track for the column heads and every
-// category row: name, assigned, progress, available. Declared once so a head and
-// its rows can never drift apart. Below 768px the four columns
-// collapse to two: the name and its progress bar stack in the first, and
-// Available spans both rows in the second. Children place themselves explicitly
-// (col-start/row-start) so one DOM order serves both layouts.
-const budgetGridCols = "grid grid-cols-[1fr_auto] items-center gap-x-s3 gap-y-1 md:grid-cols-[1fr_190px_140px_200px_140px] md:gap-s4"
+// category row. Declared once so a head and its rows can never drift apart.
+// Children place themselves explicitly (col-start/row-start) so one DOM order
+// serves all three layouts.
+//
+// The tiers are container queries against #budget-table's own width, not the
+// viewport, because the viewport does not determine how much room this table
+// gets. Two things move it independently: the summary rail claims a fixed 300px
+// beside the table from 1024px up, and the app sidebar collapses to a 72px icon
+// rail on demand, handing the table ~256px with no viewport change at all. A
+// media query cannot see either, which is how the 5-column track came to be
+// applied at 768px where it needs ~950px: its fixed tracks total 670px and
+// cannot shrink, so the name track absorbed the entire shortfall (52px of usable
+// text at 1440px, 17 of 28 names clipped) and the page grew a horizontal
+// scrollbar. inline-size containment also stops the grid forcing the table wider
+// than its parent allows, so overflow can no longer escape into the document.
+//
+// The thresholds are the widths at which each layout actually fits, leaving the
+// category name a readable 180px (the longest seeded name, "Credit Card
+// Payment", wants 161px):
+//
+//	tier 2   180 name + 400 tracks + 52.8 gaps + 26.4 row padding = 659.2
+//	tier 3   180 name + 670 tracks + 70.4 gaps + 26.4 row padding = 946.8
+//
+// Tier 2's name and goal tracks are minmax rather than fixed so the tier engages
+// as early as it can and then degrades within itself. Sized rigidly at
+// 1fr_190px_140px_140px it needed 730px, which a 1366px laptop misses by 62px —
+// and missing it dropped the whole row to tier 1, losing Goal and Assigned
+// outright. With a floor of 120px the goal column simply gives up its caption
+// width first, and both columns survive down to 660px.
+const budgetGridCols = "grid grid-cols-[1fr_auto] items-center gap-x-s3 gap-y-1 " +
+	"@min-[660px]:grid-cols-[minmax(180px,1fr)_minmax(120px,190px)_140px_140px] @min-[660px]:gap-s4 " +
+	"@min-[950px]:grid-cols-[1fr_190px_140px_200px_140px]"
 
 // BudgetTable is the category list. It is a div grid rather than a <table>: the
 // redesign shows two numbers per row (Assigned as an editable field, Available
@@ -54,14 +80,14 @@ func BudgetTable(d BudgetData) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"budget-table\" class=\"js-group-sort flex min-w-0 flex-1 flex-col\" data-month=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"budget-table\" class=\"js-group-sort @container flex min-w-0 flex-1 flex-col\" data-month=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(d.Month)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 32, Col: 22}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 58, Col: 22}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -200,7 +226,7 @@ func BudgetTable(d BudgetData) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(d.UncategorizedSpent))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 90, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 116, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -219,8 +245,13 @@ func BudgetTable(d BudgetData) templ.Component {
 	})
 }
 
-// budgetColumnHeads labels the four tracks. Assigned and Available are
-// right-aligned so the labels sit over their figures.
+// budgetColumnHeads labels the tracks. Assigned and Available are right-aligned
+// so the labels sit over their figures.
+//
+// Progress has no column of its own below tier 3 — the bar stacks under the
+// category name — so its label is dropped there. display:none takes it out of
+// grid flow entirely, which lets Available auto-place into the 4th track at tier
+// 2 and the 5th at tier 3 without either being positioned by hand.
 func budgetColumnHeads() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -242,7 +273,7 @@ func budgetColumnHeads() templ.Component {
 			templ_7745c5c3_Var7 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var8 = []any{budgetGridCols, "hidden px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground md:grid"}
+		var templ_7745c5c3_Var8 = []any{budgetGridCols, "hidden px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground @min-[660px]:grid"}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var8...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -260,7 +291,7 @@ func budgetColumnHeads() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\"><span>Category</span> <span>Goal</span> <span class=\"text-right\">Assigned</span> <span>Progress</span> <span class=\"text-right\">Available</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\"><span>Category</span> <span>Goal</span> <span class=\"text-right\">Assigned</span> <span class=\"hidden @min-[950px]:block\">Progress</span> <span class=\"text-right\">Available</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -308,7 +339,7 @@ func BudgetGroupTbody(month string, g BudgetGroup) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("group-%d", g.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 116, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 147, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -334,7 +365,7 @@ func BudgetGroupTbody(month string, g BudgetGroup) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", g.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 116, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 147, Col: 114}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -444,7 +475,7 @@ func budgetGroupHeader(month string, g BudgetGroup, oob bool) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", g.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 149, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 180, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -465,7 +496,7 @@ func budgetGroupHeader(month string, g BudgetGroup, oob bool) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/budget/group/%d?month=%s", g.ID, month))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 156, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 187, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
@@ -478,7 +509,7 @@ func budgetGroupHeader(month string, g BudgetGroup, oob bool) templ.Component {
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("#group-head-%d", g.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 157, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 188, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
@@ -491,7 +522,7 @@ func budgetGroupHeader(month string, g BudgetGroup, oob bool) templ.Component {
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(g.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 166, Col: 12}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 197, Col: 12}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -504,7 +535,7 @@ func budgetGroupHeader(month string, g BudgetGroup, oob bool) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(g.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 171, Col: 18}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 202, Col: 18}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
@@ -544,7 +575,7 @@ func budgetGroupHeader(month string, g BudgetGroup, oob bool) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(avail))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 180, Col: 26}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_table.templ`, Line: 211, Col: 26}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 		if templ_7745c5c3_Err != nil {

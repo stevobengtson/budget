@@ -320,7 +320,7 @@ func heroSection() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = browserFrame("/static/marketing/budget.png", "The Pigglet budget page showing income, credit and expense categories").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = browserFrame("/static/marketing/budget.png", "The Pigglet budget page: category groups with what's assigned, spent and still available, beside a summary of what's left to assign").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -373,7 +373,7 @@ func featuresSection() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = browserFrame("/static/marketing/transactions.png", "The Pigglet transactions page for a checking account").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = browserFrame("/static/marketing/transactions.png", "The Pigglet transactions page, listing a month of spending across every account with its category tagged").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
