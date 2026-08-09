@@ -113,7 +113,36 @@ func (h *Handlers) Logout(c *gin.Context) {
 }
 
 func (h *Handlers) AccountPage(c *gin.Context) {
-	render(c, http.StatusOK, views.AccountPage(h.accountData(c, "account")))
+	d := h.accountData(c, settingsTab(c))
+	// Built here and nowhere else: the settings mutation handlers re-render this
+	// page too, and none of them changes the subscription. When it is absent the
+	// Billing tab fetches itself (AccountBillingSection).
+	b := h.billingData(c)
+	d.Billing = &b
+	render(c, http.StatusOK, views.AccountPage(d))
+}
+
+// AccountBillingSection serves the Billing tab on its own, for the renders that
+// do not build the subscription state up front.
+func (h *Handlers) AccountBillingSection(c *gin.Context) {
+	render(c, http.StatusOK, views.BillingSection(h.billingData(c)))
+}
+
+// settingsTab picks the initially-open settings tab from ?tab=, so the user
+// menu can link straight to Billing. The tabs themselves are client-side; this
+// only chooses which one is open on arrival. An unknown value falls back to the
+// first tab rather than rendering none.
+func settingsTab(c *gin.Context) string {
+	switch c.Query("tab") {
+	case "security":
+		return "security"
+	case "addons":
+		return "addons"
+	case "billing":
+		return "billing"
+	default:
+		return "account"
+	}
 }
 
 // accountData builds the settings view model for the given active tab, loading
@@ -146,11 +175,11 @@ func (h *Handlers) ToggleAddOn(c *gin.Context) {
 		d := h.accountData(c, "addons")
 		if errors.Is(err, store.ErrAddOnNotFound) {
 			d.AddOnErr = "That add-on doesn't exist."
-			render(c, http.StatusNotFound, views.AccountPage(d))
+			render(c, http.StatusNotFound, views.AccountAddOnsSection(d))
 			return
 		}
 		d.AddOnErr = "Could not update the add-on."
-		render(c, http.StatusInternalServerError, views.AccountPage(d))
+		render(c, http.StatusInternalServerError, views.AccountAddOnsSection(d))
 		return
 	}
 
@@ -165,7 +194,7 @@ func (h *Handlers) ToggleAddOn(c *gin.Context) {
 	} else {
 		d.AddOnOK = "Add-on disabled."
 	}
-	render(c, http.StatusOK, views.AccountPage(d))
+	render(c, http.StatusOK, views.AddOnToggleResult(d))
 }
 
 // RequestEmailChange starts a verified email change from the Account tab: it
@@ -191,11 +220,11 @@ func (h *Handlers) RequestEmailChange(c *gin.Context) {
 		default:
 			d.EmailErr = "Could not start the email change."
 		}
-		render(c, http.StatusBadRequest, views.AccountPage(d))
+		render(c, http.StatusBadRequest, views.AccountEmailSection(d))
 		return
 	}
 	d.EmailOK = "Check " + d.PendingEmail + " for a link to confirm your new email."
-	render(c, http.StatusOK, views.AccountPage(d))
+	render(c, http.StatusOK, views.AccountEmailSection(d))
 }
 
 // ConfirmEmailChange applies a pending email change when the link sent to the new
@@ -220,7 +249,7 @@ func (h *Handlers) UpdateAvatar(c *gin.Context) {
 	fail := func(status int, msg string) {
 		d := h.accountData(c, "account")
 		d.AvatarErr = msg
-		render(c, status, views.AccountPage(d))
+		render(c, status, views.AccountProfileSection(d))
 	}
 
 	file, _, err := c.Request.FormFile("avatar")
@@ -256,7 +285,7 @@ func (h *Handlers) UpdateAvatar(c *gin.Context) {
 	c.Request = c.Request.WithContext(views.WithUserAvatarVersion(c.Request.Context(), u.AvatarVersion()))
 	d := h.accountData(c, "account")
 	d.AvatarOK = "Avatar updated."
-	render(c, http.StatusOK, views.AccountPage(d))
+	render(c, http.StatusOK, views.AccountProfileSection(d))
 }
 
 // RemoveAvatar clears the user's custom avatar, reverting to the monogram.
@@ -265,14 +294,14 @@ func (h *Handlers) RemoveAvatar(c *gin.Context) {
 	if err := h.store.RemoveUserAvatar(c.Request.Context(), uid); err != nil {
 		d := h.accountData(c, "account")
 		d.AvatarErr = "Could not remove your avatar."
-		render(c, http.StatusInternalServerError, views.AccountPage(d))
+		render(c, http.StatusInternalServerError, views.AccountProfileSection(d))
 		return
 	}
 	// Drop the avatar from this render's sidebar too (back to the monogram).
 	c.Request = c.Request.WithContext(views.WithUserAvatarVersion(c.Request.Context(), 0))
 	d := h.accountData(c, "account")
 	d.AvatarOK = "Avatar removed."
-	render(c, http.StatusOK, views.AccountPage(d))
+	render(c, http.StatusOK, views.AccountProfileSection(d))
 }
 
 // ServeAvatar streams the current user's stored avatar PNG. The URL carries a
@@ -294,13 +323,13 @@ func (h *Handlers) UpdateProfile(c *gin.Context) {
 	if name == "" {
 		d := h.accountData(c, "account")
 		d.ProfileErr = "Name can't be empty."
-		render(c, http.StatusBadRequest, views.AccountPage(d))
+		render(c, http.StatusBadRequest, views.AccountProfileSection(d))
 		return
 	}
 	if err := h.store.UpdateUserName(c.Request.Context(), uid, name); err != nil {
 		d := h.accountData(c, "account")
 		d.ProfileErr = "Could not save your profile."
-		render(c, http.StatusInternalServerError, views.AccountPage(d))
+		render(c, http.StatusInternalServerError, views.AccountProfileSection(d))
 		return
 	}
 	// Reflect the new name in this render's sidebar (requireAuth set the context
@@ -308,7 +337,7 @@ func (h *Handlers) UpdateProfile(c *gin.Context) {
 	c.Request = c.Request.WithContext(views.WithUserName(c.Request.Context(), name))
 	d := h.accountData(c, "account")
 	d.ProfileOK = "Profile updated."
-	render(c, http.StatusOK, views.AccountPage(d))
+	render(c, http.StatusOK, views.AccountProfileSection(d))
 }
 
 // StartFresh wipes all of the current user's budget data and re-provisions the
@@ -395,14 +424,14 @@ func (h *Handlers) ChangePassword(c *gin.Context) {
 	d := h.accountData(c, "security")
 	if len(next) < 8 {
 		d.PasswordErr = "New password must be at least 8 characters."
-		render(c, http.StatusBadRequest, views.AccountPage(d))
+		render(c, http.StatusBadRequest, views.AccountSecuritySection(d))
 		return
 	}
 	if err := h.auth.ChangePassword(c.Request.Context(), uid, cur, next); err != nil {
 		d.PasswordErr = "Current password is incorrect."
-		render(c, http.StatusBadRequest, views.AccountPage(d))
+		render(c, http.StatusBadRequest, views.AccountSecuritySection(d))
 		return
 	}
 	d.PasswordOK = "Password changed."
-	render(c, http.StatusOK, views.AccountPage(d))
+	render(c, http.StatusOK, views.AccountSecuritySection(d))
 }

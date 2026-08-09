@@ -18,7 +18,16 @@ const maxWebhookBytes = 1 << 20 // 1 MiB
 // BillingPage renders the billing/subscription status page. It doubles as the
 // landing page the subscription gate redirects lapsed users to.
 func (h *Handlers) BillingPage(c *gin.Context) {
-	render(c, http.StatusOK, views.BillingPage(h.billingData(c)))
+	d := h.billingData(c)
+	// Managing a plan now lives in Settings. Only a locked-out user — never
+	// subscribed, or lapsed — still gets the standalone paywall here, because
+	// that is where the subscription gate sends them and they cannot reach
+	// Settings at all.
+	if !d.Standalone {
+		c.Redirect(http.StatusSeeOther, "/account?tab=billing")
+		return
+	}
+	render(c, http.StatusOK, views.BillingPage(d))
 }
 
 // billingData builds the billing view model from the user's current subscription.

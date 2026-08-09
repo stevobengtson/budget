@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -282,9 +283,15 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 	if txType == "" {
 		txType = "expense"
 	}
+	// The parse error used to be discarded, so "twelve" quietly became a $0.00
+	// transaction. A malformed amount is a mistake to report, not a zero.
 	var amount int64
-	if v := c.PostForm("amount"); v != "" {
-		amount, _ = money.Parse(v)
+	if v := strings.TrimSpace(c.PostForm("amount")); v != "" {
+		parsed, err := money.Parse(v)
+		if err != nil {
+			return errInvalid("amount: " + err.Error())
+		}
+		amount = parsed
 	}
 	var outCents, inCents int64
 	if txType == "income" {
@@ -292,13 +299,23 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 	} else {
 		outCents = amount
 	}
+	// A transfer needs somewhere to go. Without this, a transfer missing its
+	// destination fell through to the plain-transaction path below and was
+	// silently stored as an ordinary expense from the source account.
 	var transferTo *int64
 	if txType == "transfer" {
-		if v := c.PostForm("transfer_to"); v != "" {
-			if tid, err := strconv.ParseInt(v, 10, 64); err == nil {
-				transferTo = &tid
-			}
+		v := strings.TrimSpace(c.PostForm("transfer_to"))
+		if v == "" {
+			return errInvalid("choose an account for the transfer to go to")
 		}
+		tid, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return errInvalid("transfer destination is not valid")
+		}
+		if tid == acctID {
+			return errInvalid("a transfer needs two different accounts")
+		}
+		transferTo = &tid
 	}
 
 	payee := c.PostForm("payee")

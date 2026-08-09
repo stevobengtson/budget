@@ -183,7 +183,17 @@ type AccountData struct {
 	PendingEmail  string       // a not-yet-confirmed email change, "" when none
 	AvatarVersion int64        // >0 renders the stored image; 0 renders the monogram
 	AddOns        []store.AddOn // the add-on catalog with this user's enabled state
-	ActiveTab     string       // "account" | "security" | "addons"
+	ActiveTab     string       // "account" | "security" | "addons" | "billing"
+	// Billing is the subscription state for the Billing tab. It is a pointer
+	// because only the page load builds it: the settings mutation handlers
+	// (profile save, add-on toggle, …) re-render this whole page and have no
+	// reason to query the subscription. When it is nil the tab fetches itself,
+	// so it is never rendered from empty data — which would have it claim
+	// billing was unconfigured.
+	//
+	// The standalone /billing paywall remains for locked-out users, who cannot
+	// reach settings at all.
+	Billing       *BillingData
 	Collapsed     bool         // render the sidebar collapsed to its icon rail
 	AvatarErr     string
 	AvatarOK      string
@@ -205,7 +215,7 @@ templ AccountPage(d AccountData) {
 			<h1 class="text-2xl font-semibold tracking-tight">Settings</h1>
 			@tabs.Tabs() {
 				@tabs.List() {
-					@tabs.Trigger(tabs.TriggerProps{Value: "account", IsActive: d.ActiveTab != "security"}) {
+					@tabs.Trigger(tabs.TriggerProps{Value: "account", IsActive: d.ActiveTab == "account"}) {
 						@icon.User(icon.Props{Class: "size-4"})
 						Account
 					}
@@ -217,29 +227,56 @@ templ AccountPage(d AccountData) {
 						@icon.Blocks(icon.Props{Class: "size-4"})
 						Add-ons
 					}
+					@tabs.Trigger(tabs.TriggerProps{Value: "billing", IsActive: d.ActiveTab == "billing"}) {
+						@icon.CreditCard(icon.Props{Class: "size-4"})
+						Billing
+					}
 				}
-				@tabs.Content(tabs.ContentProps{Value: "account", IsActive: d.ActiveTab != "security" && d.ActiveTab != "addons", Class: "mt-6"}) {
+				@tabs.Content(tabs.ContentProps{Value: "account", IsActive: d.ActiveTab == "account", Class: "mt-6"}) {
 					<div class="space-y-6">
-						@accountProfileSection(d)
-						@accountEmailSection(d)
+						@AccountProfileSection(d)
+						@AccountEmailSection(d)
 						@accountDangerSection(d)
 					</div>
 				}
 				@tabs.Content(tabs.ContentProps{Value: "security", IsActive: d.ActiveTab == "security", Class: "mt-6"}) {
-					@accountSecuritySection(d)
+					@AccountSecuritySection(d)
 				}
 				@tabs.Content(tabs.ContentProps{Value: "addons", IsActive: d.ActiveTab == "addons", Class: "mt-6"}) {
-					@accountAddOnsSection(d)
+					@AccountAddOnsSection(d)
+				}
+				@tabs.Content(tabs.ContentProps{Value: "billing", IsActive: d.ActiveTab == "billing", Class: "mt-6"}) {
+					if d.Billing != nil {
+						@BillingSection(*d.Billing)
+					} else {
+						<div hx-get="/account/billing" hx-trigger="load" hx-swap="outerHTML">
+							<div class="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+								Loading your plan…
+							</div>
+						</div>
+					}
 				}
 			}
 		</div>
 	}
 }
 
-// accountProfileSection is the Account tab's "User profile" card: avatar
+// AccountProfileSection is the Account tab's "User profile" card: avatar
 // (monogram, upload not wired yet) and the editable display name.
-templ accountProfileSection(d AccountData) {
-	<section class="space-y-2">
+// AddOnToggleResult is the response to enabling or disabling an add-on: the
+// Add-ons section itself, plus the two navs refreshed out of band, since which
+// add-ons are on decides which entries they carry.
+templ AddOnToggleResult(d AccountData) {
+	@AccountAddOnsSection(d)
+	@PrimaryNav("account", true)
+	@tabBarNav("account", true)
+}
+
+// The settings sections are exported and individually swappable: each form
+// posts with htmx and replaces only its own section, rather than the whole
+// settings page being re-rendered for a name change.
+templ AccountProfileSection(d AccountData) {
+	<section id="account-profile" data-inline-errors class="space-y-2">
 		<h2 class="text-sm font-semibold">User profile</h2>
 		<div class="overflow-hidden rounded-xl border bg-card">
 			<div class="space-y-4 p-4 sm:p-6">
@@ -247,7 +284,7 @@ templ accountProfileSection(d AccountData) {
 					<label class="text-sm font-medium leading-none">Avatar</label>
 					<div class="flex items-center gap-3">
 						@userAvatar(d.Name, d.AvatarVersion, "size-14 rounded-lg text-lg")
-						<form method="post" action="/account/avatar" enctype="multipart/form-data">
+						<form hx-post="/account/avatar" hx-trigger="change" hx-target="#account-profile" hx-swap="outerHTML" hx-encoding="multipart/form-data" enctype="multipart/form-data">
 							<label class="inline-flex h-8 cursor-pointer items-center rounded-full border border-input bg-background px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
 								Change avatar
 								<input
@@ -255,12 +292,11 @@ templ accountProfileSection(d AccountData) {
 									name="avatar"
 									accept="image/png,image/jpeg,image/gif,image/webp"
 									class="sr-only"
-									onchange="this.form.submit()"
 								/>
 							</label>
 						</form>
 						if d.AvatarVersion > 0 {
-							<form method="post" action="/account/avatar/remove">
+							<form hx-post="/account/avatar/remove" hx-target="#account-profile" hx-swap="outerHTML">
 								@button.Button(button.Props{
 									Type:    button.TypeSubmit,
 									Variant: button.VariantGhost,
@@ -274,7 +310,7 @@ templ accountProfileSection(d AccountData) {
 					</div>
 					@settingsMessages(d.AvatarErr, d.AvatarOK)
 				</div>
-				<form id="profile-form" method="post" action="/account/profile" class="space-y-1.5">
+				<form id="profile-form" hx-post="/account/profile" hx-target="#account-profile" hx-swap="outerHTML" class="space-y-1.5">
 					<label for="profile-name" class="text-sm font-medium leading-none">Name</label>
 					@input.Input(input.Props{ID: "profile-name", Name: "name", Value: d.Name, Attributes: templ.Attributes{"required": true, "autocomplete": "name"}})
 					@settingsMessages(d.ProfileErr, d.ProfileOK)
@@ -289,13 +325,13 @@ templ accountProfileSection(d AccountData) {
 	</section>
 }
 
-// accountEmailSection is the Account tab's "Change email" card. Submitting emails
+// AccountEmailSection is the Account tab's "Change email" card. Submitting emails
 // a confirmation link to the new address; the login email only changes once that
 // link is clicked, so a pending change is surfaced here.
-templ accountEmailSection(d AccountData) {
-	<section class="space-y-2">
+templ AccountEmailSection(d AccountData) {
+	<section id="account-email" data-inline-errors class="space-y-2">
 		<h2 class="text-sm font-semibold">Change email</h2>
-		<form method="post" action="/account/email" class="overflow-hidden rounded-xl border bg-card">
+		<form hx-post="/account/email" hx-target="#account-email" hx-swap="outerHTML" class="overflow-hidden rounded-xl border bg-card">
 			<div class="space-y-4 p-4 sm:p-6">
 				if d.PendingEmail != "" {
 					<div class="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-muted-foreground">
@@ -325,7 +361,7 @@ templ accountEmailSection(d AccountData) {
 // (wipe data / delete account), each gated on the current password (and, for
 // deletion, re-typing the account email). Both submit as full-page POSTs.
 templ accountDangerSection(d AccountData) {
-	<section class="space-y-2">
+	<section id="account-danger" data-inline-errors class="space-y-2">
 		<h2 class="text-sm font-semibold text-destructive">Danger zone</h2>
 		<div class="divide-y overflow-hidden rounded-xl border border-destructive/40 bg-card">
 			<div class="space-y-4 p-4 sm:p-6">
@@ -383,11 +419,11 @@ templ dangerButton(label string) {
 	<button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 focus-visible:ring-offset-background">{ label }</button>
 }
 
-// accountSecuritySection is the Security tab's "Change password" card.
-templ accountSecuritySection(d AccountData) {
-	<section class="space-y-2">
+// AccountSecuritySection is the Security tab's "Change password" card.
+templ AccountSecuritySection(d AccountData) {
+	<section id="account-security" data-inline-errors class="space-y-2">
 		<h2 class="text-sm font-semibold">Change password</h2>
-		<form method="post" action="/account/password" class="overflow-hidden rounded-xl border bg-card">
+		<form hx-post="/account/password" hx-target="#account-security" hx-swap="outerHTML" class="overflow-hidden rounded-xl border bg-card">
 			<div class="space-y-4 p-4 sm:p-6">
 				@passwordField("Current password", "current", "Enter your current password", "current-password", "")
 				@passwordField("New password", "next", "New password", "new-password", "8")
@@ -402,11 +438,11 @@ templ accountSecuritySection(d AccountData) {
 	</section>
 }
 
-// accountAddOnsSection is the Add-ons tab: the feature catalog, each with a
+// AccountAddOnsSection is the Add-ons tab: the feature catalog, each with a
 // switch that turns it on or off for this user. Toggling submits the row's form
 // (a full-page POST), so the sidebar nav reflects the change on re-render.
-templ accountAddOnsSection(d AccountData) {
-	<section class="space-y-2">
+templ AccountAddOnsSection(d AccountData) {
+	<section id="account-addons" data-inline-errors class="space-y-2">
 		<h2 class="text-sm font-semibold">Add-ons</h2>
 		<p class="text-sm text-muted-foreground">Turn on only the features you need. Enable more any time.</p>
 		@settingsMessages(d.AddOnErr, d.AddOnOK)
@@ -430,11 +466,11 @@ templ addOnRow(a store.AddOn) {
 			</div>
 			<p class="text-sm text-muted-foreground">{ a.Description }</p>
 		</div>
-		<form method="post" action={ addOnAction(a.Slug) } class="shrink-0 pt-0.5">
+		<form hx-post={ addOnAction(a.Slug) } hx-trigger="change" hx-target="#account-addons" hx-swap="outerHTML" class="shrink-0 pt-0.5">
 			@switchcomp.Switch(switchcomp.Props{
 				Name:       "enabled",
 				Checked:    a.Enabled,
-				Attributes: templ.Attributes{"onchange": "this.form.submit()", "aria-label": "Toggle " + a.Name},
+				Attributes: templ.Attributes{"aria-label": "Toggle " + a.Name},
 			})
 		</form>
 	</div>

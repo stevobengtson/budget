@@ -60,6 +60,7 @@ templ Layout(title string, active string, collapsed bool) {
 			<script src={ Asset("/static/collapsible-persist.js") }></script>
 			<script src={ Asset("/static/section-collapse.js") }></script>
 			<script src={ Asset("/static/theme-toggle.js") }></script>
+			<script src={ Asset("/static/error-flash.js") } defer></script>
 		</head>
 		<body class="min-h-screen bg-background text-foreground">
 			@appShell(active, collapsed) {
@@ -108,18 +109,7 @@ templ appShell(active string, collapsed bool) {
 			}
 			@sidebar.Content() {
 				@sidebar.Group() {
-					@sidebar.Menu() {
-						@navItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-[18px]"}), active)
-						// Transactions is reached through the account list below —
-						// "All Accounts" heads it — rather than as its own nav entry,
-						// so the sidebar names places to be, not a second route to the
-						// same screen. That list is hidden in the collapsed icon rail
-						// though, so the rail keeps its own way in.
-						@collapsedOnlyNavItem("transactions", "All Accounts", icon.List(icon.Props{Class: "size-[18px]"}), active)
-						if AddOnEnabled(ctx, "paydown") {
-							@navItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-[18px]"}), active)
-						}
-					}
+					@PrimaryNav(active, false)
 				}
 				@sidebar.Group(sidebar.GroupProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"}) {
           @sidebar.GroupLabel() {
@@ -153,6 +143,31 @@ templ appShell(active string, collapsed bool) {
 		}
 	}
 	@tabBar(active)
+}
+
+// PrimaryNav is the sidebar's nav menu. It is a component with a stable id
+// because its contents depend on which add-ons are enabled: toggling one only
+// swaps the Add-ons section of the settings page, so the nav is refreshed out of
+// band from there (oob=true) rather than waiting for the next full page load.
+templ PrimaryNav(active string, oob bool) {
+	{{ attrs := templ.Attributes{"id": "primary-nav"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	<div { attrs... }>
+		@sidebar.Menu() {
+			@navItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-[18px]"}), active)
+			// Transactions is reached through the account list below — "All
+			// Accounts" heads it — rather than as its own nav entry, so the sidebar
+			// names places to be, not a second route to the same screen. That list
+			// is hidden in the collapsed icon rail though, so the rail keeps its own
+			// way in.
+			@collapsedOnlyNavItem("transactions", "All Accounts", icon.List(icon.Props{Class: "size-[18px]"}), active)
+			if AddOnEnabled(ctx, "paydown") {
+				@navItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-[18px]"}), active)
+			}
+		}
+	</div>
 }
 
 // navItem is one primary-nav entry. Active is a solid terracotta pill with a
@@ -212,7 +227,18 @@ func navItemClass(isActive bool) string {
 // each meets the 48px minimum touch target. "Transactions" reads as "Activity"
 // here because the label sits under a 22px icon at 11px.
 templ tabBar(active string) {
+	@tabBarNav(active, false)
+}
+
+// tabBarNav is the <768px nav, separated out for the same reason as PrimaryNav:
+// an add-on toggle changes which tabs exist and refreshes it out of band.
+templ tabBarNav(active string, oob bool) {
+	{{ attrs := templ.Attributes{"id": "tab-bar"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
 	<nav
+		{ attrs... }
 		aria-label="Primary"
 		class="fixed inset-x-0 bottom-0 z-40 flex justify-around rounded-t-[30px] bg-card px-s3 pt-s2 pb-s4 shadow-organic-lg md:hidden"
 	>
@@ -305,7 +331,7 @@ templ userMenu() {
 					Settings
 				</span>
 			}
-			@dropdown.Item(dropdown.ItemProps{Href: "/billing"}) {
+			@dropdown.Item(dropdown.ItemProps{Href: "/account?tab=billing"}) {
 				<span class="flex items-center gap-2">
 					@icon.CreditCard(icon.Props{Class: "size-4"})
 					Billing

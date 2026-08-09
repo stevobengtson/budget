@@ -1000,3 +1000,269 @@ func seedGoalCategory(t *testing.T, s *store.Store, uid int64) int64 {
 	}
 	return cat
 }
+
+// TestBadTransactionInputIsRejected covers two ways the create path used to fail
+// silently: an unparseable amount had its parse error discarded and became a
+// $0.00 transaction, and a transfer with no destination fell through to the
+// plain-transaction path and was stored as an ordinary expense. Both wrote a
+// wrong record and reported success.
+func TestBadTransactionInputIsRejected(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	chq, err := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.CreateAccount(ctx, uid, store.Account{Name: "Savings", Type: store.TypeSavings})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	post := func(form url.Values) int {
+		t.Helper()
+		resp, err := client.PostForm(ts.URL+"/transactions", form)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	cases := []struct {
+		label string
+		form  url.Values
+	}{
+		{"unparseable amount", url.Values{
+			"tx_type": {"expense"}, "date": {"2026-08-04"}, "amount": {"twelve"},
+			"account_id": {itoa(chq)}}},
+		{"transfer with no destination", url.Values{
+			"tx_type": {"transfer"}, "date": {"2026-08-05"}, "amount": {"200.00"},
+			"account_id": {itoa(chq)}}},
+		{"transfer to the same account", url.Values{
+			"tx_type": {"transfer"}, "date": {"2026-08-06"}, "amount": {"200.00"},
+			"account_id": {itoa(chq)}, "transfer_to": {itoa(chq)}}},
+	}
+	for _, c := range cases {
+		if got := post(c.form); got != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", c.label, got)
+		}
+	}
+
+	// Nothing was written by any of them.
+	rows, err := s.ListTransactions(ctx, uid, store.TxFilter{Month: "2026-08"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		for _, r := range rows {
+			t.Errorf("rejected input still stored a row: out=%d in=%d transfer=%v",
+				r.OutflowCents, r.InflowCents, r.TransferAccountID != nil)
+		}
+	}
+
+	// A well-formed transfer still works.
+	if got := post(url.Values{
+		"tx_type": {"transfer"}, "date": {"2026-08-07"}, "amount": {"200.00"},
+		"account_id": {itoa(chq)}, "transfer_to": {itoa(other)}}); got != http.StatusOK {
+		t.Errorf("valid transfer rejected with %d", got)
+	}
+	rows, _ = s.ListTransactions(ctx, uid, store.TxFilter{Month: "2026-08"})
+	if len(rows) != 2 {
+		t.Errorf("valid transfer stored %d legs, want 2", len(rows))
+	}
+}
+
+// TestErrorsAreSurfaced checks the script that makes the rejections above
+// visible is actually loaded — htmx does not swap 4xx/5xx, so without a listener
+// a rejected action looks identical to one that did nothing.
+func TestErrorsAreSurfaced(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	if _, err := s.CreateAccount(context.Background(), uid,
+		store.Account{Name: "Chequing", Type: "checking"}); err != nil {
+		t.Fatal(err)
+	}
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget"))
+	if !strings.Contains(body, "error-flash.js") {
+		t.Error("error-flash.js is not loaded; failed requests would be invisible")
+	}
+	if !strings.Contains(body, `id="flash"`) {
+		t.Error("no #flash slot for messages to appear in")
+	}
+}
+
+// TestBillingLivesInSettings covers moving plan management into Settings: the
+// Billing tab renders there, ?tab= deep-links it (so the user menu can point
+// straight at it), and unknown tab values fall back to the first tab rather
+// than rendering none.
+func TestBillingLivesInSettings(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, _ := serveAuthed(t, s)
+
+	page := readAll(t, mustGetOK(t, client, ts.URL+"/account?tab=billing"))
+	if !strings.Contains(page, "Billing") {
+		t.Error("Settings should offer a Billing tab")
+	}
+	// The other tabs are still there — Billing is an addition, not a replacement.
+	for _, tab := range []string{"Account", "Security", "Add-ons"} {
+		if !strings.Contains(page, tab) {
+			t.Errorf("Settings lost the %s tab", tab)
+		}
+	}
+
+	activeTab := func(body string) string {
+		m := regexp.MustCompile(`data-tui-tabs-value="([a-z-]+)"[^>]*data-tui-tabs-state="active"`).
+			FindStringSubmatch(body)
+		if m == nil {
+			// templUI may order the attributes the other way round.
+			m = regexp.MustCompile(`data-tui-tabs-state="active"[^>]*data-tui-tabs-value="([a-z-]+)"`).
+				FindStringSubmatch(body)
+		}
+		if m == nil {
+			return ""
+		}
+		return m[1]
+	}
+	if got := activeTab(page); got != "" && got != "billing" {
+		t.Errorf("?tab=billing opened %q", got)
+	}
+	// A bogus tab must not leave every panel closed.
+	junk := readAll(t, mustGetOK(t, client, ts.URL+"/account?tab=nonsense"))
+	if got := activeTab(junk); got != "" && got != "account" {
+		t.Errorf("unknown tab opened %q, want the account tab", got)
+	}
+
+	// The user menu points at the tab rather than the old standalone page.
+	if !strings.Contains(page, "/account?tab=billing") {
+		t.Error("the user menu should link to the Billing tab")
+	}
+}
+
+// TestSettingsMutationsReturnFragments checks that a settings action re-renders
+// only its own section. Saving a display name used to return the entire settings
+// page — every tab, including a subscription lookup for Billing that the save
+// had nothing to do with.
+func TestSettingsMutationsReturnFragments(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, _ := serveAuthedCfg(t, s, billingCfg(t))
+
+	// The page load is the whole page, with billing rendered inline.
+	page := readAll(t, mustGetOK(t, client, ts.URL+"/account?tab=billing"))
+	for _, want := range []string{`id="account-profile"`, `id="account-security"`, `id="account-addons"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("settings page missing %s", want)
+		}
+	}
+	if strings.Contains(page, `hx-get="/account/billing"`) {
+		t.Error("the page load should render billing inline, not defer it")
+	}
+
+	// A profile save returns just that section.
+	resp, err := client.PostForm(ts.URL+"/account/profile", url.Values{"name": {"Steven B"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frag := readAll(t, resp)
+	if !strings.Contains(frag, `id="account-profile"`) || !strings.Contains(frag, "Profile updated") {
+		t.Error("profile save should return the profile section with its message")
+	}
+	for _, unwanted := range []string{`id="account-security"`, `id="account-addons"`, `id="app-rail"`} {
+		if strings.Contains(frag, unwanted) {
+			t.Errorf("profile save returned %s — it should be a fragment, not the page", unwanted)
+		}
+	}
+	if len(frag) >= len(page) {
+		t.Errorf("fragment (%d bytes) is not smaller than the page (%d bytes)", len(frag), len(page))
+	}
+
+	// A validation error also comes back as the section, carrying the reason, and
+	// keeps its 4xx status (error-flash.js opts these sections into swapping).
+	resp, err = client.PostForm(ts.URL+"/account/profile", url.Values{"name": {"   "}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := readAll(t, resp)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("empty name = %d, want 400", resp.StatusCode)
+	}
+	if !strings.Contains(bad, `id="account-profile"`) || !strings.Contains(bad, "data-inline-errors") {
+		t.Error("a rejected save should return the section, marked for inline errors")
+	}
+
+	// The deferred billing fragment still exists for the renders that do not
+	// build it (the danger-zone actions re-render the whole page).
+	if f := readAll(t, mustGetOK(t, client, ts.URL+"/account/billing")); len(f) < 100 {
+		t.Errorf("billing fragment looks wrong (%d bytes)", len(f))
+	}
+}
+
+// TestAddOnToggleDisables covers turning an add-on off. The switch used to call
+// this.form.submit() — a native submit that bypasses htmx entirely — so once the
+// form became an hx-post the toggle silently stopped working. The response also
+// refreshes both navs out of band, because which add-ons are on decides whether
+// Paydown appears in them.
+func TestAddOnToggleDisables(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	enabled := func() bool {
+		t.Helper()
+		slugs, err := s.EnabledAddOnSlugs(ctx, uid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, sl := range slugs {
+			if sl == "paydown" {
+				return true
+			}
+		}
+		return false
+	}
+
+	// On: the checkbox posts enabled=on.
+	resp, err := client.PostForm(ts.URL+"/account/addons/paydown", url.Values{"enabled": {"on"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	on := readAll(t, resp)
+	if !enabled() {
+		t.Fatal("add-on did not turn on")
+	}
+	// href="/paydown" appears only in a nav entry — the Add-ons row is a form to
+	// /account/addons/paydown, so a looser match would always succeed.
+	if !strings.Contains(on, `href="/paydown"`) {
+		t.Error("the refreshed nav should carry Paydown while the add-on is on")
+	}
+
+	// Off: an unchecked switch posts no value at all, which is what broke.
+	resp, err = client.PostForm(ts.URL+"/account/addons/paydown", url.Values{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	off := readAll(t, resp)
+	if enabled() {
+		t.Error("add-on is still enabled after being switched off")
+	}
+	if !strings.Contains(off, "Add-on disabled.") {
+		t.Error("the Add-ons section should confirm it was disabled")
+	}
+
+	// Both navs are refreshed out of band, and no longer offer Paydown.
+	for _, id := range []string{`id="primary-nav"`, `id="tab-bar"`} {
+		if !strings.Contains(off, id) {
+			t.Errorf("toggle response missing %s for the out-of-band refresh", id)
+		}
+	}
+	if !strings.Contains(off, `hx-swap-oob="true"`) {
+		t.Error("the navs should be swapped out of band")
+	}
+	if strings.Contains(off, `href="/paydown"`) {
+		t.Error("the refreshed nav still offers Paydown after it was disabled")
+	}
+	// And it really is gone from the app.
+	if body := readAll(t, mustGetOK(t, client, ts.URL+"/budget")); strings.Contains(body, `href="/paydown"`) {
+		t.Error("Paydown is still in the nav on a fresh page load")
+	}
+}

@@ -216,6 +216,7 @@ func (s *Server) routes(cfg config.Config) {
 	// Account + billing stay reachable even when a subscription has lapsed, so a
 	// locked-out user can still manage their account and subscribe.
 	app.GET("/account", hs.AccountPage)
+	app.GET("/account/billing", hs.AccountBillingSection)
 	app.POST("/account/profile", hs.UpdateProfile)
 	app.POST("/account/email", hs.RequestEmailChange)
 	app.POST("/account/avatar", hs.UpdateAvatar)

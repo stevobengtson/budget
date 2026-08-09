@@ -113,20 +113,28 @@ func TestBillingExemptBypassesGate(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("exempt /budget = %d, want 200", resp.StatusCode)
 	}
-	// And /billing reflects the complimentary status.
-	body := readAll(t, mustGetOK(t, client, ts.URL+"/billing"))
+	// /billing now sends anyone who still has access to the Settings tab, which
+	// is where a plan is managed; only locked-out users get the paywall there.
+	resp, _ = client.Get(ts.URL + "/billing")
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/account?tab=billing" {
+		t.Fatalf("exempt /billing = %d %q, want 303 /account?tab=billing",
+			resp.StatusCode, resp.Header.Get("Location"))
+	}
+	// And the tab reflects the complimentary status.
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/account?tab=billing"))
 	if !strings.Contains(body, "Complimentary access") {
-		t.Error("exempt /billing should show the complimentary state")
+		t.Error("the Billing tab should show the complimentary state")
 	}
 	if strings.Contains(body, "Start free trial") {
-		t.Error("exempt /billing should not show a trial CTA")
+		t.Error("an exempt user should not see a trial CTA")
 	}
 }
 
 // TestBillingStandaloneLayout verifies a never-subscribed user's /billing is the
-// chrome-less paywall, while a user with access sees the in-app management page
-// inside the app shell. Regression for the early-return that skipped the
-// Standalone flag for never-subscribed users.
+// chrome-less paywall, while a user with access is sent to the Settings Billing
+// tab instead. Regression for the early-return that skipped the Standalone flag
+// for never-subscribed users.
 //
 // The marker is the nav rail itself rather than the account-overview widget:
 // the widget used to live in the shell, but the redesign moved it into the
@@ -151,9 +159,19 @@ func TestBillingStandaloneLayout(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	body = readAll(t, mustGetOK(t, client, ts.URL+"/billing"))
+	// With access, /billing is no longer a page of its own — it redirects into
+	// Settings, where the plan is managed alongside the rest of the account.
+	client.CheckRedirect = func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }
+	resp := mustGet(t, client, ts.URL+"/billing")
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/account?tab=billing" {
+		t.Errorf("/billing with access = %d %q, want 303 /account?tab=billing",
+			resp.StatusCode, resp.Header.Get("Location"))
+	}
+	client.CheckRedirect = nil
+	body = readAll(t, mustGetOK(t, client, ts.URL+"/account?tab=billing"))
 	if !strings.Contains(body, `id="app-rail"`) {
-		t.Error("in-app /billing (active sub) should render the app shell")
+		t.Error("the Billing tab should render inside the app shell")
 	}
 }
 
@@ -260,4 +278,15 @@ func TestStripeWebhookRejectsBadSignature(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("forged webhook status = %d, want 400", resp.StatusCode)
 	}
+}
+
+// mustGet performs a GET and fails the test on a transport error, leaving the
+// status for the caller to assert (unlike mustGetOK, which requires 200).
+func mustGet(t *testing.T, client *http.Client, url string) *http.Response {
+	t.Helper()
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
 }

@@ -20,25 +20,28 @@ type BillingData struct {
 	CancelAtPeriodEnd bool
 }
 
+// BillingPage is now only the locked-out paywall. A user who still has access
+// manages their plan in Settings -> Billing (BillingSection); /billing redirects
+// them there, so there is one place to look rather than two views of the same
+// subscription.
 templ BillingPage(d BillingData) {
-	if d.Standalone {
-		@billingStandalone(d)
-	} else {
-		@Layout("Billing", "billing", d.Collapsed) {
-			<div class="mx-auto w-full max-w-2xl space-y-6">
-				<h1 class="text-2xl font-semibold tracking-tight">Billing</h1>
-				if !d.Configured {
-					<div class="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
-						Billing isn't configured in this environment.
-					</div>
-				} else if d.State == "exempt" {
-					@billingExemptCard()
-				} else {
-					@billingCard(d)
-				}
+	@billingStandalone(d)
+}
+
+// BillingSection is the subscription state as it appears in the Settings page's
+// Billing tab.
+templ BillingSection(d BillingData) {
+	<div class="space-y-6">
+		if !d.Configured {
+			<div class="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+				Billing isn't configured in this environment.
 			</div>
+		} else if d.State == "exempt" {
+			@billingExemptCard()
+		} else {
+			@billingCard(d)
 		}
-	}
+	</div>
 }
 
 // billingStandalone is the sidebar-less paywall a locked-out user sees (never
