@@ -272,6 +272,120 @@ func TestMonthBudget(t *testing.T) {
 	}
 }
 
+// TestArchiveRoundTripPreservesAvailable is the guarantee the archive warning
+// and the Archived panel both rest on: archiving hides a category's balance from
+// the month but does not spend, move or destroy it, and unarchiving returns the
+// same figure to MonthBudget.
+func TestArchiveRoundTripPreservesAvailable(t *testing.T) {
+	s, uid := newTestStoreUser(t)
+	ctx := context.Background()
+
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	gid, _ := s.CreateGroup(ctx, uid, "Monthly", 0)
+	vac, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Vacation"})
+
+	now := time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC)
+	month := MonthKey(now)
+	if err := s.SetAssigned(ctx, uid, month, vac, 20_000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateTransaction(ctx, uid, Transaction{
+		Date: now, AccountID: chk, CategoryID: &vac, OutflowCents: 7_550,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	const want = 12_450 // 200.00 assigned − 75.50 spent
+
+	if got := findCategoryRow(t, mustMonthBudget(t, s, uid, month), "Vacation").AvailableCents; got != want {
+		t.Fatalf("available before archive = %d, want %d", got, want)
+	}
+
+	if err := s.ArchiveCategory(ctx, uid, vac); err != nil {
+		t.Fatal(err)
+	}
+
+	// Gone from the month, so it counts toward no total on the budget page.
+	for _, r := range mustMonthBudget(t, s, uid, month) {
+		if r.CategoryName == "Vacation" {
+			t.Error("archived category still in MonthBudget")
+		}
+	}
+
+	// But the panel can still see it, and still see the money.
+	archived, err := s.ListArchivedCategories(ctx, uid, month)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(archived) != 1 {
+		t.Fatalf("archived count = %d, want 1", len(archived))
+	}
+	if archived[0].ID != vac || archived[0].Name != "Vacation" || archived[0].GroupName != "Monthly" {
+		t.Errorf("archived row = %+v, want Vacation in Monthly", archived[0])
+	}
+	if archived[0].AvailableCents != want {
+		t.Errorf("archived available = %d, want %d", archived[0].AvailableCents, want)
+	}
+	if n, _ := s.CountArchivedCategories(ctx, uid); n != 1 {
+		t.Errorf("count = %d, want 1", n)
+	}
+
+	if err := s.UnarchiveCategory(ctx, uid, vac); err != nil {
+		t.Fatal(err)
+	}
+	if got := findCategoryRow(t, mustMonthBudget(t, s, uid, month), "Vacation").AvailableCents; got != want {
+		t.Errorf("available after unarchive = %d, want %d", got, want)
+	}
+	if n, _ := s.CountArchivedCategories(ctx, uid); n != 0 {
+		t.Errorf("count after unarchive = %d, want 0", n)
+	}
+}
+
+// TestArchivedBalanceSurvivesGroupDelete pins the one path that could otherwise
+// destroy an archived balance: DeleteGroup hard-deletes the archived categories
+// in the group. A category holding money necessarily has a budgets or
+// transactions row referencing it, and those foreign keys have no ON DELETE
+// clause, so the whole delete rolls back rather than taking the money with it.
+func TestArchivedBalanceSurvivesGroupDelete(t *testing.T) {
+	s, uid := newTestStoreUser(t)
+	ctx := context.Background()
+
+	gid, _ := s.CreateGroup(ctx, uid, "Sinking", 0)
+	vac, _ := s.CreateCategory(ctx, uid, Category{GroupID: gid, Name: "Vacation"})
+
+	month := "2026-04"
+	// Assignment only — no transaction. This is the case where the balance rests
+	// entirely on a budgets row.
+	if err := s.SetAssigned(ctx, uid, month, vac, 12_450); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ArchiveCategory(ctx, uid, vac); err != nil {
+		t.Fatal(err)
+	}
+
+	// The group now looks empty to the budget page (archived rows are filtered
+	// out), so the "delete empty group" control is offered. It must not succeed.
+	if err := s.DeleteGroup(ctx, uid, gid); err == nil {
+		t.Fatal("deleting a group holding an archived balance should be rejected")
+	}
+
+	archived, err := s.ListArchivedCategories(ctx, uid, month)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(archived) != 1 || archived[0].AvailableCents != 12_450 {
+		t.Fatalf("archived after rejected delete = %+v, want one row holding 12450", archived)
+	}
+}
+
+func mustMonthBudget(t *testing.T, s *Store, uid int64, month string) []CategoryBudget {
+	t.Helper()
+	rows, err := s.MonthBudget(context.Background(), uid, month)
+	if err != nil {
+		t.Fatalf("month budget: %v", err)
+	}
+	return rows
+}
+
 func TestMonthBudgetSpentNetsInflows(t *testing.T) {
 	s, uid := newTestStoreUser(t)
 	ctx := context.Background()

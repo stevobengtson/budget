@@ -888,7 +888,7 @@ func rowMenu(month string, r store.CategoryBudget) templ.Component {
 						"hx-post":    fmt.Sprintf("/budget/category/%d/archive?month=%s", r.CategoryID, month),
 						"hx-target":  "#budget-region",
 						"hx-swap":    "outerHTML",
-						"hx-confirm": "Archive this category?",
+						"hx-confirm": archiveCategoryConfirm(r),
 					},
 				}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var39), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
@@ -908,6 +908,30 @@ func rowMenu(month string, r store.CategoryBudget) templ.Component {
 		}
 		return nil
 	})
+}
+
+// archiveCategoryConfirm words the archive prompt around the balance the
+// category is carrying, which is the part that surprises people: an archived
+// category is filtered out of MonthBudget, so its Available stops being counted
+// in the group total and in "Still in envelopes" while it is away.
+//
+// It says "stops counting", not "is lost", because that is what actually
+// happens — archiving only sets archived_at, and unarchiving from the Archived
+// panel recomputes the same figure back. Overspending is called out in its own
+// wording: hiding a negative balance is the more consequential of the two, since
+// it makes a month look better than it was.
+func archiveCategoryConfirm(r store.CategoryBudget) string {
+	const tail = "\n\nIts transactions stay where they are and still count in past months. You can bring it back from Archived."
+	switch {
+	case r.AvailableCents > 0:
+		return fmt.Sprintf("Archive %s?\n\nIt still holds %s. That money stops counting in this group's total and in \"Still in envelopes\" until you unarchive it.%s",
+			r.CategoryName, money.Format(r.AvailableCents), tail)
+	case r.AvailableCents < 0:
+		return fmt.Sprintf("Archive %s?\n\nIt is overspent by %s. Archiving hides that overspending from the month's totals rather than resolving it.%s",
+			r.CategoryName, money.Format(-r.AvailableCents), tail)
+	default:
+		return fmt.Sprintf("Archive %s?\n\nIt leaves the budget table.%s", r.CategoryName, tail)
+	}
 }
 
 // menuCheck shows a leading tick for an enabled toggle, or a blank gutter of the
@@ -1015,7 +1039,7 @@ func BudgetCategoryNewRow(month string, gid int64) templ.Component {
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/budget/group/%d/category?month=%s", gid, month))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 312, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 336, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
@@ -1058,7 +1082,7 @@ func BudgetGoalEditor(month string, r store.CategoryBudget) templ.Component {
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("goal-edit-%d", r.CategoryID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 328, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 352, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 		if templ_7745c5c3_Err != nil {
@@ -1071,7 +1095,7 @@ func BudgetGoalEditor(month string, r store.CategoryBudget) templ.Component {
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/budget/goal/%d?month=%s", r.CategoryID, month))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 330, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 354, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 		if templ_7745c5c3_Err != nil {
@@ -1084,7 +1108,7 @@ func BudgetGoalEditor(month string, r store.CategoryBudget) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("#goal-edit-%d", r.CategoryID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 331, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 355, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
@@ -1097,7 +1121,7 @@ func BudgetGoalEditor(month string, r store.CategoryBudget) templ.Component {
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(r.CategoryName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 336, Col: 29}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 360, Col: 29}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
@@ -1110,7 +1134,7 @@ func BudgetGoalEditor(month string, r store.CategoryBudget) templ.Component {
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(goalCentsValue(r))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 341, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 365, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 		if templ_7745c5c3_Err != nil {
@@ -1136,7 +1160,7 @@ func BudgetGoalEditor(month string, r store.CategoryBudget) templ.Component {
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("goal-need-%d", r.CategoryID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 380, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 404, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 		if templ_7745c5c3_Err != nil {
@@ -1149,7 +1173,7 @@ func BudgetGoalEditor(month string, r store.CategoryBudget) templ.Component {
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/budget/goal/%d/preview?month=%s", r.CategoryID, month))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 381, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 405, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 		if templ_7745c5c3_Err != nil {
@@ -1162,7 +1186,7 @@ func BudgetGoalEditor(month string, r store.CategoryBudget) templ.Component {
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("change from:#goal-edit-%d, keyup changed delay:400ms from:#goal-edit-%d", r.CategoryID, r.CategoryID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 382, Col: 133}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 406, Col: 133}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 		if templ_7745c5c3_Err != nil {
@@ -1175,7 +1199,7 @@ func BudgetGoalEditor(month string, r store.CategoryBudget) templ.Component {
 		var templ_7745c5c3_Var53 string
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("#goal-edit-%d", r.CategoryID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 383, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 407, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
@@ -1324,7 +1348,7 @@ func GoalNeed(monthlyTarget int64) templ.Component {
 			var templ_7745c5c3_Var58 string
 			templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(money.Format(monthlyTarget))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 431, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 455, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 			if templ_7745c5c3_Err != nil {
@@ -1401,7 +1425,7 @@ func GoalCell(r store.CategoryBudget) templ.Component {
 			var templ_7745c5c3_Var60 string
 			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinStringErrs(g.Amount)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 471, Col: 14}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 495, Col: 14}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 			if templ_7745c5c3_Err != nil {
@@ -1420,7 +1444,7 @@ func GoalCell(r store.CategoryBudget) templ.Component {
 					var templ_7745c5c3_Var61 string
 					templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(g.Need)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 476, Col: 14}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 500, Col: 14}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 					if templ_7745c5c3_Err != nil {
@@ -1433,7 +1457,7 @@ func GoalCell(r store.CategoryBudget) templ.Component {
 					var templ_7745c5c3_Var62 string
 					templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(g.Due)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 476, Col: 30}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 500, Col: 30}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 					if templ_7745c5c3_Err != nil {
@@ -1443,7 +1467,7 @@ func GoalCell(r store.CategoryBudget) templ.Component {
 					var templ_7745c5c3_Var63 string
 					templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(g.Need)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 478, Col: 14}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 502, Col: 14}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 					if templ_7745c5c3_Err != nil {
@@ -1457,7 +1481,7 @@ func GoalCell(r store.CategoryBudget) templ.Component {
 					var templ_7745c5c3_Var64 string
 					templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(g.Due)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 480, Col: 16}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/budget_row.templ`, Line: 504, Col: 16}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 					if templ_7745c5c3_Err != nil {

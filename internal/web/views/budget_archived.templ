@@ -1,0 +1,105 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/templui/templui/components/icon"
+)
+
+// BudgetArchivedPanel lists the archived categories and is the only way back
+// from archiving. Each row shows the balance the category still holds, because
+// that balance is the reason to come here: it is not counted anywhere on the
+// budget page while the category sits archived, and unarchiving is what puts it
+// back.
+//
+// A panel rather than a section in the table: archived categories are a rare
+// visit, and the redesign's table earns its readability by carrying only two
+// numbers per row. The button that opens it renders only when there is something
+// archived (see BudgetTable), so the header gains no permanent control.
+templ BudgetArchivedPanel(d BudgetData, rows []store.ArchivedCategory) {
+	@dialogPanel("max-w-xl") {
+		<div class="flex items-center justify-between gap-s3">
+			<h2 class="font-heading text-[22px] font-semibold">Archived categories</h2>
+			<button
+				type="button"
+				class="inline-flex size-9 items-center justify-center rounded-pill text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground"
+				aria-label="Close"
+				hx-on:click="document.getElementById('modal').innerHTML = ''"
+			>
+				@icon.X(icon.Props{Class: "size-[18px]"})
+			</button>
+		</div>
+		<div id="archived-list" class="flex flex-col gap-s3">
+			@budgetArchivedList(d, rows)
+		</div>
+		<div class="flex items-center justify-end">
+			@button.Button(button.Props{
+				Type:       "button",
+				Variant:    button.VariantOutline,
+				Size:       button.SizeSm,
+				Class:      "rounded-pill",
+				Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').innerHTML = ''"},
+			}) {
+				Done
+			}
+		</div>
+	}
+}
+
+// BudgetArchivedListResult refreshes the panel's list after an unarchive and
+// swaps the budget table region out of band, since the restored category and its
+// balance change the rows, the group total and "Still in envelopes" behind the
+// modal.
+templ BudgetArchivedListResult(d BudgetData, rows []store.ArchivedCategory) {
+	@budgetArchivedList(d, rows)
+	@BudgetRegionOOB(d)
+}
+
+templ budgetArchivedList(d BudgetData, rows []store.ArchivedCategory) {
+	if len(rows) == 0 {
+		<p class="text-[14px] text-muted-foreground">
+			Nothing archived. Archiving a category from its row menu parks it here.
+		</p>
+	} else {
+		<div class="flex flex-col">
+			<div class="grid grid-cols-[1fr_140px_110px] gap-s3 border-b border-border pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+				<span>Category</span>
+				<span class="text-right">Still holds</span>
+				<span></span>
+			</div>
+			for _, a := range rows {
+				<div class="grid grid-cols-[1fr_140px_110px] items-center gap-s3 border-b border-border py-s2 text-[15px] last:border-b-0">
+					<span class="flex min-w-0 flex-col">
+						<span class="truncate font-semibold">{ a.Name }</span>
+						<span class="truncate text-[13px] text-muted-foreground">{ a.GroupName }</span>
+					</span>
+					<span class={ "text-right font-bold tabular-nums", availColorClass(a.AvailableCents) }>
+						{ money.Format(a.AvailableCents) }
+					</span>
+					<span class="flex justify-end">
+						@button.Button(button.Props{
+							Type:    "button",
+							Variant: button.VariantOutline,
+							Size:    button.SizeSm,
+							Class:   "rounded-pill",
+							Attributes: templ.Attributes{
+								"hx-post":   fmt.Sprintf("/budget/category/%d/unarchive?month=%s", a.ID, d.Month),
+								"hx-target": "#archived-list",
+								"hx-swap":   "innerHTML",
+							},
+						}) {
+							Unarchive
+						}
+					</span>
+				</div>
+			}
+			<p class="pt-s3 text-[13px] text-muted-foreground">
+				A balance shown here counts nowhere on the budget page. Unarchiving
+				returns the category and its balance to the table.
+			</p>
+		</div>
+	}
+}

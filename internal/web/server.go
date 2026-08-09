@@ -269,7 +269,9 @@ func (s *Server) routes(cfg config.Config) {
 	gated.POST("/budget/group/:gid/category", hs.BudgetCategoryCreate)
 	gated.PUT("/budget/category/:catID", hs.BudgetCategoryRename)
 	gated.POST("/budget/category/:catID/archive", hs.BudgetCategoryArchive)
+	gated.POST("/budget/category/:catID/unarchive", hs.BudgetCategoryUnarchive)
 	gated.POST("/budget/category/:catID/rollover", hs.BudgetSetRollover)
+	gated.GET("/budget/archived/panel", hs.BudgetArchivedPanel)
 	gated.GET("/budget/income", func(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/budget")
 	})

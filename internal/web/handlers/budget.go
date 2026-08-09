@@ -93,6 +93,7 @@ func (h *Handlers) budgetData(ctx context.Context, userID int64, month string) (
 
 	incTotal, _ := h.store.TotalIncome(ctx, userID, month)
 	uncat, _ := h.store.UncategorizedSpent(ctx, userID, month)
+	archived, _ := h.store.CountArchivedCategories(ctx, userID)
 	credit, _ := h.store.CreditCardActivityForMonth(ctx, userID, month)
 	incomeRows, _ := h.store.ListIncomes(ctx, userID, month)
 
@@ -131,6 +132,7 @@ func (h *Handlers) budgetData(ctx context.Context, userID int64, month string) (
 		IncomeRows:         incomeRows,
 		Accounts:           accts,
 		UncategorizedSpent: uncat,
+		ArchivedCount:      archived,
 	}, rows, nil
 }
 
@@ -656,6 +658,53 @@ func (h *Handlers) BudgetCategoryArchive(c *gin.Context) {
 	}
 	setCollapseState(c, &data)
 	render(c, http.StatusOK, views.BudgetRegion(data))
+}
+
+// BudgetArchivedPanel renders the archived categories into #modal. It is the
+// only route back from archiving, reached from the Archived control that the
+// table header shows when the user has any.
+func (h *Handlers) BudgetArchivedPanel(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	month := monthOrNow(c)
+	data, _, err := h.budgetData(ctx, uid, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	archived, err := h.store.ListArchivedCategories(ctx, uid, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetArchivedPanel(data, archived))
+}
+
+// BudgetCategoryUnarchive restores a category and re-renders both the panel's
+// list (the primary target, since the modal stays open) and the budget region
+// out of band — the restored category brings its balance back into the group
+// total and "Still in envelopes".
+func (h *Handlers) BudgetCategoryUnarchive(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	month := monthOrNow(c)
+	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
+	if err := h.store.UnarchiveCategory(ctx, uid, catID); err != nil {
+		c.String(http.StatusBadRequest, err.Error())
+		return
+	}
+	data, _, err := h.budgetData(ctx, uid, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	setCollapseState(c, &data)
+	archived, err := h.store.ListArchivedCategories(ctx, uid, month)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	render(c, http.StatusOK, views.BudgetArchivedListResult(data, archived))
 }
 
 // findCategory loads one active category by id, rejecting the system Income

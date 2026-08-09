@@ -280,12 +280,36 @@ templ rowMenu(month string, r store.CategoryBudget) {
 					"hx-post":    fmt.Sprintf("/budget/category/%d/archive?month=%s", r.CategoryID, month),
 					"hx-target":  "#budget-region",
 					"hx-swap":    "outerHTML",
-					"hx-confirm": "Archive this category?",
+					"hx-confirm": archiveCategoryConfirm(r),
 				},
 			}) {
 				Archive category
 			}
 		}
+	}
+}
+
+// archiveCategoryConfirm words the archive prompt around the balance the
+// category is carrying, which is the part that surprises people: an archived
+// category is filtered out of MonthBudget, so its Available stops being counted
+// in the group total and in "Still in envelopes" while it is away.
+//
+// It says "stops counting", not "is lost", because that is what actually
+// happens — archiving only sets archived_at, and unarchiving from the Archived
+// panel recomputes the same figure back. Overspending is called out in its own
+// wording: hiding a negative balance is the more consequential of the two, since
+// it makes a month look better than it was.
+func archiveCategoryConfirm(r store.CategoryBudget) string {
+	const tail = "\n\nIts transactions stay where they are and still count in past months. You can bring it back from Archived."
+	switch {
+	case r.AvailableCents > 0:
+		return fmt.Sprintf("Archive %s?\n\nIt still holds %s. That money stops counting in this group's total and in \"Still in envelopes\" until you unarchive it.%s",
+			r.CategoryName, money.Format(r.AvailableCents), tail)
+	case r.AvailableCents < 0:
+		return fmt.Sprintf("Archive %s?\n\nIt is overspent by %s. Archiving hides that overspending from the month's totals rather than resolving it.%s",
+			r.CategoryName, money.Format(-r.AvailableCents), tail)
+	default:
+		return fmt.Sprintf("Archive %s?\n\nIt leaves the budget table.%s", r.CategoryName, tail)
 	}
 }
 

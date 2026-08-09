@@ -19,6 +19,10 @@ type BudgetData struct {
 	IncomeRows         []store.Income
 	Accounts           []store.AccountWithBalance
 	UncategorizedSpent int64
+	// ArchivedCount gates the Archived control in the table header — it is the
+	// only way back to an archived category, so it appears exactly when there is
+	// something to go back to.
+	ArchivedCount int
 }
 
 // BudgetGroup is one category group plus its month rows, for rendering a
@@ -60,7 +64,22 @@ templ BudgetBody(d BudgetData) {
 // swap this whole region — they replace just the edited row and refresh the
 // banner + totals via out-of-band swaps (see BudgetAssignResult).
 templ BudgetRegion(d BudgetData) {
-	<div id="budget-region" class="flex flex-col gap-s6">
+	@budgetRegion(d, false)
+}
+
+// BudgetRegionOOB is the same region marked for an out-of-band swap, for
+// responses whose primary target is elsewhere — the archived panel unarchives
+// into its own list and refreshes the table behind the modal with this.
+templ BudgetRegionOOB(d BudgetData) {
+	@budgetRegion(d, true)
+}
+
+templ budgetRegion(d BudgetData, oob bool) {
+	{{ attrs := templ.Attributes{"id": "budget-region"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	<div class="flex flex-col gap-s6" { attrs... }>
 		<div class="flex flex-col gap-s6 lg:flex-row">
 			@BudgetRail(d, false)
 			@BudgetTable(d)

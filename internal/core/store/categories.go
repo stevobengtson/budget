@@ -229,6 +229,84 @@ func (s *Store) ArchiveCategory(ctx context.Context, userID, id int64) error {
 	return err
 }
 
+// UnarchiveCategory returns an archived category to the budget table. Archiving
+// only sets archived_at — the category's budgets and transactions rows are never
+// touched — so the balance it held before comes back with it, recomputed by
+// categoryAvailable from the same underlying data.
+//
+// No is-income guard: the Income category cannot be archived in the first place,
+// so there is no archived income category to restore.
+func (s *Store) UnarchiveCategory(ctx context.Context, userID, id int64) error {
+	_, err := s.run(ctx,
+		`UPDATE categories SET archived_at=NULL WHERE id=$1 AND user_id=$2`, id, userID)
+	return err
+}
+
+// ArchivedCategory is one archived category plus the balance it still holds.
+type ArchivedCategory struct {
+	ID             int64
+	Name           string
+	GroupName      string
+	AvailableCents int64
+	ArchivedAt     time.Time
+}
+
+// CountArchivedCategories counts the user's archived categories. The budget page
+// calls this on every render to decide whether the Archived control is worth
+// showing, so it stays a plain COUNT — the balances are only computed when the
+// panel is actually opened.
+func (s *Store) CountArchivedCategories(ctx context.Context, userID int64) (int, error) {
+	var n int
+	err := s.queryOne(ctx,
+		`SELECT COUNT(*) FROM categories WHERE archived_at IS NOT NULL AND user_id=$1`, userID).Scan(&n)
+	return n, err
+}
+
+// ListArchivedCategories returns the archived categories with the Available each
+// still holds as of month, newest archived first. The balance is computed by the
+// same categoryAvailable walk MonthBudget uses, so what this panel shows is
+// exactly what unarchiving puts back into the table.
+func (s *Store) ListArchivedCategories(ctx context.Context, userID int64, month string) ([]ArchivedCategory, error) {
+	q := `
+SELECT c.id, c.name, g.name, c.rollover_mode, c.archived_at
+FROM categories c
+JOIN category_groups g ON g.id = c.group_id AND g.user_id = c.user_id
+WHERE c.archived_at IS NOT NULL AND c.user_id = $1
+ORDER BY c.archived_at DESC, c.name`
+	rows, err := s.queryAll(ctx, q, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list archived categories: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	// Modes are collected alongside the rows and the balances computed after the
+	// cursor is closed: categoryAvailable issues its own queries, and running them
+	// mid-iteration would hold two cursors open on one connection.
+	var out []ArchivedCategory
+	var modes []string
+	for rows.Next() {
+		var a ArchivedCategory
+		var mode string
+		if err := rows.Scan(&a.ID, &a.Name, &a.GroupName, &mode, &a.ArchivedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+		modes = append(modes, mode)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range out {
+		avail, err := s.categoryAvailable(ctx, userID, out[i].ID, modes[i], month)
+		if err != nil {
+			return nil, err
+		}
+		out[i].AvailableCents = avail
+	}
+	return out, nil
+}
+
 func (s *Store) DeleteCategory(ctx context.Context, userID, id int64) error {
 	if err := s.checkNotIncome(ctx, userID, id); err != nil {
 		return err

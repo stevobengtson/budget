@@ -88,6 +88,26 @@ templ BudgetTable(d BudgetData) {
 				}) {
 					Cards
 				}
+				// Only when there is something archived: this is the sole route back
+				// from archiving, so it must be present whenever it can do anything —
+				// and absent otherwise, rather than sitting in the header as a dead
+				// control on a budget nobody has archived from.
+				if d.ArchivedCount > 0 {
+					@button.Button(button.Props{
+						Type:    "button",
+						Variant: button.VariantOutline,
+						Size:    button.SizeSm,
+						Class:   "rounded-pill",
+						Attributes: templ.Attributes{
+							"hx-get":    "/budget/archived/panel?month=" + d.Month,
+							"hx-target": "#modal",
+							"hx-swap":   "innerHTML",
+							"title":     "Archived categories",
+						},
+					}) {
+						Archived
+					}
+				}
 				@button.Button(button.Props{
 					Type:    "button",
 					Variant: button.VariantOutline,
