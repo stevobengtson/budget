@@ -8,6 +8,10 @@ import (
 	"github.com/templui/templui/components/icon"
 )
 
+// Rail cards carry p-s4 (17.6px) rather than the handoff's 13.2px: at the 32.2px
+// corner radius these use, 13.2px leaves the first and last characters of a line
+// sitting inside the curve, which reads as overflowing the card.
+//
 // BudgetRail is the Budget screen's 300px summary column: month navigation, the
 // Ready-to-assign headline, the month's totals, and a "Needs attention" card
 // that appears only when something is wrong.
@@ -30,6 +34,7 @@ templ BudgetRail(d BudgetData, oob bool) {
 		@railReadyToAssign(d)
 		@railTotals(d)
 		@railNeedsAttention(d)
+		@railCardsOwing(d)
 	</aside>
 }
 
@@ -70,7 +75,7 @@ templ railMonthNav(d BudgetData) {
 // the number itself carries the sign, and the wording below names the problem,
 // so an over-assigned month reads as a sentence rather than a colour.
 templ railReadyToAssign(d BudgetData) {
-	<div class="flex flex-col gap-s2 rounded-xl bg-surface-ready p-s3 shadow-organic-sm">
+	<div class="flex flex-col gap-s2 rounded-xl bg-surface-ready p-s4 shadow-organic-sm">
 		<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-surface-ready-fg">
 			Ready to assign
 		</span>
@@ -91,7 +96,7 @@ templ railReadyToAssign(d BudgetData) {
 templ railTotals(d BudgetData) {
 	{{ assigned, spent, _ := budgetTotals(d.Groups) }}
 	{{ stillInEnvelopes := assigned - spent }}
-	<div class="flex flex-col gap-s2 rounded-xl bg-card p-s3 shadow-organic-sm">
+	<div class="flex flex-col gap-s2 rounded-xl bg-card p-s4 shadow-organic-sm">
 		@railTotalRow("Income", money.Format(d.Estimated), "")
 		@railTotalRow("Assigned", money.Format(assigned), "")
 		@railTotalRow("Spent", money.Format(spent), "")
@@ -107,15 +112,18 @@ templ railTotalRow(label, value, valueClass string) {
 	</div>
 }
 
-// railNeedsAttention lists the month's actual problems — overspent categories
-// and cards carrying a balance — and renders nothing at all when there are none.
+// railNeedsAttention lists what has actually gone wrong — categories spent past
+// what was in them — and renders nothing at all when nothing has. It is
+// deliberately only overspending: a card balance is a fact to know, not a
+// mistake to correct, and mixing the two made a normal month look alarming.
+// Card balances live in railCardsOwing below.
+//
 // Overspending is terracotta here, but it is also worded ("overspent"), so the
 // meaning never rests on colour alone.
 templ railNeedsAttention(d BudgetData) {
 	{{ over := overspentRows(d.Groups) }}
-	{{ owing := owingRows(d.CreditRows) }}
-	if len(over) > 0 || len(owing) > 0 {
-		<div class="flex flex-col gap-s2 rounded-xl bg-surface-attention p-s3 text-surface-attention-fg shadow-organic-sm">
+	if len(over) > 0 {
+		<div class="flex flex-col gap-s2 rounded-xl bg-surface-attention p-s4 text-surface-attention-fg shadow-organic-sm">
 			<span class="text-[12px] font-bold uppercase tracking-[0.08em]">Needs attention</span>
 			for _, r := range over {
 				// On a phone this is the way into the assign sheet: an overspend is
@@ -136,10 +144,47 @@ templ railNeedsAttention(d BudgetData) {
 					</span>
 				</button>
 			}
+		</div>
+	}
+}
+
+// railCardsOwing reports what is sitting on cards and loans. It is a plain
+// raised surface, not the attention tint: carrying a balance is a normal state
+// of affairs and only the figures are terracotta. Renders nothing when no card
+// carries a balance, and opens the per-card detail panel for the breakdown.
+templ railCardsOwing(d BudgetData) {
+	{{ owing := owingRows(d.CreditRows) }}
+	if len(owing) > 0 {
+		<div class="flex flex-col gap-s2 rounded-xl bg-card p-s4 shadow-organic-sm">
+			<div class="flex items-baseline justify-between gap-s2">
+				<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+					On your cards
+				</span>
+				<button
+					type="button"
+					class="text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+					hx-get={ "/budget/credit/panel?month=" + d.Month }
+					hx-target="#modal"
+					hx-swap="innerHTML"
+				>
+					details
+				</button>
+			</div>
 			for _, c := range owing {
 				<div class="flex items-baseline justify-between gap-s2 text-[14px]">
-					<span class="truncate">{ c.AccountName } owing</span>
-					<span class="shrink-0 font-bold tabular-nums">{ money.Format(c.OwingCents) }</span>
+					<span class="truncate text-muted-foreground">{ c.AccountName }</span>
+					<span class="shrink-0 font-bold tabular-nums text-money-negative">
+						{ money.Format(c.OwingCents) }
+					</span>
+				</div>
+			}
+			if len(owing) > 1 {
+				<div class="h-px bg-border"></div>
+				<div class="flex items-baseline justify-between gap-s2 text-[14px]">
+					<span class="text-muted-foreground">Total owing</span>
+					<span class="font-bold tabular-nums text-money-negative">
+						{ money.Format(creditOwingTotal(owing)) }
+					</span>
 				</div>
 			}
 		</div>

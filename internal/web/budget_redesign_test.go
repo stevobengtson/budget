@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sbengtson/budget/internal/core/store"
 )
@@ -539,5 +540,115 @@ func TestTransferEditsInline(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("edit-row on an ordinary transaction = %d, want 200", resp.StatusCode)
 		}
+	}
+}
+
+// TestProgressBarCountsRolloverInTheEnvelope is the rendered counterpart to
+// TestProgressPct: it proves the row passes Available, not Assigned, to the
+// progress note. A category carrying $60 forward with $5 assigned and $1 spent
+// has a $65 envelope; reading it against the assignment alone said
+// "$1.00 of $5.00" while the Available column correctly showed $64.
+func TestProgressBarCountsRolloverInTheEnvelope(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	acct, err := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gid, err := s.CreateGroup(ctx, uid, "Transportation", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := s.CreateCategory(ctx, uid, store.Category{
+		GroupID: gid, Name: "Parking", RolloverMode: store.RolloverCarry,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// June assigns $60 and spends none of it, so $60 carries into July.
+	if err := s.SetAssigned(ctx, uid, "2026-06", cat, 6000); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAssigned(ctx, uid, "2026-07", cat, 500); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := time.Parse("2006-01-02", "2026-07-03")
+	payee := "Meter"
+	if _, err := s.CreateTransaction(ctx, uid, store.Transaction{
+		Date: d, AccountID: acct, CategoryID: &cat, Payee: &payee, OutflowCents: 100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget?month=2026-07"))
+	if !strings.Contains(body, "$1.00 of $65.00") {
+		t.Error(`progress note should read "$1.00 of $65.00" — carryover plus this month's assignment`)
+	}
+	if strings.Contains(body, "$1.00 of $5.00") {
+		t.Error("progress note is measuring against the assignment alone, ignoring rollover")
+	}
+	if !strings.Contains(body, "$64.00") {
+		t.Error("Available should be $64.00")
+	}
+}
+
+// TestRailSeparatesOverspendFromCardBalances covers the split between the two
+// rail cards. "Needs attention" is only for money spent past what was in a
+// category — something to correct. A card balance is a normal state of affairs
+// and lives in its own card, so carrying one no longer makes an otherwise fine
+// month report a problem.
+func TestRailSeparatesOverspendFromCardBalances(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+
+	chq, err := s.CreateAccount(ctx, uid, store.Account{Name: "Chequing", Type: store.TypeChecking})
+	if err != nil {
+		t.Fatal(err)
+	}
+	visa, err := s.CreateAccount(ctx, uid, store.Account{Name: "Visa", Type: store.TypeCredit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gid, _ := s.CreateGroup(ctx, uid, "Living", 1)
+	gas, err := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Gas"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Fund Gas so spending on the card does not also overspend it.
+	if err := s.SetAssigned(ctx, uid, "2026-07", gas, 20000); err != nil {
+		t.Fatal(err)
+	}
+	spend := func(acct int64, payee string, cents int64) {
+		t.Helper()
+		d, _ := time.Parse("2006-01-02", "2026-07-02")
+		if _, err := s.CreateTransaction(ctx, uid, store.Transaction{
+			Date: d, AccountID: acct, CategoryID: &gas, Payee: &payee, OutflowCents: cents,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state := func() (attention, cards bool) {
+		t.Helper()
+		body := readAll(t, mustGetOK(t, client, ts.URL+"/budget?month=2026-07"))
+		return strings.Contains(body, "Needs attention"), strings.Contains(body, "On your cards")
+	}
+
+	if a, c := state(); a || c {
+		t.Errorf("clean month: attention=%v cards=%v, want both false", a, c)
+	}
+
+	// A card balance on its own is not a problem to fix.
+	spend(visa, "Dinner", 1577)
+	if a, c := state(); a || !c {
+		t.Errorf("card balance only: attention=%v cards=%v, want false/true", a, c)
+	}
+
+	// Overspending is, and appears independently.
+	spend(chq, "Pump", 25000)
+	if a, c := state(); !a || !c {
+		t.Errorf("overspent + card: attention=%v cards=%v, want both true", a, c)
 	}
 }

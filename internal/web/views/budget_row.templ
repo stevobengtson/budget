@@ -115,7 +115,8 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 // overspent category pins the bar to full width in terracotta and says so in
 // words, so the state never rests on colour alone.
 templ budgetProgress(r store.CategoryBudget) {
-	{{ pct, over := progressPct(r.SpentCents, r.AssignedCents) }}
+	{{ pct, over := progressPct(r.SpentCents, r.AvailableCents) }}
+	{{ envelope := r.SpentCents + r.AvailableCents }}
 	<div class="col-start-1 row-start-2 flex flex-col gap-1 md:col-start-3 md:row-start-1">
 		<div class="h-[7px] w-full overflow-hidden rounded-pill bg-progress-track md:h-2">
 			<div
@@ -127,27 +128,36 @@ templ budgetProgress(r store.CategoryBudget) {
 			if over {
 				{ money.Format(-r.AvailableCents) } overspent
 			} else {
-				{ money.Format(r.SpentCents) } of { money.Format(r.AssignedCents) }
+				{ money.Format(r.SpentCents) } of { money.Format(envelope) }
 			}
 		</span>
 	</div>
 }
 
 // progressPct returns the bar width as a whole percentage and whether the
-// category is overspent. Overspending always fills the bar. Spending against a
-// zero assignment is overspending too — there was nothing to spend — while a
-// zero-assigned, zero-spent category is simply empty.
-func progressPct(spent, assigned int64) (int, bool) {
-	if assigned <= 0 {
-		if spent > 0 {
-			return 100, true
-		}
+// category is overspent.
+//
+// The bar measures spending against everything in the envelope this month, not
+// against this month's assignment alone: the store defines
+// Available = carryover + assigned − spent, so the envelope is spent + available.
+// Using AssignedCents instead understates a category carrying money forward — a
+// category with $60 rolled over and $5 assigned would read "$1.00 of $5.00"
+// while its Available column correctly said $64.
+//
+// Overspent is taken straight from Available being negative, so the bar and the
+// Available figure can never disagree about the state of a row.
+func progressPct(spent, available int64) (int, bool) {
+	if available < 0 {
+		return 100, true
+	}
+	envelope := spent + available
+	if envelope <= 0 || spent <= 0 {
 		return 0, false
 	}
-	if spent >= assigned {
-		return 100, spent > assigned
+	if spent >= envelope {
+		return 100, false
 	}
-	return int(spent * 100 / assigned), false
+	return int(spent * 100 / envelope), false
 }
 
 // BudgetAssignResult is the response to a single assignment save. It replaces

@@ -41,16 +41,16 @@ templ TransactionsPage(d TransactionsData, collapsed bool) {
 }
 
 templ TransactionsBody(d TransactionsData) {
+	// Ordered by how the page is used, widest scope first: which month, then
+	// which slice of it, then entry, then the result. The add form sits directly
+	// above the list so a new entry appears right where you were looking.
 	<div class="flex flex-col gap-s3">
 		<div class="flex flex-wrap items-center justify-between gap-s3">
 			<h1 class="font-heading text-[22px] font-semibold">{ txMonthLabel(d.FilterMonth) }</h1>
-			<div class="flex flex-wrap items-center gap-s3">
-				@TxAccountFilter(d)
-				@monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth), d.FilterMonth == d.Today)
-			</div>
+			@monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth), d.FilterMonth == d.Today)
 		</div>
-		@TxQuickAdd(d)
 		@TxFilterBar(d)
+		@TxQuickAdd(d)
 		<div id="tx-rows" class="flex flex-col">
 			@TxRows(d.Rows, d.Accounts, d.Categories, d.FilterAccount)
 		</div>
@@ -70,32 +70,6 @@ templ TransactionsBody(d TransactionsData) {
 			</div>
 		}
 	</div>
-}
-
-// TxAccountFilter is the segmented account filter. These are links, not form
-// controls: each re-requests the page with the account scoped, which is also
-// what makes a transfer render as its own account's leg (see TxRows).
-templ TxAccountFilter(d TransactionsData) {
-	<div class="flex max-w-full items-center gap-1 overflow-x-auto rounded-pill bg-muted p-1">
-		@txAccountChip(txAccountHref(d, nil), "All Accounts", d.FilterAccount == nil)
-		for _, a := range d.Accounts {
-			@txAccountChip(txAccountHref(d, &a.ID), a.Name, d.FilterAccount != nil && *d.FilterAccount == a.ID)
-		}
-	</div>
-}
-
-templ txAccountChip(href, label string, active bool) {
-	<a
-		href={ templ.SafeURL(href) }
-		if active {
-			aria-current="true"
-			class="shrink-0 whitespace-nowrap rounded-pill bg-primary px-s3 py-1 text-[14px] font-semibold text-primary-foreground"
-		} else {
-			class="shrink-0 whitespace-nowrap rounded-pill px-s3 py-1 text-[14px] text-muted-foreground hover:text-foreground"
-		}
-	>
-		{ label }
-	</a>
 }
 
 // TxQuickAdd is the always-open entry row — the redesign's centrepiece. It
@@ -276,25 +250,56 @@ templ quickField(id, label, class string) {
 // SelectField) — templUI dispatches `change` there only on a user pick or the
 // built-in clear button, never on init, so this can't loop on page load.
 templ TxFilterBar(d TransactionsData) {
-	<form method="get" action="/transactions" class="flex flex-wrap items-center gap-s2 border-b border-border pb-s3">
+	// Both filters live in one GET form so changing either carries the other,
+	// rather than the account being links that have to rebuild the query string
+	// by hand. The month rides along hidden.
+	<form method="get" action="/transactions" class="flex flex-wrap items-center gap-x-s4 gap-y-s2 border-b border-border pb-s3">
 		if d.FilterMonth != "" {
 			<input type="hidden" name="month" value={ d.FilterMonth }/>
 		} else {
 			<input type="hidden" name="all" value="1"/>
 		}
-		if d.FilterAccount != nil {
-			<input type="hidden" name="account" value={ strconv.FormatInt(*d.FilterAccount, 10) }/>
-		}
-		@label.Label(label.Props{For: "filter-category", Class: "text-[13px] text-muted-foreground"}) {
-			Category
-		}
-		@SelectField(SelectFieldProps{
-			ID:         "filter-category",
-			Name:       "category",
-			Class:      "w-56",
-			Attributes: templ.Attributes{"onchange": "this.form.requestSubmit()"},
-		}, categoryFilterOptions(d.Categories, d.FilterCategory))
+		<div class="flex items-center gap-s2">
+			@label.Label(label.Props{For: "filter-account", Class: "text-[13px] text-muted-foreground"}) {
+				Account
+			}
+			@SelectField(SelectFieldProps{
+				ID:           "filter-account",
+				Name:         "account",
+				Class:        "w-56",
+				TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+				Attributes:   templ.Attributes{"onchange": "this.form.requestSubmit()"},
+			}, accountFilterOptions(d.Accounts, d.FilterAccount))
+		</div>
+		<div class="flex items-center gap-s2">
+			@label.Label(label.Props{For: "filter-category", Class: "text-[13px] text-muted-foreground"}) {
+				Category
+			}
+			@SelectField(SelectFieldProps{
+				ID:           "filter-category",
+				Name:         "category",
+				Class:        "w-56",
+				TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+				Attributes:   templ.Attributes{"onchange": "this.form.requestSubmit()"},
+			}, categoryFilterOptions(d.Categories, d.FilterCategory))
+		</div>
 	</form>
+}
+
+// accountFilterOptions lists the accounts for the filter, led by an
+// empty-valued "All Accounts" entry that clears the filter — the same zero-state
+// the sidebar's account list is headed by.
+func accountFilterOptions(accts []store.AccountWithBalance, selected *int64) []Opt {
+	out := make([]Opt, 0, len(accts)+1)
+	out = append(out, Opt{Value: "", Label: "All Accounts", Selected: selected == nil})
+	for _, a := range accts {
+		out = append(out, Opt{
+			Value:    strconv.FormatInt(a.ID, 10),
+			Label:    a.Name,
+			Selected: selected != nil && *selected == a.ID,
+		})
+	}
+	return out
 }
 
 // categoryFilterOptions lists the categories for the filter bar, led by an
@@ -673,24 +678,6 @@ func txDeleteConfirm(t store.Transaction) string {
 		return "Delete this transfer? It is removed from both accounts."
 	}
 	return "Delete this transaction?"
-}
-
-// txAccountHref builds a /transactions URL scoped to one account (or all
-// accounts when id is nil), preserving the active month and category filters.
-func txAccountHref(d TransactionsData, id *int64) string {
-	q := "/transactions"
-	if d.FilterMonth != "" {
-		q += "?month=" + d.FilterMonth
-	} else {
-		q += "?all=1"
-	}
-	if id != nil {
-		q += fmt.Sprintf("&account=%d", *id)
-	}
-	if d.FilterCategory != nil {
-		q += fmt.Sprintf("&category=%d", *d.FilterCategory)
-	}
-	return q
 }
 
 // txDefaultAccount preselects the quick-add's account: the one being filtered

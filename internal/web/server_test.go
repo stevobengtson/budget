@@ -549,9 +549,15 @@ func TestTransactionsFilterBarNarrowsAccount(t *testing.T) {
 	if strings.Contains(body, "CornerCafe") {
 		t.Error("body contains CornerCafe; want it filtered out by category")
 	}
-	// The bar's hidden field carries the account so the next pick keeps it.
-	if want := `name="account" value="` + strconv.FormatInt(chequing, 10) + `"`; !strings.Contains(body, want) {
-		t.Errorf("filter bar missing hidden account field %q", want)
+	// Both filters share one form, so the account select shows the active
+	// account and submits it alongside whatever category is picked next. It used
+	// to be a hidden field beside a chip list; the guarantee is the same.
+	acct := selectboxScope(t, body, "filter-account")
+	if !strings.Contains(acct, selectboxSelected(chequing)) {
+		t.Errorf("account filter does not show %d as selected", chequing)
+	}
+	if strings.Contains(acct, selectboxSelected(visa)) {
+		t.Errorf("account filter shows %d as selected; only one account is active", visa)
 	}
 }
 
