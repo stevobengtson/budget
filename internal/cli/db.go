@@ -10,7 +10,7 @@ import (
 )
 
 // DBCmd builds the `db` command group (up / up-one / down / reset / status /
-// version) plus the `seed` subcommand.
+// version) plus the `truncate` and `seed` subcommands.
 func (a *App) DBCmd() *cobra.Command {
 	dbCmd := &cobra.Command{
 		Use:   "db",
@@ -73,7 +73,8 @@ different database temporarily, pass --db on the command line.`,
 			return nil
 		}}
 
-	dbCmd.AddCommand(dbUpCmd, dbUpOneCmd, dbDownCmd, dbResetCmd, dbStatusCmd, dbVersionCmd, a.seedCmd())
+	dbCmd.AddCommand(dbUpCmd, dbUpOneCmd, dbDownCmd, dbResetCmd, dbStatusCmd, dbVersionCmd,
+		a.truncateCmd(), a.seedCmd())
 	return dbCmd
 }
 

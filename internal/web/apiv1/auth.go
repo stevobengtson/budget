@@ -51,6 +51,10 @@ func (a *API) Login(c *gin.Context) {
 			writeError(c, http.StatusUnauthorized, "email_not_verified", "Please verify your email before logging in.")
 			return
 		}
+		if errors.Is(err, auth.ErrAccountDisabled) {
+			writeError(c, http.StatusForbidden, "account_disabled", "This account has been disabled.")
+			return
+		}
 		writeError(c, http.StatusUnauthorized, "invalid_credentials", "Invalid email or password.")
 		return
 	}

@@ -74,11 +74,15 @@ func requireAuth(svc *auth.Service, st *store.Store) gin.HandlerFunc {
 		}
 		c.Set("userID", user.ID)
 		c.Set("userEmail", user.Email)
+		c.Set("userIsAdmin", user.IsAdmin)
 		// Also stash the name + email on the request context so the shared layout
 		// can render the sidebar user menu without every page threading it through.
 		ctx := views.WithUserEmail(c.Request.Context(), user.Email)
 		ctx = views.WithUserName(ctx, user.Name)
 		ctx = views.WithUserAvatarVersion(ctx, user.AvatarVersion())
+		// Drives the Admin entry in the shared user menu; the routes themselves
+		// are guarded by requireAdmin, which re-reads the flag from the database.
+		ctx = views.WithIsAdmin(ctx, user.IsAdmin)
 		// Enabled add-ons gate add-on-owned nav (e.g. Paydown) in the shared layout
 		// and the requireAddOn route guard.
 		slugs, _ := st.EnabledAddOnSlugs(c.Request.Context(), user.ID)
@@ -137,6 +141,23 @@ func gateRedirect(c *gin.Context, dest string) {
 		c.Redirect(http.StatusSeeOther, dest)
 	}
 	c.Abort()
+}
+
+// requireAdmin guards the /admin console. requireAuth must run first; this reads
+// the is_admin flag it loaded from the database on this request, so revoking the
+// flag takes effect on the very next request rather than at session expiry.
+//
+// A non-admin gets a plain 404, not a 403: the console's existence is not
+// something a regular user needs confirmed, and 403 would confirm it.
+func requireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.GetBool("userIsAdmin") {
+			c.Next()
+			return
+		}
+		c.Status(http.StatusNotFound)
+		c.Abort()
+	}
 }
 
 // requireAddOn guards routes owned by an opt-in add-on. It reads the enabled

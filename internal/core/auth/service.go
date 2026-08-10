@@ -115,6 +115,11 @@ func (s *Service) Login(ctx context.Context, email, password, userAgent, ip stri
 	if u.EmailVerifiedAt == nil {
 		return "", ErrEmailNotVerified
 	}
+	// Checked after the password so a suspended account is not revealed to
+	// someone who does not already hold its credentials.
+	if u.Disabled() {
+		return "", ErrAccountDisabled
+	}
 	raw, err := RandomToken()
 	if err != nil {
 		return "", err
@@ -131,7 +136,10 @@ func (s *Service) Logout(ctx context.Context, rawToken string) error {
 }
 
 // AuthenticateSession resolves a raw cookie token to its user, rejecting expired
-// sessions. Used by the RequireAuth middleware.
+// sessions and suspended accounts. Used by the web RequireAuth middleware and by
+// the mobile API's bearer auth, so the disabled check here covers both surfaces.
+// (Suspending already deletes the user's sessions; this closes the window where
+// one was issued concurrently, and covers a row disabled by hand in SQL.)
 func (s *Service) AuthenticateSession(ctx context.Context, rawToken string) (store.User, error) {
 	sess, err := s.store.GetSessionByTokenHash(ctx, HashToken(rawToken))
 	if err != nil {
@@ -141,7 +149,15 @@ func (s *Service) AuthenticateSession(ctx context.Context, rawToken string) (sto
 		_ = s.store.DeleteSession(ctx, sess.TokenHash)
 		return store.User{}, ErrInvalidCredentials
 	}
-	return s.store.GetUserByID(ctx, sess.UserID)
+	u, err := s.store.GetUserByID(ctx, sess.UserID)
+	if err != nil {
+		return store.User{}, err
+	}
+	if u.Disabled() {
+		_ = s.store.DeleteSession(ctx, sess.TokenHash)
+		return store.User{}, ErrAccountDisabled
+	}
+	return u, nil
 }
 
 // RequestPasswordReset emails a reset link. To avoid account enumeration it

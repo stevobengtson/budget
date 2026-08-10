@@ -1,0 +1,282 @@
+package views
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
+)
+
+type AdminUserData struct {
+	User          store.User
+	Subscriptions []store.Subscription
+	// CompFlagSet is the stored billing_exempt flag; CompActive additionally
+	// accounts for the expiry, so a lapsed comp shows as set-but-inactive rather
+	// than silently vanishing from the console.
+	CompFlagSet      bool
+	CompActive       bool
+	CompUntil        *time.Time
+	StripeCustomerID string
+	// IsSelf disables the destructive actions on the acting admin's own row, so
+	// an operator cannot lock themselves out of the console.
+	IsSelf bool
+	// CanDelete gates deletion; DeleteBlocked explains the refusal when it is off.
+	CanDelete     bool
+	DeleteBlocked string
+	Err           string
+}
+
+// CompDuration is one option in the complimentary-subscription grant form.
+type CompDuration struct {
+	Key   string
+	Label string
+}
+
+// CompDurations are the grant lengths offered in the console. "lifetime" stores
+// a NULL expiry rather than a far-future date, so there is no sentinel to
+// misread later.
+var CompDurations = []CompDuration{
+	{Key: "1m", Label: "1 month"},
+	{Key: "6m", Label: "6 months"},
+	{Key: "1y", Label: "1 year"},
+	{Key: "lifetime", Label: "Lifetime"},
+}
+
+templ AdminUserPage(d AdminUserData) {
+	@AdminLayout(d.User.Email+" · Admin", "users") {
+		<div class="flex max-w-[880px] flex-col gap-s4">
+			<a href="/admin/users" class="text-[14px] text-muted-foreground hover:text-foreground">
+				← Back to users
+			</a>
+			@adminUserHeader(d)
+			if d.Err != "" {
+				<p class="rounded-card border border-destructive/40 bg-destructive/10 px-s4 py-s3 text-[14px] text-destructive">
+					{ d.Err }
+				</p>
+			}
+			@adminUserFacts(d)
+			@adminUserSubscriptions(d)
+			@adminUserActions(d)
+			@adminUserDanger(d)
+		</div>
+	}
+}
+
+templ adminUserHeader(d AdminUserData) {
+	<div class="flex flex-wrap items-center gap-s3">
+		<h1 class="font-heading text-[28px] font-semibold">{ d.User.Name }</h1>
+		<div class="flex flex-wrap gap-1">
+			if d.User.Disabled() {
+				@adminBadge("Disabled", "bg-destructive/15 text-destructive")
+			}
+			if d.User.IsAdmin {
+				@adminBadge("Admin", "bg-primary/15 text-primary")
+			}
+			if d.CompActive {
+				@adminBadge(compBadgeLabel(d.CompUntil), "bg-surface-ready text-surface-ready-fg")
+			}
+			if d.IsSelf {
+				@adminBadge("You", "bg-muted text-muted-foreground")
+			}
+		</div>
+	</div>
+}
+
+templ adminUserFacts(d AdminUserData) {
+	@adminCard("grid gap-s3 sm:grid-cols-2") {
+		@adminFact("Email", d.User.Email)
+		@adminFact("User ID", fmt.Sprintf("%d", d.User.ID))
+		@adminFact("Signed up", d.User.CreatedAt.Format("Jan 2, 2006 15:04 MST"))
+		@adminFact("Email verified", optionalTime(d.User.EmailVerifiedAt, "Not verified"))
+		@adminFact("Disabled", optionalTime(d.User.DisabledAt, "No"))
+		@adminFact("Stripe customer", orDash(d.StripeCustomerID))
+		@adminFact("Complimentary", compDescription(d))
+	}
+}
+
+templ adminFact(label string, value string) {
+	<div class="flex flex-col gap-0.5">
+		<span class="text-[13px] text-muted-foreground">{ label }</span>
+		<span class="text-[15px] break-words">{ value }</span>
+	</div>
+}
+
+templ adminUserSubscriptions(d AdminUserData) {
+	@adminCard("flex flex-col gap-s3") {
+		<h2 class="font-heading text-[20px] font-semibold">Subscriptions</h2>
+		if len(d.Subscriptions) == 0 {
+			<p class="text-[15px] text-muted-foreground">Never subscribed.</p>
+		} else {
+			<div class="overflow-x-auto">
+				<table class="w-full min-w-[520px] text-left text-[14px]">
+					<thead class="border-b border-border text-[13px] text-muted-foreground">
+						<tr>
+							<th class="py-s2 pr-s4 font-medium">Status</th>
+							<th class="py-s2 pr-s4 font-medium">Started</th>
+							<th class="py-s2 pr-s4 font-medium">Period ends</th>
+							<th class="py-s2 font-medium">Stripe ID</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, sub := range d.Subscriptions {
+							<tr class="border-b border-border/60 last:border-0">
+								<td class="py-s2 pr-s4">
+									@subscriptionBadge(sub.Status)
+									if sub.CancelAtPeriodEnd {
+										<span class="ml-1 text-[12px] text-muted-foreground">cancels at period end</span>
+									}
+								</td>
+								<td class="py-s2 pr-s4 whitespace-nowrap tabular-nums text-muted-foreground">
+									{ sub.CreatedAt.Format("Jan 2, 2006") }
+								</td>
+								<td class="py-s2 pr-s4 whitespace-nowrap tabular-nums text-muted-foreground">
+									{ optionalTime(sub.CurrentPeriodEnd, "—") }
+								</td>
+								<td class="py-s2 font-mono text-[12px] break-all text-muted-foreground">
+									{ sub.StripeSubscriptionID }
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+// adminUserActions holds the reversible controls: suspension and comps.
+templ adminUserActions(d AdminUserData) {
+	@adminCard("flex flex-col gap-s4") {
+		<h2 class="font-heading text-[20px] font-semibold">Actions</h2>
+		<div class="flex flex-col gap-s2 border-b border-border pb-s4">
+			<h3 class="text-[15px] font-medium">Account access</h3>
+			<p class="text-[14px] text-muted-foreground">
+				Disabling signs the user out everywhere and blocks new logins. Their data
+				is untouched, so this can be undone.
+			</p>
+			if d.IsSelf {
+				<p class="text-[14px] text-muted-foreground">You cannot disable your own account.</p>
+			} else if d.User.Disabled() {
+				<form method="post" action={ adminUserAction(d.User.ID, "enable") }>
+					@button.Button(button.Props{Type: "submit", Variant: button.VariantOutline, Class: "rounded-pill w-fit"}) {
+						Re-enable account
+					}
+				</form>
+			} else {
+				<form
+					method="post"
+					action={ adminUserAction(d.User.ID, "disable") }
+					onsubmit="return confirm('Disable this account? The user will be signed out immediately.')"
+				>
+					@button.Button(button.Props{Type: "submit", Variant: button.VariantDestructive, Class: "rounded-pill w-fit"}) {
+						Disable account
+					}
+				</form>
+			}
+		</div>
+		<div class="flex flex-col gap-s2">
+			<h3 class="text-[15px] font-medium">Complimentary subscription</h3>
+			<p class="text-[14px] text-muted-foreground">
+				Grants app access without Stripe. It does not cancel an existing paid
+				subscription — Stripe keeps billing until that is cancelled separately.
+			</p>
+			<form method="post" action={ adminUserAction(d.User.ID, "comp") } class="flex flex-wrap items-end gap-s2">
+				<div class="flex flex-col gap-1">
+					<label for="comp-duration" class="text-[13px] text-muted-foreground">Duration</label>
+					<select id="comp-duration" name="duration" class={ authInputClass + " w-[180px]" }>
+						for _, opt := range CompDurations {
+							<option value={ opt.Key }>{ opt.Label }</option>
+						}
+					</select>
+				</div>
+				@button.Button(button.Props{Type: "submit", Class: "rounded-pill"}) {
+					if d.CompFlagSet {
+						Update comp
+					} else {
+						Grant comp
+					}
+				}
+			</form>
+			if d.CompFlagSet {
+				<form method="post" action={ adminUserAction(d.User.ID, "comp/revoke") }>
+					@button.Button(button.Props{Type: "submit", Variant: button.VariantOutline, Size: button.SizeSm, Class: "rounded-pill w-fit"}) {
+						Remove comp
+					}
+				</form>
+			}
+		</div>
+	}
+}
+
+// adminUserDanger is deletion, kept apart from the reversible actions and gated
+// on retyping the user's email — the same friction the self-service delete uses,
+// because this one is being done to somebody else's data.
+templ adminUserDanger(d AdminUserData) {
+	<section class="flex flex-col gap-s3 rounded-card border border-destructive/40 bg-card p-s4">
+		<h2 class="font-heading text-[20px] font-semibold text-destructive">Delete user</h2>
+		<p class="text-[14px] text-muted-foreground">
+			Permanently deletes the account and every budget, transaction and category
+			in it. This cannot be undone, and it does not touch Stripe — cancel or
+			delete the Stripe customer separately.
+		</p>
+		if !d.CanDelete {
+			<p class="text-[14px] text-muted-foreground">{ d.DeleteBlocked }</p>
+		} else {
+			<form method="post" action={ adminUserAction(d.User.ID, "delete") } class="flex flex-col gap-s3">
+				<div class="flex flex-col gap-1.5">
+					<label for="confirm_email" class="text-[14px] font-medium">
+						Type <span class="font-semibold">{ d.User.Email }</span> to confirm
+					</label>
+					<input
+						id="confirm_email"
+						name="confirm_email"
+						type="email"
+						autocomplete="off"
+						required
+						placeholder={ d.User.Email }
+						class={ authInputClass + " max-w-[420px]" }
+					/>
+				</div>
+				@button.Button(button.Props{Type: "submit", Variant: button.VariantDestructive, Class: "rounded-pill w-fit"}) {
+					Delete this user
+				}
+			</form>
+		}
+	</section>
+}
+
+// adminUserAction builds a form action URL for one of the console's POST routes.
+func adminUserAction(id int64, action string) templ.SafeURL {
+	return templ.SafeURL(fmt.Sprintf("/admin/users/%d/%s", id, action))
+}
+
+// optionalTime renders a nullable timestamp, falling back to absent text.
+func optionalTime(t *time.Time, absent string) string {
+	if t == nil {
+		return absent
+	}
+	return t.Format("Jan 2, 2006")
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "—"
+	}
+	return s
+}
+
+// compDescription spells out the stored comp state, including the case that a
+// badge cannot show: the flag is set but the end date has already passed.
+func compDescription(d AdminUserData) string {
+	switch {
+	case !d.CompFlagSet:
+		return "None"
+	case d.CompUntil == nil:
+		return "Lifetime"
+	case d.CompActive:
+		return "Until " + d.CompUntil.Format("Jan 2, 2006")
+	default:
+		return "Expired " + d.CompUntil.Format("Jan 2, 2006")
+	}
+}

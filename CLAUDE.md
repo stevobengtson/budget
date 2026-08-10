@@ -47,11 +47,27 @@ task tailwind-watch # watch mode
 
 # Database (Postgres; DSN from BUDGET_DB_DSN, else the local budget default):
 task db:migrate     # goose up (Postgres)
-task db:reset       # goose reset + up (DESTRUCTIVE — wipes data)
+task db:reset       # migrate + TRUNCATE every table (DESTRUCTIVE — wipes data, keeps schema)
 task db:status      # goose migration status
-task db:seed        # migrate + load demo data (via the web binary)
+task db:seed        # migrate + seed the two accounts + demo data (via the web binary)
 task db:dsn         # print the DSN the admin targets use
 ```
+
+`db:reset` empties the data without touching the schema: it truncates every
+table in one statement (`RESTART IDENTITY CASCADE`, so the foreign keys between
+them don't need a delete order) and leaves `goose_db_version` alone. It then
+restores the global Income category that migration 00005 inserts — truncating
+removes it and no migration will run again to put it back. It deliberately does
+*not* roll migrations back; `budget db reset` still does that if you need it.
+
+`db:seed` creates two verified accounts, both with password `password1`
+(`internal/cli/seed.go`). It refuses to run against a database that already has
+data, so the flow is `task db:reset` then `task db:seed`.
+
+| Account | Purpose |
+| --- | --- |
+| `admin@example.com` | Owns the demo data (3 months of transactions). Has `is_admin` and a lifetime complimentary subscription, so `/admin` and the whole app are reachable with no Stripe setup. |
+| `test@example.com` | A bare freshly-registered account: starter budget only, no subscription and no comp, so logging in lands on the free-trial flow. |
 
 The Tailwind entry point and theme tokens live in
 `internal/web/tailwind/{input.css,theme.css}`.

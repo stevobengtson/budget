@@ -9,6 +9,7 @@ const (
 	userNameKey
 	userAvatarVersionKey
 	enabledAddOnsKey
+	isAdminKey
 )
 
 // WithUserEmail returns ctx carrying the authenticated user's email so the shared
@@ -55,6 +56,19 @@ func UserAvatarVersionFromContext(ctx context.Context) int64 {
 // requireAuth middleware alongside the other user fields.
 func WithEnabledAddOns(ctx context.Context, slugs []string) context.Context {
 	return context.WithValue(ctx, enabledAddOnsKey, slugs)
+}
+
+// WithIsAdmin returns ctx carrying whether the authenticated user is an admin,
+// so the shared user menu can show the Admin entry. Set by requireAuth. This is
+// display only — the /admin routes are guarded server-side by requireAdmin.
+func WithIsAdmin(ctx context.Context, admin bool) context.Context {
+	return context.WithValue(ctx, isAdminKey, admin)
+}
+
+// IsAdmin reports whether the request's user is an admin. False when absent.
+func IsAdmin(ctx context.Context) bool {
+	v, _ := ctx.Value(isAdminKey).(bool)
+	return v
 }
 
 // AddOnEnabled reports whether the given add-on slug is in the enabled set on

@@ -1,0 +1,168 @@
+package views
+
+import (
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/sbengtson/budget/internal/core/store"
+)
+
+// AdminUsersPageSize is the number of users shown per page.
+const AdminUsersPageSize = 25
+
+type AdminUsersData struct {
+	Users      []store.AdminUserRow
+	Page       int // 1-based
+	TotalPages int
+	Total      int
+}
+
+templ AdminUsersPage(d AdminUsersData) {
+	@AdminLayout("Users · Admin", "users") {
+		<div class="flex flex-col gap-s4">
+			<div class="flex flex-wrap items-baseline justify-between gap-s3">
+				<h1 class="font-heading text-[28px] font-semibold">Users</h1>
+				<span class="text-[13px] text-muted-foreground tabular-nums">
+					{ fmt.Sprintf("%d total", d.Total) }
+				</span>
+			</div>
+			@adminCard("p-0 overflow-hidden") {
+				// The table scrolls inside the card on narrow screens rather than
+				// forcing the page itself sideways.
+				<div class="overflow-x-auto">
+					<table class="w-full min-w-[720px] text-left text-[14px]">
+						<thead class="border-b border-border text-[13px] text-muted-foreground">
+							<tr>
+								<th class="px-s4 py-s3 font-medium">User</th>
+								<th class="px-s4 py-s3 font-medium">Signed up</th>
+								<th class="px-s4 py-s3 font-medium">Subscription</th>
+								<th class="px-s4 py-s3 font-medium">Flags</th>
+								<th class="px-s4 py-s3"><span class="sr-only">Actions</span></th>
+							</tr>
+						</thead>
+						<tbody>
+							if len(d.Users) == 0 {
+								<tr>
+									<td colspan="5" class="px-s4 py-s8 text-center text-muted-foreground">
+										No users on this page.
+									</td>
+								</tr>
+							}
+							for _, u := range d.Users {
+								@adminUserRow(u)
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+			@adminPagination(d.Page, d.TotalPages)
+		</div>
+	}
+}
+
+templ adminUserRow(u store.AdminUserRow) {
+	<tr class="border-b border-border/60 last:border-0 hover:bg-primary/5">
+		<td class="px-s4 py-s3">
+			<div class="flex flex-col">
+				<span class="font-medium">{ u.Name }</span>
+				<span class="text-[13px] text-muted-foreground">{ u.Email }</span>
+			</div>
+		</td>
+		<td class="px-s4 py-s3 whitespace-nowrap tabular-nums text-muted-foreground">
+			{ u.CreatedAt.Format("Jan 2, 2006") }
+		</td>
+		<td class="px-s4 py-s3">
+			@subscriptionBadge(u.SubStatus)
+		</td>
+		<td class="px-s4 py-s3">
+			<div class="flex flex-wrap gap-1">
+				if u.DisabledAt != nil {
+					@adminBadge("Disabled", "bg-destructive/15 text-destructive")
+				}
+				if u.IsAdmin {
+					@adminBadge("Admin", "bg-primary/15 text-primary")
+				}
+				if u.CompActive {
+					@adminBadge(compBadgeLabel(u.CompUntil), "bg-surface-ready text-surface-ready-fg")
+				}
+				if !u.EmailVerified {
+					@adminBadge("Unverified", "bg-surface-attention text-surface-attention-fg")
+				}
+			</div>
+		</td>
+		<td class="px-s4 py-s3 text-right whitespace-nowrap">
+			<a
+				href={ templ.SafeURL(fmt.Sprintf("/admin/users/%d", u.ID)) }
+				class="rounded-pill px-s3 py-1 text-[14px] font-medium text-primary hover:bg-primary/10"
+			>
+				View
+			</a>
+		</td>
+	</tr>
+}
+
+// subscriptionBadge colours a Stripe status by what it means operationally:
+// paying, trialing, needs attention, or gone.
+templ subscriptionBadge(status string) {
+	switch status {
+		case "":
+			<span class="text-muted-foreground">—</span>
+		case "active":
+			@adminBadge("Active", "bg-surface-ready text-surface-ready-fg")
+		case "trialing":
+			@adminBadge("Trialing", "bg-primary/15 text-primary")
+		case "past_due", "unpaid", "incomplete":
+			@adminBadge(status, "bg-surface-attention text-surface-attention-fg")
+		default:
+			@adminBadge(status, "bg-muted text-muted-foreground")
+	}
+}
+
+templ adminBadge(label string, class string) {
+	<span class={ "inline-flex items-center rounded-pill px-2 py-0.5 text-[12px] font-medium whitespace-nowrap " + class }>
+		{ label }
+	</span>
+}
+
+// compBadgeLabel distinguishes a lifetime comp from a dated one at a glance.
+func compBadgeLabel(until *time.Time) string {
+	if until == nil {
+		return "Comp · lifetime"
+	}
+	return "Comp · to " + until.Format("Jan 2, 2006")
+}
+
+// adminPagination is prev/next plus a position readout. There is no page-number
+// list: the user table is ordered by signup date and operators navigate it by
+// stepping, not by jumping to page 37.
+templ adminPagination(page, totalPages int) {
+	if totalPages > 1 {
+		<div class="flex items-center justify-between gap-s3">
+			@adminPageLink(page-1, page > 1) {
+				Previous
+			}
+			<span class="text-[13px] text-muted-foreground tabular-nums">
+				{ fmt.Sprintf("Page %d of %d", page, totalPages) }
+			</span>
+			@adminPageLink(page+1, page < totalPages) {
+				Next
+			}
+		</div>
+	}
+}
+
+templ adminPageLink(target int, enabled bool) {
+	if enabled {
+		<a
+			href={ templ.SafeURL("/admin/users?page=" + strconv.Itoa(target)) }
+			class="rounded-pill border border-border px-s4 py-2 text-[14px] font-medium hover:bg-primary/10"
+		>
+			{ children... }
+		</a>
+	} else {
+		<span class="rounded-pill border border-border/50 px-s4 py-2 text-[14px] font-medium text-muted-foreground/50">
+			{ children... }
+		</span>
+	}
+}

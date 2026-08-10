@@ -156,10 +156,16 @@ tasks:
       - 'goose -dir {{.MIGRATIONS}} postgres "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}" up'
 
   db:reset:
-    desc: Roll all migrations back then re-apply them (DESTRUCTIVE — wipes data)
+    # Migrate first so the schema is at head, then empty it. This does NOT roll
+    # migrations back: `goose reset` would exercise every Down migration just to
+    # throw away rows, and a single bad Down leaves the schema stranded. TRUNCATE
+    # of all tables at once (RESTART IDENTITY CASCADE) empties them regardless of
+    # the foreign keys between them, and keeps goose_db_version intact.
+    desc: Migrate, then truncate every table (DESTRUCTIVE — wipes data, keeps schema)
+    deps: [build]
     cmds:
-      - 'goose -dir {{.MIGRATIONS}} postgres "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}" reset'
-      - 'goose -dir {{.MIGRATIONS}} postgres "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}" up'
+      - task: db:migrate
+      - '{{.BIN_WEB}} --db "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}" db truncate'
 
   db:status:
     desc: Show goose migration status

@@ -1,0 +1,159 @@
+package views
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/sbengtson/budget/internal/core/store"
+)
+
+type AdminDashboardData struct {
+	Stats store.AdminStats
+	Chart SignupChart
+}
+
+templ AdminDashboardPage(d AdminDashboardData) {
+	@AdminLayout("Admin", "dashboard") {
+		<div class="flex flex-col gap-s4">
+			<h1 class="font-heading text-[28px] font-semibold">Dashboard</h1>
+			<div class="grid grid-cols-2 gap-s3 lg:grid-cols-4">
+				@adminStat("Users", d.Stats.TotalUsers, "")
+				@adminStat("Active subscriptions", d.Stats.ActiveSubs, "")
+				@adminStat("Complimentary", d.Stats.Comped, "")
+				@adminStat("Disabled", d.Stats.Disabled, "text-destructive")
+			</div>
+			@SignupsChartCard(d.Chart)
+		</div>
+	}
+}
+
+// adminStat is one headline counter.
+templ adminStat(label string, value int, valueClass string) {
+	@adminCard("flex flex-col gap-1") {
+		<span class="text-[13px] text-muted-foreground">{ label }</span>
+		<span class={ "font-heading text-[28px] font-semibold tabular-nums " + valueClass }>
+			{ strconv.Itoa(value) }
+		</span>
+	}
+}
+
+// SignupsChartCard is the swap target for the range toggle: the buttons live
+// inside it, so changing the range re-renders their own active state alongside
+// the chart in a single exchange.
+templ SignupsChartCard(c SignupChart) {
+	<section id="signups-chart" class="rounded-card border border-border bg-card p-s4">
+		<div class="flex flex-wrap items-baseline justify-between gap-s3">
+			<div class="flex flex-col gap-1">
+				<h2 class="font-heading text-[20px] font-semibold">Signups</h2>
+				<span class="text-[13px] text-muted-foreground">
+					{ signupSummary(c) }
+				</span>
+			</div>
+			<div class="flex items-center gap-1 rounded-pill bg-surface-sunk p-1" role="group" aria-label="Chart range">
+				for _, r := range SignupRanges {
+					@signupRangeButton(r, c.Range)
+				}
+			</div>
+		</div>
+		if c.Empty {
+			<p class="py-s8 text-center text-[15px] text-muted-foreground">
+				No signups in this period.
+			</p>
+		} else {
+			@signupsChartSVG(c)
+		}
+	</section>
+}
+
+// signupRangeButton swaps the whole card, so the pressed state comes back from
+// the server rather than being toggled client-side.
+templ signupRangeButton(r SignupRange, active string) {
+	<button
+		type="button"
+		hx-get={ "/admin/chart?range=" + r.Key }
+		hx-target="#signups-chart"
+		hx-swap="outerHTML"
+		aria-pressed={ strconv.FormatBool(r.Key == active) }
+		class={ "rounded-pill px-s3 py-1 text-[14px] font-medium",
+			templ.KV("bg-primary text-primary-foreground", r.Key == active),
+			templ.KV("text-muted-foreground hover:text-foreground", r.Key != active) }
+	>
+		{ r.Label }
+	</button>
+}
+
+// signupsChartSVG draws the series. The viewBox scales the drawing to whatever
+// width the card has; vector-effect keeps the stroke one device pixel at any
+// scale, which is what stops the line thickening on a wide screen.
+templ signupsChartSVG(c SignupChart) {
+	<svg
+		viewBox={ ChartViewBox }
+		class="mt-s4 h-auto w-full overflow-visible"
+		role="img"
+		aria-label={ signupSummary(c) }
+	>
+		for _, g := range c.Grid {
+			<line
+				x1="40"
+				x2="708"
+				y1={ fmt.Sprintf("%.2f", g.Y) }
+				y2={ fmt.Sprintf("%.2f", g.Y) }
+				class="stroke-border"
+				stroke-width="1"
+				vector-effect="non-scaling-stroke"
+			></line>
+			<text
+				x="34"
+				y={ fmt.Sprintf("%.2f", g.Y+4) }
+				text-anchor="end"
+				class="fill-muted-foreground text-[11px] tabular-nums"
+			>
+				{ strconv.Itoa(g.Value) }
+			</text>
+		}
+		<path d={ c.Area } class="fill-chart-3/25"></path>
+		<polyline
+			points={ c.Line }
+			fill="none"
+			class="stroke-chart-4"
+			stroke-width="2"
+			stroke-linejoin="round"
+			stroke-linecap="round"
+			vector-effect="non-scaling-stroke"
+		></polyline>
+		for _, p := range c.Points {
+			// A generous transparent hit circle over a small visible one, so the
+			// native <title> tooltip is reachable without a 3px target.
+			<circle cx={ fmt.Sprintf("%.2f", p.X) } cy={ fmt.Sprintf("%.2f", p.Y) } r="3" class="fill-chart-4"></circle>
+			<circle cx={ fmt.Sprintf("%.2f", p.X) } cy={ fmt.Sprintf("%.2f", p.Y) } r="10" fill="transparent">
+				<title>{ p.Title }</title>
+			</circle>
+			if p.Label != "" {
+				<text
+					x={ fmt.Sprintf("%.2f", p.X) }
+					y="194"
+					text-anchor="middle"
+					class="fill-muted-foreground text-[11px]"
+				>
+					{ p.Label }
+				</text>
+			}
+		}
+	</svg>
+}
+
+// signupSummary is the sentence under the heading, doubling as the chart's
+// accessible label since the SVG itself conveys nothing to a screen reader.
+func signupSummary(c SignupChart) string {
+	window := "in the last 7 days"
+	switch c.Range {
+	case "month":
+		window = "in the last 30 days"
+	case "year":
+		window = "in the last 12 months"
+	}
+	if c.Total == 1 {
+		return "1 signup " + window
+	}
+	return fmt.Sprintf("%d signups %s", c.Total, window)
+}

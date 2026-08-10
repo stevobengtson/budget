@@ -1,0 +1,75 @@
+package views
+
+import "github.com/templui/templui/components/icon"
+
+// AdminLayout is the console's shell. It deliberately does not reuse appShell:
+// the admin nav is a different place, not a fourth product tab, and mixing them
+// would put Budget/Transactions in front of an operator who is looking at
+// someone else's account. It shares headTag, so both shells load the same
+// assets and theme bootstrap.
+//
+// The sidebar here is a plain element rather than the templUI collapsible one:
+// that component persists its open/closed state in a cookie shared with the app
+// rail, so collapsing one would collapse the other.
+templ AdminLayout(title string, active string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		@headTag(title)
+		<body class="min-h-screen bg-background text-foreground">
+			<div class="flex min-h-screen flex-col md:flex-row">
+				@adminSidebar(active)
+				<main id="main" class="min-w-0 flex-1 p-s3 sm:p-s6">
+					{ children... }
+				</main>
+			</div>
+			<div id="modal" class="modal-mount"></div>
+			<div id="flash"></div>
+		</body>
+	</html>
+}
+
+// adminSidebar is the console nav: the two sections, then the way back to the
+// product. It becomes a horizontal strip below md rather than disappearing,
+// since the console has no bottom tab bar to fall back on.
+templ adminSidebar(active string) {
+	<aside class="flex shrink-0 flex-col gap-s4 border-b border-border bg-card p-s3 md:min-h-screen md:w-[240px] md:border-b-0 md:border-r md:p-s4">
+		<div class="flex items-center gap-s2">
+			<span class="font-heading text-[22px] font-semibold text-brand">Pigglet</span>
+			<span class="rounded-pill bg-surface-attention px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-surface-attention-fg">
+				Admin
+			</span>
+		</div>
+		<nav class="flex flex-row gap-s1 md:flex-col">
+			@adminNavItem("dashboard", "/admin", "Dashboard", icon.LayoutDashboard(icon.Props{Class: "size-[18px]"}), active)
+			@adminNavItem("users", "/admin/users", "Users", icon.Users(icon.Props{Class: "size-[18px]"}), active)
+		</nav>
+		<a
+			href="/budget"
+			class="mt-auto flex items-center gap-s2 rounded-pill px-s3 py-2 text-[14px] text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+		>
+			@icon.ArrowLeft(icon.Props{Class: "size-4"})
+			Back to app
+		</a>
+	</aside>
+}
+
+// adminNavItem is one console nav entry, active state matching the app's own
+// nav: a solid pill for the current section, plain text otherwise.
+templ adminNavItem(slug string, href string, label string, ic templ.Component, active string) {
+	<a
+		href={ templ.SafeURL(href) }
+		class={ "flex items-center gap-s2 rounded-pill px-s3 py-2 text-[15px] font-medium",
+			templ.KV("bg-primary text-primary-foreground", active == slug),
+			templ.KV("text-foreground hover:bg-primary/10", active != slug) }
+	>
+		@ic
+		{ label }
+	</a>
+}
+
+// adminCard is the console's one container shape, matching the product's cards.
+templ adminCard(class string) {
+	<section class={ "rounded-card border border-border bg-card p-s4 " + class }>
+		{ children... }
+	</section>
+}

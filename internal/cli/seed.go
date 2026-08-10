@@ -12,11 +12,27 @@ import (
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
+// Seeded accounts. Both are verified so neither needs the email flow, and both
+// share one password. They differ in what they are for:
+//
+//   - The admin owns all the demo data and holds a lifetime complimentary
+//     subscription, so the app and the /admin console are both reachable
+//     immediately with nothing to set up.
+//   - The test user is a bare, freshly-registered account: verified, given the
+//     same starter budget a real signup gets, and deliberately left with no
+//     subscription and no comp — so logging in as them lands on the free-trial
+//     flow, which is the thing that needs exercising.
+const (
+	seedAdminEmail = "admin@example.com"
+	seedTestEmail  = "test@example.com"
+	seedPassword   = "password1"
+)
+
 // seedCmd builds the `seed` command (registered under `db` by DBCmd).
 func (a *App) seedCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "seed",
-		Short: "Populate the database with three months of demo data",
+		Short: "Create the admin and test accounts and three months of demo data",
 		RunE: func(c *cobra.Command, args []string) error {
 			cfg, err := a.ResolvedConfig()
 			if err != nil {
@@ -31,46 +47,69 @@ func (a *App) seedCmd() *cobra.Command {
 			s := store.New(conn)
 			ctx := context.Background()
 
-			// All seeded rows are owned by a demo user. Create (or reuse) that
-			// user, then claim any pre-auth NULL-owner rows (the Income category
-			// seeded by migration 00005) so the demo user owns them too.
-			uid, err := demoUser(ctx, s)
+			// All seeded rows are owned by the admin user. Create (or reuse) that
+			// user first, then claim any pre-auth NULL-owner rows (the Income
+			// category seeded by migration 00005) so the admin owns them too —
+			// this mirrors what registering as the very first user does.
+			adminID, err := seedUser(ctx, s, seedAdminEmail)
 			if err != nil {
 				return err
 			}
-			if err := s.ClaimOrphanData(ctx, uid); err != nil {
+			if err := s.ClaimOrphanData(ctx, adminID); err != nil {
 				return fmt.Errorf("claim orphan data: %w", err)
 			}
+			if err := s.SetUserAdmin(ctx, adminID, true); err != nil {
+				return fmt.Errorf("grant admin: %w", err)
+			}
+			// nil = no expiry, i.e. a lifetime comp: the admin never hits the
+			// subscription gate and never needs Stripe configured locally.
+			if err := s.GrantComp(ctx, adminID, nil); err != nil {
+				return fmt.Errorf("grant comp: %w", err)
+			}
 
-			groups, _ := s.ListGroups(ctx, uid)
+			groups, _ := s.ListGroups(ctx, adminID)
 			for _, g := range groups {
 				if g.Name != "Income" {
 					return fmt.Errorf("database already has data — wipe it first")
 				}
 			}
-			if err := seed(ctx, s, uid); err != nil {
+			if err := seed(ctx, s, adminID); err != nil {
 				return err
 			}
+
+			// The test account is created after the admin so it is never the first
+			// user, and so it cannot claim the pre-auth rows. SeedNewUser gives it
+			// the same starter budget auth.Register would.
+			testID, err := seedUser(ctx, s, seedTestEmail)
+			if err != nil {
+				return err
+			}
+			if err := s.SeedNewUser(ctx, testID); err != nil {
+				return fmt.Errorf("seed test user budget: %w", err)
+			}
+
 			fmt.Println("seeded successfully")
+			fmt.Printf("  admin  %s / %s  (demo data, lifetime comp, /admin access)\n", seedAdminEmail, seedPassword)
+			fmt.Printf("  test   %s / %s  (starter budget, no subscription — starts the free trial)\n", seedTestEmail, seedPassword)
 			return nil
 		},
 	}
 }
 
-// demoUser returns the id of the verified demo account, creating it on first
-// run. Seeded data is owned by this user so it is visible after login.
-func demoUser(ctx context.Context, s *store.Store) (int64, error) {
-	const email = "demo@example.com"
+// seedUser returns the id of a verified seeded account, creating it on first run
+// and reusing it afterwards so the command can be re-run without duplicating
+// logins.
+func seedUser(ctx context.Context, s *store.Store, email string) (int64, error) {
 	if u, err := s.GetUserByEmail(ctx, email); err == nil {
 		return u.ID, nil
 	}
-	hash, err := auth.HashPassword("password1")
+	hash, err := auth.HashPassword(seedPassword)
 	if err != nil {
 		return 0, err
 	}
 	uid, err := s.CreateUser(ctx, email, hash)
 	if err != nil {
-		return 0, fmt.Errorf("create demo user: %w", err)
+		return 0, fmt.Errorf("create user %s: %w", email, err)
 	}
 	if err := s.SetEmailVerified(ctx, uid); err != nil {
 		return 0, err

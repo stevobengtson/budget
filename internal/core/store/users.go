@@ -14,9 +14,15 @@ type User struct {
 	PasswordHash    string
 	EmailVerifiedAt *time.Time
 	AvatarUpdatedAt *time.Time // nil when the user has no custom avatar
+	IsAdmin         bool
+	DisabledAt      *time.Time // non-nil when the account is suspended
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
+
+// Disabled reports whether the account is suspended. A disabled user cannot log
+// in and their existing sessions are rejected (see auth.AuthenticateSession).
+func (u User) Disabled() bool { return u.DisabledAt != nil }
 
 // AvatarVersion returns a cache-busting version for the user's avatar URL — the
 // avatar's last-updated unix time, or 0 when there's no custom avatar.
@@ -79,26 +85,31 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	return n, nil
 }
 
+// userColumns is the SELECT list every user lookup shares, kept in one place so
+// it cannot drift out of step with scanUser's Scan order.
+const userColumns = `id, email, name, password_hash, email_verified_at, avatar_updated_at,
+	is_admin, disabled_at, created_at, updated_at`
+
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	return s.scanUser(s.queryOne(ctx,
-		`SELECT id, email, name, password_hash, email_verified_at, avatar_updated_at, created_at, updated_at
-		 FROM users WHERE email = $1`, email))
+		`SELECT `+userColumns+` FROM users WHERE email = $1`, email))
 }
 
 func (s *Store) GetUserByID(ctx context.Context, id int64) (User, error) {
 	return s.scanUser(s.queryOne(ctx,
-		`SELECT id, email, name, password_hash, email_verified_at, avatar_updated_at, created_at, updated_at
-		 FROM users WHERE id = $1`, id))
+		`SELECT `+userColumns+` FROM users WHERE id = $1`, id))
 }
 
 func (s *Store) scanUser(row *sql.Row) (User, error) {
 	var u User
-	var verified, avatarUpdated nullTime
-	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &verified, &avatarUpdated, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	var verified, avatarUpdated, disabled nullTime
+	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &verified, &avatarUpdated,
+		&u.IsAdmin, &disabled, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		return User{}, err
 	}
 	u.EmailVerifiedAt = verified.Ptr()
 	u.AvatarUpdatedAt = avatarUpdated.Ptr()
+	u.DisabledAt = disabled.Ptr()
 	return u, nil
 }
 

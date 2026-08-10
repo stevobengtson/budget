@@ -9,4 +9,5 @@ var (
 	ErrInvalidToken       = errors.New("invalid or expired token")
 	ErrInvalidEmail       = errors.New("enter a valid email address")
 	ErrSameEmail          = errors.New("that is already your email")
+	ErrAccountDisabled    = errors.New("this account has been disabled")
 )

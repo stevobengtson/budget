@@ -228,6 +228,21 @@ func (s *Server) routes(cfg config.Config) {
 	app.POST("/account/start-fresh", hs.StartFresh)
 	app.POST("/account/delete", hs.DeleteAccount)
 
+	// Admin console. Authenticated but deliberately NOT behind the subscription
+	// gate: an operator has to be able to reach it while their own billing is in
+	// whatever state, and the console is where lapsed accounts get sorted out.
+	admin := app.Group("/admin")
+	admin.Use(requireAdmin())
+	admin.GET("", hs.AdminDashboard)
+	admin.GET("/chart", hs.AdminSignupsChart)
+	admin.GET("/users", hs.AdminUsers)
+	admin.GET("/users/:id", hs.AdminUserDetail)
+	admin.POST("/users/:id/disable", hs.AdminUserDisable)
+	admin.POST("/users/:id/enable", hs.AdminUserEnable)
+	admin.POST("/users/:id/comp", hs.AdminUserGrantComp)
+	admin.POST("/users/:id/comp/revoke", hs.AdminUserRevokeComp)
+	admin.POST("/users/:id/delete", hs.AdminUserDelete)
+
 	app.GET("/billing", hs.BillingPage)
 	app.POST("/billing/checkout", hs.StartCheckout)
 	// /billing/start is the gate's auto-redirect target for never-subscribed

@@ -25,8 +25,11 @@ func (h *Handlers) Login(c *gin.Context) {
 	raw, err := h.auth.Login(c.Request.Context(), email, pw, c.Request.UserAgent(), c.ClientIP())
 	if err != nil {
 		msg := "Invalid email or password."
-		if errors.Is(err, auth.ErrEmailNotVerified) {
+		switch {
+		case errors.Is(err, auth.ErrEmailNotVerified):
 			msg = "Please verify your email before logging in."
+		case errors.Is(err, auth.ErrAccountDisabled):
+			msg = "This account has been disabled. Contact support if you think this is a mistake."
 		}
 		render(c, http.StatusUnauthorized, views.LoginPage(email, msg))
 		return

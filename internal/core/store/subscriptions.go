@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -37,12 +38,31 @@ var accessGrantingStatuses = map[string]bool{
 // should grant the user access to the app.
 func AccessGranting(status string) bool { return accessGrantingStatuses[status] }
 
-// IsBillingExempt reports whether the user is a complimentary / always-free
-// account that bypasses the subscription gate. It's set manually in the database
-// (there's no UI): UPDATE users SET billing_exempt = true WHERE email = '...'.
+// AccessGrantingStatuses returns those statuses as a sorted slice, for the
+// callers that need to bind them into SQL instead of testing one at a time.
+func AccessGrantingStatuses() []string {
+	out := make([]string, 0, len(accessGrantingStatuses))
+	for status := range accessGrantingStatuses {
+		out = append(out, status)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// IsBillingExempt reports whether the user currently holds a complimentary
+// account that bypasses the subscription gate. Two columns combine: billing_exempt
+// is the switch and billing_exempt_until an optional expiry, so a NULL expiry is
+// a lifetime comp and a past one has lapsed. Expiry is evaluated in SQL against
+// the database clock, which keeps it consistent with every other timestamp the
+// app writes.
+//
+// Comps are granted from the admin console (GrantComp/RevokeComp); the original
+// manual form still works: UPDATE users SET billing_exempt = true WHERE ...
 func (s *Store) IsBillingExempt(ctx context.Context, userID int64) (bool, error) {
 	var exempt bool
-	if err := s.queryOne(ctx, `SELECT billing_exempt FROM users WHERE id = $1`, userID).Scan(&exempt); err != nil {
+	if err := s.queryOne(ctx,
+		`SELECT billing_exempt AND (billing_exempt_until IS NULL OR billing_exempt_until > CURRENT_TIMESTAMP)
+		 FROM users WHERE id = $1`, userID).Scan(&exempt); err != nil {
 		return false, err
 	}
 	return exempt, nil
@@ -71,8 +91,7 @@ func (s *Store) GetUserStripeCustomer(ctx context.Context, userID int64) (string
 // attribute incoming webhook events. Returns sql.ErrNoRows when unknown.
 func (s *Store) GetUserByStripeCustomer(ctx context.Context, customerID string) (User, error) {
 	return s.scanUser(s.queryOne(ctx,
-		`SELECT id, email, name, password_hash, email_verified_at, avatar_updated_at, created_at, updated_at
-		 FROM users WHERE stripe_customer_id = $1`, customerID))
+		`SELECT `+userColumns+` FROM users WHERE stripe_customer_id = $1`, customerID))
 }
 
 // UpsertSubscription inserts or updates a subscription keyed by its Stripe id,
