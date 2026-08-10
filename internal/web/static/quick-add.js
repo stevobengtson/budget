@@ -1,12 +1,14 @@
 // Behaviour for the always-open quick-add transaction row (#tx-quickadd).
 //
-// The row is deliberately not re-rendered by its own save: htmx swaps only the
-// row list (#tx-rows), which sits outside the form, so the fields keep their DOM
-// identity and focus survives the round trip. That leaves three things for JS:
+// A successful save re-renders the row server-side and htmx swaps it in out of
+// band, which is what clears it: every field comes back at the same default it
+// had on page load. The fields are templUI widgets whose value lives in a hidden
+// input carrying no value attribute, so there is nothing for JS to restore them
+// from — the defaults exist only in the Go template. That leaves three things
+// for JS:
 //
-//   1. After a successful save, clear Amount and Payee but KEEP Date and
-//      Account, then put the caret back in Amount. A run of receipts is then a
-//      run of Enters with no reaching for the mouse.
+//   1. Put the caret back in Amount once the fresh row lands, so a run of
+//      receipts is a run of Enters with no reaching for the mouse.
 //   2. Swap From and To in transfer mode.
 //   3. Esc clears the row.
 //
@@ -33,20 +35,12 @@
     }
   }
 
-  // Reset only the volatile fields. Date and account_id are intentionally left
-  // alone — they are the things that stay the same across a batch of entries.
-  function resetForNextEntry() {
-    var amount = field("amount");
-    var payee = field("payee");
-    if (amount) amount.value = "";
-    if (payee) payee.value = "";
-    focusAmount();
-  }
-
-  document.body.addEventListener("htmx:afterRequest", function (e) {
+  // htmx fires this on the newly swapped-in element, so the fresh row is already
+  // in the document and getElementById finds it rather than the replaced node.
+  // A failed save swaps nothing, so the typed values stay put and this never runs.
+  document.body.addEventListener("htmx:oobAfterSwap", function (e) {
     if (!e.target || e.target.id !== FORM) return;
-    // Leave the typed values in place on a failed save so nothing is retyped.
-    if (e.detail && e.detail.successful) resetForNextEntry();
+    focusAmount();
   });
 
   // The account pickers are templUI SelectBoxes, so the value lives in a hidden
@@ -80,10 +74,12 @@
     if (e.key !== "Escape") return;
     var f = form();
     if (!f || !f.contains(e.target)) return;
-    var amount = field("amount");
-    var payee = field("payee");
-    if (amount) amount.value = "";
-    if (payee) payee.value = "";
+    // The typed fields only: the pickers keep their values, matching what Esc
+    // has always cleared here.
+    ["amount", "payee", "notes"].forEach(function (name) {
+      var el = field(name);
+      if (el) el.value = "";
+    });
     focusAmount();
   });
 })();

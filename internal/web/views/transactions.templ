@@ -50,7 +50,7 @@ templ TransactionsBody(d TransactionsData) {
 			@monthselector.MonthSelector(txMonthHref(d, d.PrevMonth), txMonthHref(d, d.Today), txMonthHref(d, d.NextMonth), d.FilterMonth == d.Today)
 		</div>
 		@TxFilterBar(d)
-		@TxQuickAdd(d)
+		@TxQuickAdd(d, false)
 		<div id="tx-rows" class="flex flex-col">
 			@TxRows(d.Rows, d.Accounts, d.Categories, d.FilterAccount)
 		</div>
@@ -85,7 +85,18 @@ templ TransactionsBody(d TransactionsData) {
 // for a keyboard run (tab through, Enter, repeat), and a native select tabs and
 // type-aheads correctly and can be reassigned by the swap button without driving
 // a custom popover widget.
-templ TxQuickAdd(d TransactionsData) {
+//
+// oob renders the row as an out-of-band swap, which is how a successful save
+// resets it: the create handler sends this markup back alongside the new row
+// list, so every field returns to the same defaults it had on page load. Doing
+// the reset by re-rendering keeps those defaults defined once, in Go — the
+// pickers are templUI widgets whose value lives in a hidden input with no value
+// attribute, so there is nothing in the DOM for JS to restore them from.
+templ TxQuickAdd(d TransactionsData, oob bool) {
+	{{ attrs := templ.Attributes{} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
 	<form
 		id="tx-quickadd"
 		data-tx-form
@@ -93,6 +104,7 @@ templ TxQuickAdd(d TransactionsData) {
 		hx-target="#tx-rows"
 		hx-swap="innerHTML"
 		class="flex flex-col gap-s3 rounded-xl bg-surface-quickadd p-s3 shadow-organic-sm"
+		{ attrs... }
 	>
 		// Below 768px the fields stack full-width with touch-sized targets and Add
 		// becomes a full-width primary action at the foot of the card. The design
@@ -213,6 +225,19 @@ templ TxQuickAdd(d TransactionsData) {
 			>
 				@icon.ArrowLeftRight(icon.Props{Class: "size-[18px]"})
 			</button>
+			// Notes mirrors the edit form's field — same name, width and position at
+			// the end of the row — so a note can be written at entry instead of only
+			// on a second pass through the editor. Shown for every type: a transfer
+			// leg stores notes too.
+			@quickField("qa-notes", "Notes", "w-full md:w-[200px]") {
+				<input
+					id="qa-notes"
+					type="text"
+					name="notes"
+					autocomplete="off"
+					class="h-12 w-full rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary md:h-9"
+				/>
+			}
 			@button.Button(button.Props{Type: "submit", Class: "h-[52px] w-full shrink-0 rounded-pill text-[16px] md:h-9 md:w-auto md:px-s3 md:text-[14px]"}) {
 				Add
 			}
@@ -339,9 +364,13 @@ templ TxRows(rows []store.Transaction, accts []store.AccountWithBalance, cats []
 				{ money.Format(day.Net) }
 			</span>
 		</div>
-		for _, t := range day.Rows {
-			@TransactionRow(t, accts, cats, false)
-		}
+		// Left-only inset: the rows hang under their date header while their
+		// right edge — and so the amount column — stays aligned with the day net.
+		<div class="pl-s4">
+			for _, t := range day.Rows {
+				@TransactionRow(t, accts, cats, false)
+			}
+		</div>
 	}
 }
 

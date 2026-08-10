@@ -104,8 +104,9 @@ func (h *Handlers) TransactionsCreate(c *gin.Context) {
 		return
 	}
 	c.Header("HX-Trigger", "accountsChanged")
-	// Re-render full row list scoped by current filters.
-	h.renderTxRows(c)
+	// Re-render full row list scoped by current filters, plus a fresh quick-add
+	// row so the entry that just saved leaves the form empty.
+	h.renderTxRows(c, true)
 }
 
 // txFormData maps a stored transaction onto the single (type, amount) shape both
@@ -203,8 +204,10 @@ func (h *Handlers) TransactionsUpdate(c *gin.Context) {
 	// A successful update changed balances; refresh the sidebar overview.
 	c.Header("HX-Trigger", "accountsChanged")
 	// Re-render the full row list (sorted) so a changed date re-orders the row
-	// instead of leaving it stranded in its old position.
-	h.renderTxRows(c)
+	// instead of leaving it stranded in its old position. The quick-add row is
+	// left alone: an edit comes from the sheet, and anything half-typed in the
+	// entry row above should survive it.
+	h.renderTxRows(c, false)
 }
 
 func (h *Handlers) TransactionsDelete(c *gin.Context) {
@@ -332,11 +335,18 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 	// user must delete and recreate. Enforce it server-side (the form also
 	// disables the mismatched type buttons). An existing transfer leg is then
 	// updated in place so its ids and pair linkage survive.
+	// Reconciling is a separate action (the row's cleared checkbox -> SetCleared),
+	// so an edit must carry the stored flag through: UpdateTransaction writes
+	// every column, and the zero value here would silently un-reconcile the row.
+	// Left false when creating — a new transaction has not been seen on a
+	// statement yet.
+	var cleared bool
 	if id != 0 {
 		existing, err := h.store.GetTransaction(ctx, uid, id)
 		if err != nil {
 			return err
 		}
+		cleared = existing.Cleared
 		wasTransfer := existing.TransferPairID != nil
 		if wasTransfer != (txType == "transfer") {
 			return errInvalid("to switch between a transfer and a regular transaction, delete this one and create a new one")
@@ -373,6 +383,7 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 		ID: id, Date: t, AccountID: acctID, CategoryID: catPtr,
 		Payee: payeePtr, Notes: notesPtr,
 		OutflowCents: outCents, InflowCents: inCents,
+		Cleared: cleared,
 	}
 	if id == 0 {
 		_, err := h.store.CreateTransaction(ctx, uid, tx)
@@ -386,7 +397,11 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 // form disappears after a successful save.
 // Filters are read from the HX-Current-URL header so the active account
 // and month filters are preserved after create/update.
-func (h *Handlers) renderTxRows(c *gin.Context) {
+//
+// resetQuickAdd additionally sends the quick-add row back out of band, so a
+// created transaction leaves the entry form at its page defaults. It is off for
+// an update, which is edited elsewhere and must not clobber the entry row.
+func (h *Handlers) renderTxRows(c *gin.Context, resetQuickAdd bool) {
 	ctx := c.Request.Context()
 
 	q := currentURLQuery(c)
@@ -408,6 +423,16 @@ func (h *Handlers) renderTxRows(c *gin.Context) {
 	c.Status(http.StatusOK)
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = views.TxRows(rows, accts, cats, acctPtr).Render(ctx, c.Writer)
+	if resetQuickAdd {
+		// Only the fields the row actually reads — it is being re-rendered for its
+		// defaults, not for the list.
+		_ = views.TxQuickAdd(views.TransactionsData{
+			Accounts:       accts,
+			Categories:     cats,
+			FilterAccount:  acctPtr,
+			FilterCategory: catPtr,
+		}, true).Render(ctx, c.Writer)
+	}
 	_, _ = c.Writer.WriteString(`<div id="modal" class="modal-mount" hx-swap-oob="true"></div>`)
 }
 

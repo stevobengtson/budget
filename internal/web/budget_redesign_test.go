@@ -132,6 +132,154 @@ func TestQuickAddCreatesAndReturnsRows(t *testing.T) {
 	}
 }
 
+// TestQuickAddResetsAfterSave pins where the reset happens: the save response
+// carries a re-rendered quick-add row as an out-of-band swap, so every field
+// returns to its page default. It cannot be done client-side — the pickers are
+// templUI widgets whose value lives in a hidden input with no value attribute,
+// leaving the DOM with no record of the default to restore.
+//
+// An update must NOT do this: it is edited in the sheet, and re-rendering would
+// wipe whatever is half-typed in the entry row above it.
+func TestQuickAddResetsAfterSave(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	acct, err := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: "checking"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gid, err := s.CreateGroup(ctx, uid, "Living", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := s.CreateCategory(ctx, uid, store.Category{GroupID: gid, Name: "Dining Out"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	create := url.Values{
+		"tx_type":     {"expense"},
+		"date":        {"2026-07-04"},
+		"amount":      {"12.34"},
+		"payee":       {"Corner Shop"},
+		"account_id":  {itoa(acct)},
+		"category_id": {itoa(cat)},
+	}
+	body := readAll(t, postHTMX(t, client, ts.URL+"/transactions", "/transactions?month=2026-07", create))
+
+	i := strings.Index(body, `id="tx-quickadd"`)
+	if i < 0 {
+		t.Fatal("create response did not re-render the quick-add row")
+	}
+	form := body[i:]
+	if !strings.Contains(form[:200], `hx-swap-oob="true"`) {
+		t.Error("quick-add row came back without hx-swap-oob, so htmx will not swap it in")
+	}
+	// The category just used must come back unselected — the reset the user sees.
+	if strings.Contains(selectboxScope(t, form, "qa-category"), selectboxSelected(cat)) {
+		t.Error("quick-add row kept the category from the saved transaction")
+	}
+
+	tx, err := s.ListTransactions(ctx, uid, store.TxFilter{Limit: 1})
+	if err != nil || len(tx) == 0 {
+		t.Fatalf("expected the created transaction: %v", err)
+	}
+	create.Set("payee", "Corner Shop 2")
+	resp := sendHTMX(t, client, "PUT", ts.URL+"/transactions/"+itoa(tx[0].ID),
+		"/transactions?month=2026-07", create)
+	if resp.StatusCode != 200 {
+		t.Fatalf("update failed: %d", resp.StatusCode)
+	}
+	upd := readAll(t, resp)
+	if !strings.Contains(upd, "Corner Shop 2") {
+		t.Fatal("update response missing the edited row")
+	}
+	if strings.Contains(upd, `id="tx-quickadd"`) {
+		t.Error("an update re-rendered the quick-add row and would discard a half-typed entry")
+	}
+}
+
+// TestQuickAddPostsNotes: notes used to be reachable only by saving a
+// transaction and then reopening it in the editor. The handler already read the
+// field, so this guards the wiring — the input's name is what makes it post.
+func TestQuickAddPostsNotes(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	acct, err := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: "checking"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	page := readAll(t, mustGetOK(t, client, ts.URL+"/transactions?all=1"))
+	qa := page[strings.Index(page, `id="tx-quickadd"`):]
+	if !strings.Contains(qa, `id="qa-notes"`) {
+		t.Error("quick-add row has no notes field")
+	}
+
+	readAll(t, postHTMX(t, client, ts.URL+"/transactions", "/transactions?month=2026-07", url.Values{
+		"tx_type":    {"expense"},
+		"date":       {"2026-07-04"},
+		"amount":     {"12.34"},
+		"payee":      {"Corner Shop"},
+		"notes":      {"split with Sam"},
+		"account_id": {itoa(acct)},
+	}))
+
+	rows, err := s.ListTransactions(ctx, uid, store.TxFilter{Limit: 1})
+	if err != nil || len(rows) == 0 {
+		t.Fatalf("expected the created transaction: %v", err)
+	}
+	if rows[0].Notes == nil || *rows[0].Notes != "split with Sam" {
+		t.Errorf("notes did not survive quick-add: %v", rows[0].Notes)
+	}
+}
+
+// TestEditKeepsCleared: the edit form has no cleared control — reconciling is
+// the row's own checkbox — so saving an edit must leave the flag alone.
+// UpdateTransaction writes every column, so the handler has to carry the stored
+// value through or a zero value silently un-reconciles the row.
+func TestEditKeepsCleared(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, client, uid := serveAuthed(t, s)
+	ctx := context.Background()
+	acct, err := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: "checking"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	txID, err := s.CreateTransaction(ctx, uid, store.Transaction{
+		Date: time.Date(2026, 7, 4, 0, 0, 0, 0, time.UTC), AccountID: acct,
+		OutflowCents: 1234, Cleared: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := sendHTMX(t, client, "PUT", ts.URL+"/transactions/"+itoa(txID),
+		"/transactions?month=2026-07", url.Values{
+			"tx_type":    {"expense"},
+			"date":       {"2026-07-04"},
+			"amount":     {"99.99"},
+			"payee":      {"Corner Shop"},
+			"account_id": {itoa(acct)},
+		})
+	if resp.StatusCode != 200 {
+		t.Fatalf("update failed: %d", resp.StatusCode)
+	}
+	_ = readAll(t, resp)
+
+	after, err := s.GetTransaction(ctx, uid, txID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.Cleared {
+		t.Error("editing a transaction un-reconciled it")
+	}
+	if after.OutflowCents != 9999 {
+		t.Errorf("outflow = %d, want 9999 — the edit itself must still land", after.OutflowCents)
+	}
+}
+
 // TestTransferRendersAsOneRow covers the "one row, two readings" rule. Both legs
 // are still stored; only the rendering collapses. Unfiltered, the arriving leg
 // is suppressed so a transfer never appears twice and money reads as leaving.
@@ -186,7 +334,13 @@ func TestTransferRendersAsOneRow(t *testing.T) {
 // that tells the server which view the request came from.
 func postHTMX(t *testing.T, client *http.Client, endpoint, currentURL string, vals url.Values) *http.Response {
 	t.Helper()
-	req, err := http.NewRequest("POST", endpoint, strings.NewReader(vals.Encode()))
+	return sendHTMX(t, client, "POST", endpoint, currentURL, vals)
+}
+
+// sendHTMX is postHTMX for any verb — an update is a PUT.
+func sendHTMX(t *testing.T, client *http.Client, method, endpoint, currentURL string, vals url.Values) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(method, endpoint, strings.NewReader(vals.Encode()))
 	if err != nil {
 		t.Fatal(err)
 	}

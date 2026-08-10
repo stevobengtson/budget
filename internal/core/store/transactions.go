@@ -188,14 +188,17 @@ func (s *Store) UpdateTransfer(ctx context.Context, userID, legID int64, in Tran
 		pairCat = in.CategoryID
 	}
 
-	// Edited leg: exactly the values the user chose.
+	// Edited leg: exactly the values the user chose. cleared is left out of both
+	// statements on purpose — TransferLegEdit carries no such field because
+	// reconciling is SetCleared's job, and writing the column here would
+	// un-reconcile a matched transfer on any unrelated edit.
 	if _, err := s.txExec(ctx, tx,
 		`UPDATE transactions
 		 SET date=$1, account_id=$2, transfer_account_id=$3, category_id=$4, notes=$5,
-		     outflow_cents=$6, inflow_cents=$7, cleared=$8
-		 WHERE id=$9 AND user_id=$10`,
+		     outflow_cents=$6, inflow_cents=$7
+		 WHERE id=$8 AND user_id=$9`,
 		dateStr, in.AccountID, in.TransferAccountID, nullInt(editedCat), nullStr(in.Notes),
-		in.OutflowCents, in.InflowCents, false, legID, userID); err != nil {
+		in.OutflowCents, in.InflowCents, legID, userID); err != nil {
 		return fmt.Errorf("update edited leg: %w", err)
 	}
 
@@ -204,10 +207,10 @@ func (s *Store) UpdateTransfer(ctx context.Context, userID, legID int64, in Tran
 	if _, err := s.txExec(ctx, tx,
 		`UPDATE transactions
 		 SET date=$1, account_id=$2, transfer_account_id=$3, category_id=$4, notes=$5,
-		     outflow_cents=$6, inflow_cents=$7, cleared=$8
-		 WHERE id=$9 AND user_id=$10`,
+		     outflow_cents=$6, inflow_cents=$7
+		 WHERE id=$8 AND user_id=$9`,
 		dateStr, in.TransferAccountID, in.AccountID, nullInt(pairCat), nullStr(in.Notes),
-		in.InflowCents, in.OutflowCents, false, pairID, userID); err != nil {
+		in.InflowCents, in.OutflowCents, pairID, userID); err != nil {
 		return fmt.Errorf("update paired leg: %w", err)
 	}
 

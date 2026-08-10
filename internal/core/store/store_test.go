@@ -975,6 +975,44 @@ func TestUpdateTransfer(t *testing.T) {
 	}
 }
 
+// TestUpdateTransferKeepsCleared: reconciling is SetCleared's job. Editing a
+// transfer that has already been matched against a statement must not silently
+// un-reconcile it — and because the two legs are always cleared together, that
+// has to hold for the pair as well as the edited leg.
+func TestUpdateTransferKeepsCleared(t *testing.T) {
+	s, uid := newTestStoreUser(t)
+	ctx := context.Background()
+
+	chk, _ := s.CreateAccount(ctx, uid, Account{Name: "Chk", Type: TypeChecking, StartingBalanceCents: 100_000})
+	sav, _ := s.CreateAccount(ctx, uid, Account{Name: "Sav", Type: TypeChecking})
+
+	outID, inID, err := s.CreateTransfer(ctx, uid, TransferInput{
+		Date: time.Now(), FromAccountID: chk, ToAccountID: sav, AmountCents: 10_000,
+	})
+	if err != nil {
+		t.Fatalf("create transfer: %v", err)
+	}
+	if err := s.SetCleared(ctx, uid, outID, true); err != nil {
+		t.Fatalf("set cleared: %v", err)
+	}
+
+	mustUpdate(t, s, uid, outID, TransferLegEdit{
+		Date: time.Now(), AccountID: chk, TransferAccountID: sav, OutflowCents: 7_500,
+	})
+
+	if out := getTx(t, s, uid, outID); !out.Cleared {
+		t.Error("editing un-reconciled the edited leg")
+	}
+	if in := getTx(t, s, uid, inID); !in.Cleared {
+		t.Error("editing un-reconciled the paired leg")
+	}
+
+	// The edit itself still has to land.
+	if out := getTx(t, s, uid, outID); out.OutflowCents != 7_500 {
+		t.Errorf("out leg = %d, want 7500", out.OutflowCents)
+	}
+}
+
 func TestSetClearedTransfer(t *testing.T) {
 	s, uid := newTestStoreUser(t)
 	ctx := context.Background()
