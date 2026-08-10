@@ -8,7 +8,7 @@ tmp_dir = "tmp"
 [build]
 args_bin = []
 bin = "./bin/web/budget"
-cmd = "${TAILWIND:-./bin/tailwindcss} -i ./internal/web/tailwind/input.css -o ./internal/web/static/app.css --minify && ${TEMPL:-templ} generate -path ./internal/web && go build -o ./bin/web/budget ./cmd/web"
+cmd = "task css && ${TEMPL:-templ} generate -path ./internal/web && go build -o ./bin/web/budget ./cmd/web"
 delay = 1000
 entrypoint = ["./bin/web/budget"]
 exclude_dir = [
@@ -22,7 +22,9 @@ exclude_dir = [
   "vendor",
 ]
 exclude_file = []
-exclude_regex = ["_test.go", ".*_templ.go", "app.css"]
+# app.css and templui-sources.css are both written by the build command itself;
+# without them here, each build's own output retriggers the watcher forever.
+exclude_regex = ["_test.go", ".*_templ.go", "app.css", "templui-sources.css"]
 exclude_unchanged = false
 follow_symlink = false
 full_bin = ""

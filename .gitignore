@@ -4,6 +4,9 @@ bin/*
 # Generated Tailwind output
 internal/web/static/app.css
 
+# Generated @source lines for templUI in the Go module cache (task css-sources)
+internal/web/tailwind/templui-sources.css
+
 # Test binary, built with go test -c
 *.test
 
