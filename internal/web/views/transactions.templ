@@ -112,6 +112,10 @@ templ TxQuickAdd(d TransactionsData, oob bool) {
 		// Amount in the DOM, which reorders the desktop row, so the phone layout
 		// keeps the stack and gives Add the full width instead.
 		<div class="flex flex-wrap items-end gap-s2">
+			// Type leads: it decides which of the fields after it exist at all, so it
+			// is the first thing read and the first thing changed. The accounts
+			// follow as a block — From, To and the swap between them — then the
+			// when/how-much pair every type shares.
 			@quickField("qa-type", "Type", "w-full md:w-[140px]") {
 				@SelectField(SelectFieldProps{
 					ID:           "qa-type",
@@ -125,48 +129,6 @@ templ TxQuickAdd(d TransactionsData, oob bool) {
 					{Value: "transfer", Label: "Transfer"},
 				})
 			}
-			@quickField("qa-date", "Date", "w-full md:w-[170px]") {
-				@datepicker.DatePicker(datepicker.Props{
-					ID:          "qa-date",
-					Name:        "date",
-					Value:       time.Now(),
-					Placeholder: "Pick a date",
-					Class:       "w-full",
-				})
-			}
-			@quickField("qa-amount", "Amount", "flex-1 md:w-[124px] md:flex-none") {
-				<input
-					id="qa-amount"
-					type="text"
-					name="amount"
-					inputmode="decimal"
-					autocomplete="off"
-					placeholder="0.00"
-					class="h-[52px] w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[22px] font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-[15px]"
-				/>
-			}
-			<div class="tx-plain-only w-full min-w-[150px] md:flex-1">
-				@quickField("qa-payee", "Payee", "w-full") {
-					<input
-						id="qa-payee"
-						type="text"
-						name="payee"
-						autocomplete="off"
-						class="h-12 w-full rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary md:h-9"
-					/>
-				}
-			</div>
-			<div class="tx-plain-only w-full md:w-[170px]">
-				@quickField("qa-category", "Category", "w-full") {
-					@SelectField(SelectFieldProps{
-						ID:           "qa-category",
-						Name:         "category_id",
-						Placeholder:  "(none)",
-						Class:        "w-full",
-						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
-					}, categoryOptions(d.Categories, d.FilterCategory))
-				}
-			</div>
 			// When the list is already scoped to one account, the Account field is
 			// redundant in expense/income mode — the answer is the account you are
 			// looking at. It stays in the DOM (a display:none select still posts its
@@ -200,6 +162,36 @@ templ TxQuickAdd(d TransactionsData, oob bool) {
 					}, transferOptions(d.Accounts, nil))
 				}
 			</div>
+			<button
+				type="button"
+				id="qa-swap"
+				data-tx-swap
+				aria-label="Swap From and To"
+				title="Swap From and To"
+				class="tx-transfer-only h-9 w-9 shrink-0 items-center justify-center rounded-pill border border-border text-foreground hover:bg-foreground/[0.07]"
+			>
+				@icon.ArrowLeftRight(icon.Props{Class: "size-[18px]"})
+			</button>
+			@quickField("qa-date", "Date", "w-full md:w-[170px]") {
+				@datepicker.DatePicker(datepicker.Props{
+					ID:          "qa-date",
+					Name:        "date",
+					Value:       time.Now(),
+					Placeholder: "Pick a date",
+					Class:       "w-full",
+				})
+			}
+			@quickField("qa-amount", "Amount", "flex-1 md:w-[124px] md:flex-none") {
+				<input
+					id="qa-amount"
+					type="text"
+					name="amount"
+					inputmode="decimal"
+					autocomplete="off"
+					placeholder="0.00"
+					class="h-[52px] w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[22px] font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:text-[15px]"
+				/>
+			}
 			// Paying down a card or loan is spending, so it can be tagged to an
 			// envelope; moving cash between your own accounts cannot. The field
 			// therefore appears only when the destination is a debt account —
@@ -215,21 +207,33 @@ templ TxQuickAdd(d TransactionsData, oob bool) {
 					}, categoryOptions(d.Categories, nil))
 				}
 			</div>
-			<button
-				type="button"
-				id="qa-swap"
-				data-tx-swap
-				aria-label="Swap From and To"
-				title="Swap From and To"
-				class="tx-transfer-only h-9 w-9 shrink-0 items-center justify-center rounded-pill border border-border text-foreground hover:bg-foreground/[0.07]"
-			>
-				@icon.ArrowLeftRight(icon.Props{Class: "size-[18px]"})
-			</button>
-			// Notes mirrors the edit form's field — same name, width and position at
-			// the end of the row — so a note can be written at entry instead of only
-			// on a second pass through the editor. Shown for every type: a transfer
-			// leg stores notes too.
-			@quickField("qa-notes", "Notes", "w-full md:w-[200px]") {
+			// Category, Payee and Notes close the row, in that order. Payee holds a
+			// short name and is sized for one; Notes is the field that runs long, so
+			// it takes the flexible remainder rather than Payee.
+			<div class="tx-plain-only w-full md:w-[170px]">
+				@quickField("qa-category", "Category", "w-full") {
+					@SelectField(SelectFieldProps{
+						ID:           "qa-category",
+						Name:         "category_id",
+						Placeholder:  "(none)",
+						Class:        "w-full",
+						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+					}, categoryOptions(d.Categories, d.FilterCategory))
+				}
+			</div>
+			<div class="tx-plain-only w-full md:w-[200px]">
+				@quickField("qa-payee", "Payee", "w-full") {
+					<input
+						id="qa-payee"
+						type="text"
+						name="payee"
+						autocomplete="off"
+						class="h-12 w-full rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary md:h-9"
+					/>
+				}
+			</div>
+			// Shown for every type: a transfer leg stores notes too.
+			@quickField("qa-notes", "Notes", "w-full min-w-[150px] md:flex-1") {
 				<input
 					id="qa-notes"
 					type="text"
@@ -557,48 +561,6 @@ templ TransactionEditRow(d TxFormData) {
 					NoSearch:     true,
 				}, txTypeOptions(d))
 			}
-			@quickField("tx-edit-date", "Date", "w-full md:w-[170px]") {
-				@datepicker.DatePicker(datepicker.Props{
-					ID:    "tx-edit-date",
-					Name:  "date",
-					Value: txDate(d.Date),
-					Class: "w-full",
-				})
-			}
-			@quickField("tx-edit-amount", "Amount", "w-full md:w-[124px]") {
-				<input
-					id="tx-edit-amount"
-					type="text"
-					name="amount"
-					value={ d.Amount }
-					inputmode="decimal"
-					autocomplete="off"
-					class="h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				/>
-			}
-			<div class="tx-plain-only w-full min-w-[150px] md:flex-1">
-				@quickField("tx-edit-payee", "Payee", "w-full") {
-					<input
-						id="tx-edit-payee"
-						type="text"
-						name="payee"
-						value={ d.Payee }
-						autocomplete="off"
-						class="h-9 w-full rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary"
-					/>
-				}
-			</div>
-			<div class="tx-plain-only w-full md:w-[170px]">
-				@quickField("tx-edit-category", "Category", "w-full") {
-					@SelectField(SelectFieldProps{
-						ID:           "tx-edit-category",
-						Name:         "category_id",
-						Placeholder:  "(none)",
-						Class:        "w-full",
-						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
-					}, categoryOptions(d.Categories, d.CategoryID))
-				}
-			</div>
 			@quickField("tx-edit-from", "Account", "w-full md:w-[180px]") {
 				@SelectField(SelectFieldProps{
 					ID:           "tx-edit-from",
@@ -627,6 +589,25 @@ templ TransactionEditRow(d TxFormData) {
 			>
 				@icon.ArrowLeftRight(icon.Props{Class: "size-[18px]"})
 			</button>
+			@quickField("tx-edit-date", "Date", "w-full md:w-[170px]") {
+				@datepicker.DatePicker(datepicker.Props{
+					ID:    "tx-edit-date",
+					Name:  "date",
+					Value: txDate(d.Date),
+					Class: "w-full",
+				})
+			}
+			@quickField("tx-edit-amount", "Amount", "w-full md:w-[124px]") {
+				<input
+					id="tx-edit-amount"
+					type="text"
+					name="amount"
+					value={ d.Amount }
+					inputmode="decimal"
+					autocomplete="off"
+					class="h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-bold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				/>
+			}
 			<div class="tx-transfer-category w-full md:w-[210px]">
 				@quickField("tx-edit-transfer-category", "Budget category", "w-full") {
 					@SelectField(SelectFieldProps{
@@ -638,7 +619,32 @@ templ TransactionEditRow(d TxFormData) {
 					}, categoryOptions(d.Categories, d.CategoryID))
 				}
 			</div>
-			@quickField("tx-edit-notes", "Notes", "w-full md:w-[200px]") {
+			// Same tail as the quick-add row — Category, Payee, Notes — so an edit
+			// reads as the row it replaces rather than as a different form.
+			<div class="tx-plain-only w-full md:w-[170px]">
+				@quickField("tx-edit-category", "Category", "w-full") {
+					@SelectField(SelectFieldProps{
+						ID:           "tx-edit-category",
+						Name:         "category_id",
+						Placeholder:  "(none)",
+						Class:        "w-full",
+						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
+					}, categoryOptions(d.Categories, d.CategoryID))
+				}
+			</div>
+			<div class="tx-plain-only w-full md:w-[200px]">
+				@quickField("tx-edit-payee", "Payee", "w-full") {
+					<input
+						id="tx-edit-payee"
+						type="text"
+						name="payee"
+						value={ d.Payee }
+						autocomplete="off"
+						class="h-9 w-full rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary"
+					/>
+				}
+			</div>
+			@quickField("tx-edit-notes", "Notes", "w-full min-w-[150px] md:flex-1") {
 				<input
 					id="tx-edit-notes"
 					type="text"
