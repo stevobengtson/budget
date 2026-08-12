@@ -1,0 +1,226 @@
+package views
+
+import (
+	"github.com/sbengtson/budget/internal/core/i18n"
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/ui/buttongroup"
+)
+
+// The first-run wizard. Three steps, each a plain form POST rather than an htmx
+// swap: step one changes the interface language, and every subsequent byte —
+// the <html lang> attribute included — has to come back in the new one, which a
+// fragment swap cannot do.
+//
+// Nothing is written to the budget until Finish. The language is the exception
+// and is saved at step one, because the rest of the wizard has to be readable
+// in the language just chosen; that is a user preference, not budget data, and
+// it is changeable afterwards from the user menu.
+//
+// It reuses authLayout, the same centered card as sign-in and the paywall, so
+// the wizard needs no chrome of its own.
+
+// WizardTotalSteps is the step count shown in the "Step n of N" line. Declared
+// once so adding a step means changing this and the constant in the handler,
+// not hunting through three templates.
+const WizardTotalSteps = 3
+
+// WelcomeData carries the wizard's in-flight state between steps. The selected
+// group keys ride along in hidden fields rather than in a session, so Back
+// changes nothing and an abandoned wizard leaves no half-built budget.
+type WelcomeData struct {
+	Locale i18n.Locale
+	// Groups holds the starter-budget group keys the user has kept.
+	Groups []string
+	// Err is an inline error from the previous submit, "" when there is none.
+	Err string
+}
+
+// WelcomeLanguage is step 1: pick the interface language.
+//
+// The current locale is pre-selected from whatever the request already
+// resolved — the browser's Accept-Language for a fresh signup — so for most
+// people this step is a confirmation and one click, not a decision.
+templ WelcomeLanguage(d WelcomeData) {
+	@authLayout(i18n.T(ctx, "wizard.language_title")) {
+		@wizardStepLine(1)
+		<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "wizard.language_intro") }</p>
+		<form method="post" action="/welcome/language" class="mt-6 space-y-4">
+			<div class="space-y-2">
+				for _, l := range i18n.Supported {
+					<label class="flex cursor-pointer items-center gap-3 rounded-md border border-input p-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+						<input
+							type="radio"
+							name="locale"
+							value={ string(l) }
+							checked?={ l == d.Locale }
+							class="size-4 accent-primary"
+						/>
+						// Each language names itself, never the language currently on
+						// screen: someone who cannot read the current one still has to be
+						// able to find their own.
+						<span class="font-medium">{ l.Name() }</span>
+					</label>
+				}
+			</div>
+			@authButton(i18n.T(ctx, "wizard.continue"))
+		</form>
+	}
+}
+
+// WelcomeCategories is step 2: review the starter budget, in the language just
+// chosen, and drop any group that does not apply. Nothing is written yet — the
+// kept keys travel to step 3 in hidden fields.
+templ WelcomeCategories(d WelcomeData) {
+	@authLayout(i18n.T(ctx, "wizard.categories_title")) {
+		@wizardStepLine(2)
+		<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "wizard.categories_intro") }</p>
+		<form method="post" action="/welcome/categories" class="mt-6 space-y-4">
+			<div class="space-y-2">
+				for _, g := range store.StarterGroups {
+					<label class="flex cursor-pointer items-start gap-3 rounded-md border border-input p-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+						<input
+							type="checkbox"
+							name="groups"
+							value={ g.Key }
+							checked?={ hasGroup(d.Groups, g.Key) }
+							class="mt-0.5 size-4 accent-primary"
+						/>
+						<span class="min-w-0">
+							<span class="block font-medium">{ store.StarterGroupName(d.Locale, g.Key) }</span>
+							<span class="block text-muted-foreground">{ starterCategoryList(d.Locale, g) }</span>
+						</span>
+					</label>
+				}
+			</div>
+			// The Income category is created either way, so it is stated rather than
+			// offered — a budget with no way to record income is not a budget.
+			<p class="text-xs text-muted-foreground">{ i18n.T(ctx, "wizard.income_note") }</p>
+			@authButton(i18n.T(ctx, "wizard.continue"))
+		</form>
+		@wizardBack("/welcome")
+	}
+}
+
+// WelcomeAccount is step 3: the first account. Nothing can be budgeted until
+// money exists somewhere, so this is the last thing the wizard needs before the
+// budget is usable.
+//
+// Submitting it is what commits everything: the kept starter groups are seeded,
+// the account is created, and the wizard is marked done.
+templ WelcomeAccount(d WelcomeData) {
+	@authLayout(i18n.T(ctx, "wizard.account_title")) {
+		@wizardStepLine(3)
+		<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "wizard.account_intro") }</p>
+		if d.Err != "" {
+			<p class="mt-4 text-sm text-destructive">{ d.Err }</p>
+		}
+		<form method="post" action="/welcome/finish" class="mt-6 space-y-4">
+			for _, g := range d.Groups {
+				<input type="hidden" name="groups" value={ g }/>
+			}
+			<div class="space-y-1.5">
+				<label for="wz-name" class="text-sm font-medium leading-none">{ i18n.T(ctx, "accounts.name_label") }</label>
+				<input
+					id="wz-name"
+					type="text"
+					name="name"
+					required
+					autofocus
+					autocomplete="off"
+					placeholder={ i18n.T(ctx, "wizard.account_name_placeholder") }
+					class={ authInputClass }
+				/>
+			</div>
+			<div class="space-y-1.5">
+				<span class="text-sm font-medium leading-none">{ i18n.T(ctx, "accounts.type_label") }</span>
+				@buttongroup.ButtonGroup(buttongroup.Props{
+					ID:    "wz-type",
+					Name:  "type",
+					Value: "checking",
+					Class: "w-full rounded-pill",
+					Options: []buttongroup.Option{
+						{Value: "checking", Label: i18n.T(ctx, "accounts.type_chequing")},
+						{Value: "savings", Label: i18n.T(ctx, "accounts.type_savings")},
+						{Value: "credit", Label: i18n.T(ctx, "accounts.type_credit")},
+						{Value: "loan", Label: i18n.T(ctx, "accounts.type_loan")},
+					},
+				})
+			</div>
+			<div class="space-y-1.5">
+				<label for="wz-balance" class="text-sm font-medium leading-none">{ i18n.T(ctx, "wizard.account_balance_label") }</label>
+				<input
+					id="wz-balance"
+					type="text"
+					name="starting_balance"
+					inputmode="decimal"
+					autocomplete="off"
+					placeholder="0.00"
+					class={ authInputClass + " tabular-nums" }
+				/>
+				<span class="block text-xs text-muted-foreground">{ i18n.T(ctx, "wizard.account_sign_note") }</span>
+			</div>
+			@authButton(i18n.T(ctx, "wizard.finish"))
+		</form>
+		@wizardBackWithGroups("/welcome/back", d.Groups)
+	}
+}
+
+// wizardStepLine is the "Step n of 3" marker above each step's body.
+templ wizardStepLine(step int) {
+	<p class="text-xs font-bold uppercase tracking-[0.08em] text-muted-foreground">
+		{ i18n.Tf(ctx, "wizard.step_of", i18n.M{"Step": step, "Total": WizardTotalSteps}) }
+	</p>
+}
+
+// wizardBack is a plain GET back-link, for a step whose predecessor needs no
+// state carried into it.
+templ wizardBack(href string) {
+	<p class="mt-6 text-center text-sm">
+		<a href={ templ.SafeURL(href) } class="text-muted-foreground underline underline-offset-4 hover:text-foreground">
+			{ i18n.T(ctx, "wizard.back") }
+		</a>
+	</p>
+}
+
+// wizardBackWithGroups posts back to the previous step so the choices made
+// there are restored rather than reset. A link cannot carry them, and re-picking
+// the groups every time you glance at the previous screen would be its own
+// small insult.
+templ wizardBackWithGroups(action string, groups []string) {
+	<form method="post" action={ templ.SafeURL(action) } class="mt-6 text-center">
+		for _, g := range groups {
+			<input type="hidden" name="groups" value={ g }/>
+		}
+		<button type="submit" class="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">
+			{ i18n.T(ctx, "wizard.back") }
+		</button>
+	</form>
+}
+
+// hasGroup reports whether a starter group key was kept. A nil slice means the
+// step has not been answered yet, where every group starts ticked.
+func hasGroup(groups []string, key string) bool {
+	if groups == nil {
+		return true
+	}
+	for _, g := range groups {
+		if g == key {
+			return true
+		}
+	}
+	return false
+}
+
+// starterCategoryList renders a group's categories as one comma-separated line,
+// so the review step shows what each group actually contains without turning
+// into a tree of eighteen checkboxes.
+func starterCategoryList(l i18n.Locale, g store.StarterGroup) string {
+	out := ""
+	for i, key := range g.Categories {
+		if i > 0 {
+			out += ", "
+		}
+		out += store.StarterCategoryName(l, key)
+	}
+	return out
+}

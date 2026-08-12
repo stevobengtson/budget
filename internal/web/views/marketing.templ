@@ -1,18 +1,29 @@
 package views
 
-import "github.com/templui/templui/components/icon"
+import (
+	"github.com/sbengtson/budget/internal/core/i18n"
+	"github.com/templui/templui/components/icon"
+)
 
 // marketingLayout is the standalone shell for the public marketing + legal
 // pages (no app sidebar, no HTMX). It mirrors authLayout's head — the theme
 // bootstrap script, compiled Tailwind, favicon — and wraps the page in a shared
 // header and footer. title is both the document title and drives nothing else.
-templ marketingLayout(title string) {
+templ marketingLayout(title, path string) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang={ string(i18n.LocaleFrom(ctx)) }>
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ title } · Pigglet</title>
+			// Each language declares the other so a crawler indexes both rather than
+			// treating one as a duplicate. x-default points at English, which is what
+			// the bare path serves.
+			for _, l := range i18n.Supported {
+				<link rel="alternate" hreflang={ string(l) } href={ PublicHref(l, path) }/>
+			}
+			<link rel="alternate" hreflang="x-default" href={ PublicHref(i18n.Default, path) }/>
+			<link rel="canonical" href={ publicHref(ctx, path) }/>
 			<script>
 				(function () {
 					var t = localStorage.getItem("theme") || "system";
@@ -25,11 +36,11 @@ templ marketingLayout(title string) {
 			<link rel="icon" type="image/svg+xml" href={ Asset("/static/favicon.svg") }/>
 		</head>
 		<body class="min-h-screen bg-background text-foreground antialiased">
-			@marketingHeader()
+			@marketingHeader(path)
 			<main>
 				{ children... }
 			</main>
-			@marketingFooter()
+			@marketingFooter(path)
 			@cookieNotice()
 		</body>
 	</html>
@@ -37,29 +48,52 @@ templ marketingLayout(title string) {
 
 // marketingHeader is the sticky top bar: wordmark on the left, in-page nav and
 // the sign-in / start-trial actions on the right.
-templ marketingHeader() {
+templ marketingHeader(path string) {
 	<header class="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur">
 		<div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-			<a href="/" class="flex items-center gap-2">
+			<a href={ templ.SafeURL(publicHref(ctx, "/")) } class="flex items-center gap-2">
 				@icon.PiggyBank(icon.Props{Class: "size-6 text-primary"})
 				<span class="font-heading text-xl font-semibold tracking-tight">Pigglet</span>
 			</a>
 			<nav class="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
-				<a href="#features" class="transition-colors hover:text-foreground">Features</a>
-				<a href="#privacy" class="transition-colors hover:text-foreground">Privacy</a>
-				<a href="#pricing" class="transition-colors hover:text-foreground">Pricing</a>
+				<a href={ templ.SafeURL(publicHref(ctx, "/") + "#features") } class="transition-colors hover:text-foreground">{ i18n.T(ctx, "marketing.nav_features") }</a>
+				<a href={ templ.SafeURL(publicHref(ctx, "/") + "#privacy") } class="transition-colors hover:text-foreground">{ i18n.T(ctx, "marketing.nav_privacy") }</a>
+				<a href={ templ.SafeURL(publicHref(ctx, "/") + "#pricing") } class="transition-colors hover:text-foreground">{ i18n.T(ctx, "marketing.nav_pricing") }</a>
 			</nav>
 			<div class="flex items-center gap-2 sm:gap-3">
-				<a href="/login" class="hidden h-9 items-center rounded-pill px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline-flex">Sign in</a>
-				<a href="/signup" class="inline-flex h-9 items-center justify-center rounded-pill bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover">Start free trial</a>
+				@languageSwitch(path)
+				<a href="/login" class="hidden h-9 items-center rounded-pill px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline-flex">{ i18n.T(ctx, "auth.sign_in") }</a>
+				<a href="/signup" class="inline-flex h-9 items-center justify-center rounded-pill bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover">{ i18n.T(ctx, "marketing.start_trial") }</a>
 			</div>
 		</div>
 	</header>
 }
 
+// languageSwitch links to this same page in the other language. A link, not a
+// cookie toggle: the whole point of /fr is that the address is what decides the
+// language, so switching has to change the address the visitor can then share
+// or bookmark.
+//
+// Each language is named in itself, never in the one on screen — someone who
+// cannot read the current page still has to find their own.
+templ languageSwitch(path string) {
+	for _, l := range i18n.Supported {
+		if l != i18n.LocaleFrom(ctx) {
+			<a
+				href={ templ.SafeURL(PublicHref(l, path)) }
+				hreflang={ string(l) }
+				lang={ string(l) }
+				class="inline-flex h-9 items-center rounded-pill px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+			>
+				{ l.ShortName() }
+			</a>
+		}
+	}
+}
+
 // marketingFooter carries the legal-page links and the operating-company notice.
 // The legal routes (/privacy, /terms, /refund, /contact) are added in a later pass.
-templ marketingFooter() {
+templ marketingFooter(path string) {
 	<footer class="border-t border-border/60">
 		<div class="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:px-6 md:flex-row md:items-center md:justify-between">
 			<div class="flex items-center gap-2">
@@ -67,10 +101,10 @@ templ marketingFooter() {
 				<span class="font-heading text-lg font-semibold tracking-tight">Pigglet</span>
 			</div>
 			<nav class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-				<a href="/privacy" class="transition-colors hover:text-foreground">Privacy Policy</a>
-				<a href="/terms" class="transition-colors hover:text-foreground">Terms &amp; Conditions</a>
-				<a href="/refund" class="transition-colors hover:text-foreground">Refund Policy</a>
-				<a href="/contact" class="transition-colors hover:text-foreground">Contact Us</a>
+				<a href={ templ.SafeURL(publicHref(ctx, "/privacy")) } class="transition-colors hover:text-foreground">{ i18n.T(ctx, "legal.privacy_title") }</a>
+				<a href={ templ.SafeURL(publicHref(ctx, "/terms")) } class="transition-colors hover:text-foreground">{ i18n.T(ctx, "legal.terms_title") }</a>
+				<a href={ templ.SafeURL(publicHref(ctx, "/refund")) } class="transition-colors hover:text-foreground">{ i18n.T(ctx, "legal.refund_title") }</a>
+				<a href={ templ.SafeURL(publicHref(ctx, "/contact")) } class="transition-colors hover:text-foreground">{ i18n.T(ctx, "legal.contact_title") }</a>
 			</nav>
 		</div>
 		<div class="border-t border-border/60">
@@ -86,7 +120,7 @@ templ marketingFooter() {
 // LandingPage is the public home page shown to logged-out visitors (a valid
 // session is redirected to /budget by the Home handler).
 templ LandingPage() {
-	@marketingLayout("Simple envelope budgeting") {
+	@marketingLayout(i18n.T(ctx, "marketing.title"), "/") {
 		@heroSection()
 		@featuresSection()
 		@addOnsSection()
@@ -101,30 +135,28 @@ templ heroSection() {
 		<div class="mx-auto max-w-6xl px-4 pt-16 pb-12 text-center sm:px-6 sm:pt-24">
 			<span class="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
 				@icon.MapPin(icon.Props{Class: "size-3.5 text-primary"})
-				Proudly built in Canada 🇨🇦 · priced in CAD
+				{ i18n.T(ctx, "marketing.badge") }
 			</span>
 			<h1 class="mx-auto mt-6 max-w-3xl font-heading text-4xl font-semibold tracking-tight sm:text-6xl">
-				Budgeting that does exactly what it should — and nothing you didn't ask for.
+				{ i18n.T(ctx, "marketing.hero_heading") }
 			</h1>
 			<p class="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-				Pigglet is envelope budgeting stripped to the essentials. Plan where your
-				money goes, see where it went, and switch on extra features only when you
-				want them.
+				{ i18n.T(ctx, "marketing.hero_body") }
 			</p>
 			<div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
 				<a href="/signup" class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-pill bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover sm:w-auto">
-					Start your 35-day free trial
+					{ i18n.T(ctx, "marketing.cta_trial") }
 					@icon.ArrowRight(icon.Props{Class: "size-4"})
 				</a>
 				<a href="/login" class="inline-flex h-11 w-full items-center justify-center rounded-pill border border-input bg-background px-6 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground sm:w-auto">
-					Sign in
+					{ i18n.T(ctx, "auth.sign_in") }
 				</a>
 			</div>
 			<p class="mt-4 text-sm text-muted-foreground">
-				No payment information required. Cancel anytime.
+				{ i18n.T(ctx, "marketing.no_payment_info") }
 			</p>
 			<div class="mx-auto mt-14 max-w-5xl">
-				@browserFrame("/static/marketing/budget.png", "The Pigglet budget page: category groups with what's assigned, spent and still available, beside a summary of what's left to assign")
+				@browserFrame(marketingShot(ctx, "budget"), i18n.T(ctx, "marketing.shot_budget_alt"))
 			</div>
 		</div>
 	</section>
@@ -134,19 +166,18 @@ templ featuresSection() {
 	<section id="features" class="border-t border-border/60 bg-muted/20">
 		<div class="mx-auto max-w-6xl px-4 py-20 sm:px-6">
 			<div class="mx-auto max-w-2xl text-center">
-				<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Only what you need</h2>
+				<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">{ i18n.T(ctx, "marketing.features_heading") }</h2>
 				<p class="mt-4 text-muted-foreground">
-					Most budgeting apps bury the basics under dashboards you'll never read.
-					Pigglet keeps the core small and fast, so you can actually stick with it.
+					{ i18n.T(ctx, "marketing.features_body") }
 				</p>
 			</div>
 			<div class="mt-14 grid gap-6 sm:grid-cols-3">
-				@featureCard(icon.Wallet(icon.Props{Class: "size-5"}), "Every dollar has a job", "Classic envelope budgeting: assign your income to categories, then spend from what's actually available.")
-				@featureCard(icon.Zap(icon.Props{Class: "size-5"}), "Fast and focused", "Assign, spend, reconcile. No clutter, no busywork, no features fighting for your attention.")
-				@featureCard(icon.Target(icon.Props{Class: "size-5"}), "Goals that keep it real", "Set targets for the things that matter — an emergency fund, a trip — and watch them fill up month over month.")
+				@featureCard(icon.Wallet(icon.Props{Class: "size-5"}), i18n.T(ctx, "marketing.feature_dollar_title"), i18n.T(ctx, "marketing.feature_dollar_body"))
+				@featureCard(icon.Zap(icon.Props{Class: "size-5"}), i18n.T(ctx, "marketing.feature_fast_title"), i18n.T(ctx, "marketing.feature_fast_body"))
+				@featureCard(icon.Target(icon.Props{Class: "size-5"}), i18n.T(ctx, "marketing.feature_goals_title"), i18n.T(ctx, "marketing.feature_goals_body"))
 			</div>
 			<div class="mx-auto mt-12 max-w-4xl">
-				@browserFrame("/static/marketing/transactions.png", "The Pigglet transactions page, listing a month of spending across every account with its category tagged")
+				@browserFrame(marketingShot(ctx, "transactions"), i18n.T(ctx, "marketing.shot_tx_alt"))
 			</div>
 		</div>
 	</section>
@@ -158,24 +189,22 @@ templ addOnsSection() {
 			<div>
 				<span class="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
 					@icon.Blocks(icon.Props{Class: "size-3.5 text-primary"})
-					Add-ons
+					{ i18n.T(ctx, "settings.tab_addons") }
 				</span>
 				<h2 class="mt-5 font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
-					Add features when you want them — not before
+					{ i18n.T(ctx, "marketing.addons_heading") }
 				</h2>
 				<p class="mt-4 text-muted-foreground">
-					The core app stays lean for everyone. Optional add-ons — like Debt Paydown,
-					which projects how quickly your loans and cards clear — can be switched on
-					from your account whenever you need them, and switched back off just as easily.
+					{ i18n.T(ctx, "marketing.addons_body") }
 				</p>
 				<ul class="mt-6 space-y-3 text-sm">
-					@addOnPoint("Opt in only to what's useful to you")
-					@addOnPoint("Some add-ons are free; others are a small additional charge — you never pay for features you don't enable")
-					@addOnPoint("Turn add-ons on or off any time from your account")
+					@addOnPoint(i18n.T(ctx, "marketing.addons_point_optin"))
+					@addOnPoint(i18n.T(ctx, "marketing.addons_point_price"))
+					@addOnPoint(i18n.T(ctx, "marketing.addons_point_toggle"))
 				</ul>
 			</div>
 			<div>
-				@browserFrame("/static/marketing/paydown.png", "The Pigglet Debt Paydown add-on projecting payoff schedules")
+				@browserFrame(marketingShot(ctx, "paydown"), i18n.T(ctx, "marketing.shot_paydown_alt"))
 			</div>
 		</div>
 	</section>
@@ -185,16 +214,15 @@ templ privacySection() {
 	<section id="privacy" class="border-t border-border/60 bg-muted/20">
 		<div class="mx-auto max-w-6xl px-4 py-20 sm:px-6">
 			<div class="mx-auto max-w-2xl text-center">
-				<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Your data is yours</h2>
+				<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">{ i18n.T(ctx, "marketing.privacy_heading") }</h2>
 				<p class="mt-4 text-muted-foreground">
-					Your finances are personal. We treat them that way — we collect as little as
-					possible and never turn it into a product.
+					{ i18n.T(ctx, "marketing.privacy_body") }
 				</p>
 			</div>
 			<div class="mt-14 grid gap-6 sm:grid-cols-3">
-				@trustItem(icon.ShieldCheck(icon.Props{Class: "size-5"}), "Only what's necessary", "To sign you in we need an email address and a password. That's it — no phone number, no address, no data broker imports.")
-				@trustItem(icon.EyeOff(icon.Props{Class: "size-5"}), "Never sold, never shared", "We don't sell your data and we don't share it with advertisers. There are no ad or tracking cookies — the only cookies we set keep you signed in.")
-				@trustItem(icon.Lock(icon.Props{Class: "size-5"}), "Kept safe", "Passwords are hashed, never stored in plain text, and your budget is only ever visible to you.")
+				@trustItem(icon.ShieldCheck(icon.Props{Class: "size-5"}), i18n.T(ctx, "marketing.trust_minimal_title"), i18n.T(ctx, "marketing.trust_minimal_body"))
+				@trustItem(icon.EyeOff(icon.Props{Class: "size-5"}), i18n.T(ctx, "marketing.trust_never_sold_title"), i18n.T(ctx, "marketing.trust_never_sold_body"))
+				@trustItem(icon.Lock(icon.Props{Class: "size-5"}), i18n.T(ctx, "marketing.trust_safe_title"), i18n.T(ctx, "marketing.trust_safe_body"))
 			</div>
 		</div>
 	</section>
@@ -204,9 +232,9 @@ templ pricingSection() {
 	<section id="pricing" class="border-t border-border/60">
 		<div class="mx-auto max-w-6xl px-4 py-20 sm:px-6">
 			<div class="mx-auto max-w-2xl text-center">
-				<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Simple pricing, in Canadian dollars</h2>
+				<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">{ i18n.T(ctx, "marketing.pricing_heading") }</h2>
 				<p class="mt-4 text-muted-foreground">
-					One plan. Everything in the core app. No tiers to decode.
+					{ i18n.T(ctx, "marketing.pricing_body") }
 				</p>
 			</div>
 			<div class="mx-auto mt-12 max-w-md">
@@ -214,21 +242,21 @@ templ pricingSection() {
 					<div class="border-b border-border p-8 text-center">
 						<p class="text-sm font-medium text-muted-foreground">Pigglet</p>
 						<p class="mt-3 font-heading text-5xl font-semibold tracking-tight">
-							$4.99 <span class="text-lg font-normal text-muted-foreground">CAD / month</span>
+							$4.99 <span class="text-lg font-normal text-muted-foreground">{ i18n.T(ctx, "marketing.pricing_period") }</span>
 						</p>
 						<p class="mt-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
 							@icon.Sparkles(icon.Props{Class: "size-4"})
-							35-day free trial — no card required
+							{ i18n.T(ctx, "marketing.pricing_trial_badge") }
 						</p>
 					</div>
 					<div class="space-y-3 p-8">
-						@pricingPoint("All core budgeting — accounts, categories, goals and transactions")
-						@pricingPoint("35 days free before you're charged a cent")
-						@pricingPoint("No payment information needed to start")
-						@pricingPoint("Optional add-ons — some free, some a small additional charge")
-						@pricingPoint("Cancel anytime from your account")
+						@pricingPoint(i18n.T(ctx, "marketing.pricing_point_core"))
+						@pricingPoint(i18n.T(ctx, "marketing.pricing_point_free"))
+						@pricingPoint(i18n.T(ctx, "marketing.pricing_point_nocard"))
+						@pricingPoint(i18n.T(ctx, "marketing.pricing_point_addons"))
+						@pricingPoint(i18n.T(ctx, "marketing.pricing_point_cancel"))
 						<a href="/signup" class="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-pill bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover">
-							Start your free trial
+							{ i18n.T(ctx, "billing.start_trial") }
 							@icon.ArrowRight(icon.Props{Class: "size-4"})
 						</a>
 					</div>
@@ -242,11 +270,10 @@ templ finalCTASection() {
 	<section class="border-t border-border/60 bg-muted/20">
 		<div class="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6">
 			<h2 class="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
-				Manage your budget, simply
+				{ i18n.T(ctx, "marketing.final_heading") }
 			</h2>
 			<p class="mx-auto mt-4 max-w-xl text-muted-foreground">
-				Try Pigglet free for 35 days. No card, no commitment — just a calmer way to
-				handle your money.
+				{ i18n.T(ctx, "marketing.final_body") }
 			</p>
 			<div class="mt-8">
 				<a href="/signup" class="inline-flex h-11 items-center justify-center gap-2 rounded-pill bg-primary px-8 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover">
@@ -318,12 +345,11 @@ templ cookieNotice() {
 	<div id="cookie-notice" class="fixed inset-x-0 bottom-0 z-50 hidden p-4 sm:p-6">
 		<div class="mx-auto flex max-w-3xl flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
 			<p class="text-sm text-muted-foreground">
-				We use only the cookies Pigglet needs to work — to keep you signed in and remember
-				your layout. No advertising or tracking cookies, ever.
-				<a href="/privacy" class="font-medium text-foreground underline underline-offset-4">Learn more</a>.
+				{ i18n.T(ctx, "marketing.cookie_body") }
+				<a href={ templ.SafeURL(publicHref(ctx, "/privacy")) } class="font-medium text-foreground underline underline-offset-4">{ i18n.T(ctx, "marketing.cookie_learn_more") }</a>.
 			</p>
 			<button type="button" onclick="dismissCookieNotice()" class="inline-flex h-9 shrink-0 items-center justify-center rounded-pill bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover">
-				Got it
+				{ i18n.T(ctx, "marketing.cookie_dismiss") }
 			</button>
 		</div>
 	</div>

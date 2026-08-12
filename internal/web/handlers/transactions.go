@@ -133,20 +133,20 @@ func (h *Handlers) txFormData(ctx context.Context, uid int64, t *store.Transacti
 		d.TxType = "transfer"
 		if t.OutflowCents > 0 {
 			d.TransferAccountID = t.TransferAccountID
-			d.Amount = money.Format(t.OutflowCents)
+			d.Amount = money.Format(ctx, t.OutflowCents)
 		} else {
 			src := *t.TransferAccountID
 			dst := t.AccountID
 			d.AccountID = src
 			d.TransferAccountID = &dst
-			d.Amount = money.Format(t.InflowCents)
+			d.Amount = money.Format(ctx, t.InflowCents)
 		}
 	case t.InflowCents > 0:
 		d.TxType = "income"
-		d.Amount = money.Format(t.InflowCents)
+		d.Amount = money.Format(ctx, t.InflowCents)
 	default:
 		d.TxType = "expense"
-		d.Amount = money.Format(t.OutflowCents)
+		d.Amount = money.Format(ctx, t.OutflowCents)
 	}
 	// A transfer's category lives on the outflow (spending) leg. When editing
 	// the inflow leg, surface the pair's category so it's visible and editable.
@@ -290,7 +290,7 @@ func (h *Handlers) upsertTransaction(c *gin.Context, id int64) error {
 	// transaction. A malformed amount is a mistake to report, not a zero.
 	var amount int64
 	if v := strings.TrimSpace(c.PostForm("amount")); v != "" {
-		parsed, err := money.Parse(v)
+		parsed, err := money.Parse(ctx, v)
 		if err != nil {
 			return errInvalid("amount: " + err.Error())
 		}

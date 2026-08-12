@@ -122,6 +122,12 @@ func serveAuthedCfg(t *testing.T, s *store.Store, cfg config.Config) (*httptest.
 	if err := s.ClaimOrphanData(ctx, uid); err != nil {
 		t.Fatal(err)
 	}
+	// These tests exercise the app, not the first-run wizard, so the seeded user
+	// arrives already onboarded — otherwise requireOnboarded would bounce every
+	// request to /welcome. The wizard has its own tests.
+	if err := s.MarkOnboarded(ctx, uid); err != nil {
+		t.Fatal(err)
+	}
 	raw, err := auth.RandomToken()
 	if err != nil {
 		t.Fatal(err)
@@ -770,7 +776,6 @@ func TestBudgetCategoriesReorder(t *testing.T) {
 	ts, client, uid := serveAuthed(t, s)
 	ctx := context.Background()
 
-	// An account is required, or /budget renders the first-run screen.
 	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: "checking"}); err != nil {
 		t.Fatal(err)
 	}
@@ -825,7 +830,6 @@ func TestGroupCollapseRendering(t *testing.T) {
 	ctx := context.Background()
 	u, _ := url.Parse(ts.URL)
 
-	// An account is required, or /budget renders the first-run screen.
 	if _, err := s.CreateAccount(ctx, uid, store.Account{Name: "Checking", Type: "checking"}); err != nil {
 		t.Fatal(err)
 	}

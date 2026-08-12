@@ -82,7 +82,7 @@ func newTestHandlers(t *testing.T) *Handlers {
 	st := store.New(openTestDB(t))
 	svc := auth.NewService(st, mail.NewConsole(), "http://localhost:8080", auth.Config{})
 	bill := billing.NewService(st, "", "", "http://localhost:8080", "")
-	return New(st, svc, bill, false, 3600)
+	return New(st, svc, bill, false, 3600, "http://localhost:8080")
 }
 
 func postForm(t *testing.T, r http.Handler, path string, form url.Values) *httptest.ResponseRecorder {
@@ -279,7 +279,7 @@ func TestEmailChangeFlow(t *testing.T) {
 	mailer := &captureMailer{}
 	svc := auth.NewService(st, mailer, "http://localhost:8080", auth.Config{})
 	bill := billing.NewService(st, "", "", "http://localhost:8080", "")
-	h := New(st, svc, bill, false, 3600)
+	h := New(st, svc, bill, false, 3600, "http://localhost:8080")
 
 	ctx := context.Background()
 	hash, _ := auth.HashPassword("password1")

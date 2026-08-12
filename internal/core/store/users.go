@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	"github.com/sbengtson/budget/internal/core/i18n"
 )
 
 type User struct {
@@ -16,6 +18,8 @@ type User struct {
 	AvatarUpdatedAt *time.Time // nil when the user has no custom avatar
 	IsAdmin         bool
 	DisabledAt      *time.Time // non-nil when the account is suspended
+	Locale          i18n.Locale
+	OnboardedAt     *time.Time // nil until the first-run wizard is finished
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
@@ -88,7 +92,7 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 // userColumns is the SELECT list every user lookup shares, kept in one place so
 // it cannot drift out of step with scanUser's Scan order.
 const userColumns = `id, email, name, password_hash, email_verified_at, avatar_updated_at,
-	is_admin, disabled_at, created_at, updated_at`
+	is_admin, disabled_at, locale, onboarded_at, created_at, updated_at`
 
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	return s.scanUser(s.queryOne(ctx,
@@ -102,15 +106,46 @@ func (s *Store) GetUserByID(ctx context.Context, id int64) (User, error) {
 
 func (s *Store) scanUser(row *sql.Row) (User, error) {
 	var u User
-	var verified, avatarUpdated, disabled nullTime
+	var verified, avatarUpdated, disabled, onboarded nullTime
+	var locale string
 	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &verified, &avatarUpdated,
-		&u.IsAdmin, &disabled, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		&u.IsAdmin, &disabled, &locale, &onboarded, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		return User{}, err
 	}
 	u.EmailVerifiedAt = verified.Ptr()
 	u.AvatarUpdatedAt = avatarUpdated.Ptr()
 	u.DisabledAt = disabled.Ptr()
+	u.OnboardedAt = onboarded.Ptr()
+	// A locale we no longer ship (a dropped language, a hand-edited row) falls
+	// back to the default rather than propagating an unsupported tag into the
+	// renderer, where every lookup would miss.
+	u.Locale, _ = i18n.Parse(locale)
 	return u, nil
+}
+
+// Onboarded reports whether the user has finished the first-run wizard.
+func (u User) Onboarded() bool { return u.OnboardedAt != nil }
+
+// MarkOnboarded records that the user finished the first-run wizard, so they
+// are never sent through it again. Idempotent — re-finishing does not move the
+// timestamp, which keeps it meaningful as "when they first got set up".
+func (s *Store) MarkOnboarded(ctx context.Context, userID int64) error {
+	_, err := s.run(ctx,
+		`UPDATE users SET onboarded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+		 WHERE id = $1 AND onboarded_at IS NULL`, userID)
+	return err
+}
+
+// UpdateUserLocale sets the user's interface language. The caller is expected to
+// have validated the tag; an unsupported one is rejected here rather than
+// stored, so a bad request cannot leave an account stuck rendering message IDs.
+func (s *Store) UpdateUserLocale(ctx context.Context, userID int64, l i18n.Locale) error {
+	if !l.Valid() {
+		return fmt.Errorf("unsupported locale %q", l)
+	}
+	_, err := s.run(ctx,
+		`UPDATE users SET locale = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, string(l), userID)
+	return err
 }
 
 // SetUserAvatar stores the (already-processed) avatar PNG for the user and bumps
@@ -155,27 +190,54 @@ func (s *Store) UpdatePasswordHash(ctx context.Context, userID int64, hash strin
 	return err
 }
 
-// defaultGroups is the starter budget layout seeded for a new user (in addition
-// to the system Income category). Order here is the display order.
-var defaultGroups = []struct {
-	Name       string
+// StarterGroup is one group of the starter budget offered by the first-run
+// wizard. Key and Categories hold catalog keys, not display names: the wizard
+// seeds in whatever language the user just chose, so the words cannot be baked
+// in here. Resolve them with StarterGroupName / StarterCategoryName.
+type StarterGroup struct {
+	Key        string
 	Categories []string
-}{
-	{"Bills", []string{"Rent/Mortgage", "Electric", "Water", "Internet", "Phone"}},
-	{"Everyday", []string{"Groceries", "Transportation", "Dining Out", "Entertainment", "Personal"}},
-	{"Savings", []string{"Emergency Fund", "Vacation"}},
 }
 
-// SeedNewUser provisions a user's starter budget: a system-managed "Income"
-// category plus a default set of expense groups/categories (see defaultGroups),
-// so a new user has something to work with immediately.
+// StarterGroups is the starter budget layout, in display order. The wizard
+// shows these for review and seeds the ones the user keeps; the system Income
+// category is always created and is not among them.
+var StarterGroups = []StarterGroup{
+	{"bills", []string{"rent", "electric", "water", "internet", "phone"}},
+	{"everyday", []string{"groceries", "transportation", "dining_out", "entertainment", "personal"}},
+	{"savings", []string{"emergency_fund", "vacation"}},
+}
+
+// StarterGroupName and StarterCategoryName resolve a starter-budget key to its
+// display name in a locale. These names become the user's own editable rows the
+// moment they are inserted, so this is a one-time translation at seeding, not a
+// rendering-time lookup — renaming a category later must not be undone by a
+// language switch.
+func StarterGroupName(l i18n.Locale, key string) string {
+	return i18n.TIn(l, "starter.group."+key)
+}
+
+func StarterCategoryName(l i18n.Locale, key string) string {
+	return i18n.TIn(l, "starter.category."+key)
+}
+
+// SeedNewUser provisions a user's starter budget in the given locale: a
+// system-managed Income category plus the expense groups named in groupKeys
+// (nil means all of StarterGroups).
 //
 // It is a no-op for parts the user already has: the Income category is created
-// only when missing, and the default expense groups only when the user has no
+// only when missing, and the expense groups only when the user has no
 // non-income categories yet. So the first (owner) user, who inherits a real
 // pre-existing budget via ClaimOrphanData, is left untouched, while a user with
-// only the claimed system Income still gets the default expense categories.
-func (s *Store) SeedNewUser(ctx context.Context, userID int64) error {
+// only the claimed system Income still gets the expense categories.
+//
+// One consequence, on the owner path only: that claimed Income category was
+// inserted in English by migration 00005, and it is NOT renamed to match the
+// language chosen in the wizard. Renaming is deliberately not attempted — the
+// same claim can carry a real pre-existing budget whose category names are the
+// owner's own words, and silently rewriting those would be the worse failure.
+// Every subsequent user gets their Income category in their chosen language.
+func (s *Store) SeedNewUser(ctx context.Context, userID int64, loc i18n.Locale, groupKeys []string) error {
 	var incomeCount, expenseCount int
 	if err := s.queryOne(ctx,
 		`SELECT
@@ -188,6 +250,24 @@ func (s *Store) SeedNewUser(ctx context.Context, userID int64) error {
 		return nil
 	}
 
+	groups := StarterGroups
+	if groupKeys != nil {
+		want := make(map[string]bool, len(groupKeys))
+		for _, k := range groupKeys {
+			want[k] = true
+		}
+		// Filter StarterGroups rather than ranging over groupKeys, so the seeded
+		// order is always the canonical display order and an unknown key coming
+		// off a form is ignored instead of inserting a group named after a
+		// missing message.
+		groups = nil
+		for _, g := range StarterGroups {
+			if want[g.Key] {
+				groups = append(groups, g)
+			}
+		}
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -195,31 +275,33 @@ func (s *Store) SeedNewUser(ctx context.Context, userID int64) error {
 	defer func() { _ = tx.Rollback() }()
 
 	if incomeCount == 0 {
+		incomeName := i18n.TIn(loc, "starter.group.income")
 		gid, err := s.txInsertReturningID(ctx, tx,
-			`INSERT INTO category_groups(user_id, name, sort_order) VALUES ($1, 'Income', -100)`, userID)
+			`INSERT INTO category_groups(user_id, name, sort_order) VALUES ($1, $2, -100)`, userID, incomeName)
 		if err != nil {
 			return fmt.Errorf("seed income group: %w", err)
 		}
 		// is_income is BOOLEAN: bind a Go bool via placeholder, never a literal.
 		if _, err := s.txExec(ctx, tx,
-			`INSERT INTO categories(user_id, group_id, name, is_income, sort_order) VALUES ($1, $2, 'Income', $3, 0)`,
-			userID, gid, true); err != nil {
+			`INSERT INTO categories(user_id, group_id, name, is_income, sort_order) VALUES ($1, $2, $3, $4, 0)`,
+			userID, gid, i18n.TIn(loc, "starter.category.income"), true); err != nil {
 			return fmt.Errorf("seed income category: %w", err)
 		}
 	}
 
 	if expenseCount == 0 {
-		for gi, g := range defaultGroups {
+		for gi, g := range groups {
 			gid, err := s.txInsertReturningID(ctx, tx,
-				`INSERT INTO category_groups(user_id, name, sort_order) VALUES ($1, $2, $3)`, userID, g.Name, gi)
+				`INSERT INTO category_groups(user_id, name, sort_order) VALUES ($1, $2, $3)`,
+				userID, StarterGroupName(loc, g.Key), gi)
 			if err != nil {
-				return fmt.Errorf("seed group %q: %w", g.Name, err)
+				return fmt.Errorf("seed group %q: %w", g.Key, err)
 			}
-			for ci, name := range g.Categories {
+			for ci, key := range g.Categories {
 				if _, err := s.txExec(ctx, tx,
 					`INSERT INTO categories(user_id, group_id, name, sort_order) VALUES ($1, $2, $3, $4)`,
-					userID, gid, name, ci); err != nil {
-					return fmt.Errorf("seed category %q: %w", name, err)
+					userID, gid, StarterCategoryName(loc, key), ci); err != nil {
+					return fmt.Errorf("seed category %q: %w", key, err)
 				}
 			}
 		}

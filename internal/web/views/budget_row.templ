@@ -1,10 +1,12 @@
 package views
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/sbengtson/budget/internal/core/format"
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
@@ -40,7 +42,7 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 		<div class="col-start-1 row-start-1 flex min-w-0 items-center gap-1">
 			<span
 				class="js-category-handle hidden cursor-grab touch-none items-center text-warm-400 opacity-0 transition-opacity group-hover:opacity-100 md:inline-flex"
-				title="Drag to reorder category"
+				title={ i18n.T(ctx, "budget.drag_category") }
 				aria-hidden="true"
 			>
 				@icon.GripVertical(icon.Props{Class: "size-4"})
@@ -51,7 +53,7 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 				hx-swap="outerHTML"
 				class="flex min-w-0 items-center"
 			>
-				<button type="button" class="js-name-display cursor-text truncate rounded-sm px-1 py-0.5 text-[16px] font-semibold ring-1 ring-transparent hover:ring-border" title="Click to rename">
+				<button type="button" class="js-name-display cursor-text truncate rounded-sm px-1 py-0.5 text-[16px] font-semibold ring-1 ring-transparent hover:ring-border" title={ i18n.T(ctx, "common.click_to_rename") }>
 					{ r.CategoryName }
 				</button>
 				<input
@@ -73,14 +75,14 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 			<button
 				type="button"
 				class="js-assign-display h-9 w-full cursor-text rounded-pill bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums ring-1 ring-transparent transition-shadow hover:ring-border"
-				title="Click to edit"
+				title={ i18n.T(ctx, "common.click_to_edit") }
 			>
-				{ money.Format(r.AssignedCents) }
+				{ money.Format(ctx, r.AssignedCents) }
 			</button>
 			<input
 				type="text"
 				name="amount"
-				value={ money.Format(r.AssignedCents) }
+				value={ money.Format(ctx, r.AssignedCents) }
 				inputmode="decimal"
 				autocomplete="off"
 				class="js-assign-input hidden h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -95,16 +97,16 @@ templ budgetRow(month string, r store.CategoryBudget, oob bool) {
 			<button
 				type="button"
 				class={ "flex min-h-[44px] items-center gap-1 rounded-md px-1 text-[19px] font-bold tabular-nums @min-[660px]:hidden", availColorClass(r.AvailableCents) }
-				aria-label={ "Assign to " + r.CategoryName }
+				aria-label={ i18n.Tf(ctx, "budget.assign_to", i18n.M{"Name": r.CategoryName}) }
 				hx-get={ fmt.Sprintf("/budget/assign/%d/sheet?month=%s", r.CategoryID, month) }
 				hx-target="#modal"
 				hx-swap="innerHTML"
 			>
-				{ money.Format(r.AvailableCents) }
+				{ money.Format(ctx, r.AvailableCents) }
 				@icon.ChevronRight(icon.Props{Class: "size-4 text-muted-foreground"})
 			</button>
 			<span class={ "hidden text-[17px] font-bold tabular-nums @min-[660px]:inline", availColorClass(r.AvailableCents) }>
-				{ money.Format(r.AvailableCents) }
+				{ money.Format(ctx, r.AvailableCents) }
 			</span>
 			// Hover-reveal is a pointer affordance; on touch the menu must simply
 			// be there.
@@ -130,9 +132,9 @@ templ budgetProgress(r store.CategoryBudget) {
 		</div>
 		<span class="truncate text-[12px] text-muted-foreground">
 			if over {
-				{ money.Format(-r.AvailableCents) } overspent
+				{ i18n.Tf(ctx, "budget.amount_overspent", i18n.M{"Amount": money.Format(ctx, -r.AvailableCents)}) }
 			} else {
-				{ money.Format(r.SpentCents) } of { money.Format(envelope) }
+				{ i18n.Tf(ctx, "budget.spent_of_envelope", i18n.M{"Spent": money.Format(ctx, r.SpentCents), "Envelope": money.Format(ctx, envelope)}) }
 			}
 		</span>
 	</div>
@@ -214,7 +216,7 @@ templ rowMenu(month string, r store.CategoryBudget) {
 	@dropdown.Dropdown() {
 		@dropdown.Trigger(dropdown.TriggerProps{
 			Class:      "inline-flex size-8 items-center justify-center rounded-pill text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground",
-			Attributes: templ.Attributes{"title": "Category actions"},
+			Attributes: templ.Attributes{"title": i18n.T(ctx, "budget.category_actions")},
 		}) {
 			@icon.EllipsisVertical(icon.Props{Class: "size-4"})
 		}
@@ -222,7 +224,7 @@ templ rowMenu(month string, r store.CategoryBudget) {
 			@dropdown.Item(dropdown.ItemProps{
 				Href: fmt.Sprintf("/transactions?category=%d&month=%s", r.CategoryID, month),
 			}) {
-				See transactions
+				{ i18n.T(ctx, "budget.menu_see_transactions") }
 			}
 			@dropdown.Item(dropdown.ItemProps{
 				Attributes: templ.Attributes{
@@ -235,7 +237,7 @@ templ rowMenu(month string, r store.CategoryBudget) {
 					"hx-on:click": fmt.Sprintf("document.getElementById('goal-edit-%d')?.remove()", r.CategoryID),
 				},
 			}) {
-				Set a goal
+				{ i18n.T(ctx, "budget.menu_set_goal") }
 			}
 			@dropdown.Separator()
 			@dropdown.Item(dropdown.ItemProps{
@@ -248,7 +250,7 @@ templ rowMenu(month string, r store.CategoryBudget) {
 				},
 			}) {
 				@menuCheck(rolloverOn)
-				Carry the balance forward
+				{ i18n.T(ctx, "budget.menu_carry_forward") }
 			}
 			@dropdown.Item(dropdown.ItemProps{
 				PreventClose: true,
@@ -261,7 +263,7 @@ templ rowMenu(month string, r store.CategoryBudget) {
 				},
 			}) {
 				@menuCheck(ignoreNeg)
-				Ignore overspending
+				{ i18n.T(ctx, "budget.menu_ignore_overspending") }
 			}
 			@dropdown.Separator()
 			@dropdown.Item(dropdown.ItemProps{
@@ -271,7 +273,7 @@ templ rowMenu(month string, r store.CategoryBudget) {
 					"hx-swap":   "outerHTML",
 				},
 			}) {
-				Same as last month
+				{ i18n.T(ctx, "budget.menu_same_as_last_month") }
 			}
 			@dropdown.Separator()
 			@dropdown.Item(dropdown.ItemProps{
@@ -280,10 +282,10 @@ templ rowMenu(month string, r store.CategoryBudget) {
 					"hx-post":    fmt.Sprintf("/budget/category/%d/archive?month=%s", r.CategoryID, month),
 					"hx-target":  "#budget-region",
 					"hx-swap":    "outerHTML",
-					"hx-confirm": archiveCategoryConfirm(r),
+					"hx-confirm": archiveCategoryConfirm(ctx, r),
 				},
 			}) {
-				Archive category
+				{ i18n.T(ctx, "budget.menu_archive_category") }
 			}
 		}
 	}
@@ -299,17 +301,22 @@ templ rowMenu(month string, r store.CategoryBudget) {
 // panel recomputes the same figure back. Overspending is called out in its own
 // wording: hiding a negative balance is the more consequential of the two, since
 // it makes a month look better than it was.
-func archiveCategoryConfirm(r store.CategoryBudget) string {
-	const tail = "\n\nIts transactions stay where they are and still count in past months. You can bring it back from Archived."
+// Each of the three prompts is a whole message in the catalog, including the
+// closing reassurance, rather than a stem plus a shared tail. Concatenating
+// sentences fixes English clause order onto every translation; here a translator
+// can restructure the paragraph.
+func archiveCategoryConfirm(ctx context.Context, r store.CategoryBudget) string {
 	switch {
 	case r.AvailableCents > 0:
-		return fmt.Sprintf("Archive %s?\n\nIt still holds %s. That money stops counting in this group's total and in \"Still in envelopes\" until you unarchive it.%s",
-			r.CategoryName, money.Format(r.AvailableCents), tail)
+		return i18n.Tf(ctx, "budget.archive_confirm_holding", i18n.M{
+			"Name": r.CategoryName, "Amount": money.Format(ctx, r.AvailableCents),
+		})
 	case r.AvailableCents < 0:
-		return fmt.Sprintf("Archive %s?\n\nIt is overspent by %s. Archiving hides that overspending from the month's totals rather than resolving it.%s",
-			r.CategoryName, money.Format(-r.AvailableCents), tail)
+		return i18n.Tf(ctx, "budget.archive_confirm_overspent", i18n.M{
+			"Name": r.CategoryName, "Amount": money.Format(ctx, -r.AvailableCents),
+		})
 	default:
-		return fmt.Sprintf("Archive %s?\n\nIt leaves the budget table.%s", r.CategoryName, tail)
+		return i18n.Tf(ctx, "budget.archive_confirm_plain", i18n.M{"Name": r.CategoryName})
 	}
 }
 
@@ -339,10 +346,10 @@ templ BudgetCategoryNewRow(month string, gid int64) {
 				name="name"
 				autocomplete="off"
 				autofocus
-				placeholder="New category"
+				placeholder={ i18n.T(ctx, "budget.new_category_placeholder") }
 				class="js-name-new h-9 w-[220px] rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			/>
-			<span class="text-[13px] text-muted-foreground">⏎ adds it · Esc cancels</span>
+			<span class="text-[13px] text-muted-foreground">{ i18n.T(ctx, "budget.enter_adds_esc_cancels") }</span>
 		</form>
 	</div>
 }
@@ -357,20 +364,24 @@ templ BudgetGoalEditor(month string, r store.CategoryBudget) {
 			class="flex flex-col gap-s3"
 		>
 			<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-				Goal for { r.CategoryName }
+				{ i18n.Tf(ctx, "budget.goal_for", i18n.M{"Name": r.CategoryName}) }
 			</span>
 			<div class="flex flex-wrap items-end gap-s3">
 				<div class="grid gap-1">
-					<label class="text-[12px] font-semibold text-muted-foreground">Target amount</label>
-					<input type="text" name="goal_cents" value={ goalCentsValue(r) } inputmode="decimal" placeholder="(optional)" autocomplete="off" class="h-9 w-[160px] rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+					<label class="text-[12px] font-semibold text-muted-foreground">{ i18n.T(ctx, "budget.target_amount") }</label>
+					<input type="text" name="goal_cents" value={ goalCentsValue(ctx, r) } inputmode="decimal" placeholder={ i18n.T(ctx, "common.optional_placeholder") } autocomplete="off" class="h-9 w-[160px] rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
 				</div>
 				<div class="grid gap-1" data-goal-due>
-					<label class="text-[12px] font-semibold text-muted-foreground">Needed by</label>
+					<label class="text-[12px] font-semibold text-muted-foreground">{ i18n.T(ctx, "budget.needed_by") }</label>
 					<div class="flex items-center gap-s2">
 						@datepicker.DatePicker(datepicker.Props{
+								// The calendar's month and weekday names come from the browser's
+								// Intl via this tag, so it has to follow the request locale or the
+								// popover stays English inside a French page.
+								LocaleTag: datepicker.LocaleTag(i18n.LocaleFrom(ctx)),
 							Name:        "goal_due",
 							Value:       goalDueTime(r),
-							Placeholder: "No date",
+							Placeholder: i18n.T(ctx, "budget.no_date"),
 							Class:       "w-[200px]",
 						})
 						// A due date is optional, and templUI's datepicker has no clear
@@ -380,11 +391,11 @@ templ BudgetGoalEditor(month string, r store.CategoryBudget) {
 						// placeholder.
 						<button
 							type="button"
-							title="Clear the date"
+							title={ i18n.T(ctx, "budget.clear_the_date") }
 							class="shrink-0 rounded-pill px-2 py-1 text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
 							onclick="const i=this.closest('[data-goal-due]').querySelector('[data-tui-datepicker-hidden-input]'); if(i){i.value='';i.dispatchEvent(new Event('input',{bubbles:true}));}"
 						>
-							clear
+							{ i18n.T(ctx, "common.clear") }
 						</button>
 					</div>
 				</div>
@@ -399,7 +410,7 @@ templ BudgetGoalEditor(month string, r store.CategoryBudget) {
 				// is computed by the same store.MonthlyTarget the saved row uses, so
 				// the preview and the result cannot disagree.
 				<div class="grid gap-1">
-					<span class="text-[12px] font-semibold text-muted-foreground">To arrive on time</span>
+					<span class="text-[12px] font-semibold text-muted-foreground">{ i18n.T(ctx, "budget.to_arrive_on_time") }</span>
 					<div
 						id={ fmt.Sprintf("goal-need-%d", r.CategoryID) }
 						hx-post={ fmt.Sprintf("/budget/goal/%d/preview?month=%s", r.CategoryID, month) }
@@ -421,10 +432,10 @@ templ BudgetGoalEditor(month string, r store.CategoryBudget) {
 							"hx-on:click": fmt.Sprintf("document.getElementById('goal-edit-%d').remove()", r.CategoryID),
 						},
 					}) {
-						Cancel
+						{ i18n.T(ctx, "common.cancel") }
 					}
 					@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Class: "rounded-pill"}) {
-						Save goal
+						{ i18n.T(ctx, "budget.save_goal") }
 					}
 				</div>
 			</div>
@@ -438,9 +449,9 @@ templ BudgetGoalResult(month string, r store.CategoryBudget) {
 	@budgetRow(month, r, true)
 }
 
-func goalCentsValue(r store.CategoryBudget) string {
+func goalCentsValue(ctx context.Context, r store.CategoryBudget) string {
 	if r.GoalCents != nil {
-		return money.Format(*r.GoalCents)
+		return money.Format(ctx, *r.GoalCents)
 	}
 	return ""
 }
@@ -452,7 +463,7 @@ func goalCentsValue(r store.CategoryBudget) string {
 templ GoalNeed(monthlyTarget int64) {
 	if monthlyTarget > 0 {
 		<span class="font-heading text-[22px] font-semibold tabular-nums text-surface-attention-fg">
-			{ money.Format(monthlyTarget) }/mo
+			{ money.Format(ctx, monthlyTarget) }{ i18n.T(ctx, "budget.per_month_suffix") }
 		</span>
 	} else {
 		<span class="font-heading text-[22px] font-semibold text-muted-foreground">—</span>
@@ -485,7 +496,7 @@ func goalDueTime(r store.CategoryBudget) time.Time {
 // one line, with the bar hanging below it.
 templ GoalCell(r store.CategoryBudget) {
 	<div class="col-start-2 row-start-1 hidden min-w-0 flex-col items-start gap-0.5 @min-[660px]:flex">
-		if g, ok := format.GoalFor(r.GoalCents, r.GoalDueDate, r.MonthlyTarget); ok {
+		if g, ok := format.GoalFor(ctx, r.GoalCents, r.GoalDueDate, r.MonthlyTarget); ok {
 			// The tag holds the target and nothing else. Putting the deadline in it
 			// too made one pill carry two facts, which filled the column edge to
 			// edge however wide it was; the deadline belongs with the monthly
@@ -497,11 +508,11 @@ templ GoalCell(r store.CategoryBudget) {
 			if g.Need != "" || g.Due != "" {
 				<span class="max-w-full truncate text-[12px] text-muted-foreground">
 					if g.Need != "" && g.Due != "" {
-						{ g.Need } · by { g.Due }
+						{ i18n.Tf(ctx, "budget.goal_need_by", i18n.M{"Need": g.Need, "Due": g.Due}) }
 					} else if g.Need != "" {
 						{ g.Need }
 					} else {
-						by { g.Due }
+						{ i18n.Tf(ctx, "budget.goal_by", i18n.M{"Due": g.Due}) }
 					}
 				</span>
 			}

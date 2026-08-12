@@ -83,7 +83,7 @@ func (a *API) Assign(c *gin.Context) {
 		writeError(c, http.StatusBadRequest, "invalid_request", "month must be formatted YYYY-MM.")
 		return
 	}
-	cents, err := money.Parse(req.Amount)
+	cents, err := money.Parse(c.Request.Context(), req.Amount)
 	if err != nil {
 		writeError(c, http.StatusBadRequest, "invalid_request", "Enter a valid amount.")
 		return

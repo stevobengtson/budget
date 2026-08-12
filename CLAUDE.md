@@ -29,6 +29,16 @@ them and **skips the tailwind download + `go install` steps**. `.air.toml` uses
 No CGO — the pgx driver is pure Go, so no compiler in the shell. A running
 Postgres is required (app + tests). When adding a tool, `devbox add <pkg>` and pin it here.
 
+**The tailwind CLI is invoked through `scripts/tailwind-runnable.sh`, never
+directly.** It is a Bun-compiled single-file executable whose Mach-O signature
+Bun writes truncated (oven-sh/bun#29120); macOS 27 enforces signatures at exec
+and SIGKILLs it, so every invocation exits 137 — including `--help`. The same
+broken artifact ships to both the GitHub release and nixpkgs, so devbox is not
+an escape. The script hands back an ad-hoc re-signed copy at `bin/tailwindcss`
+(the nix store is read-only, hence a copy). Symptom if this ever regresses:
+`task css` fails with `exit status 137` and air silently keeps serving the last
+binary it built — `tmp/build-errors.log` records only the exit status.
+
 ```bash
 task setup          # go mod download + install goose; installs templ + tailwind CLIs
 task build          # build both binaries -> bin/tui/budget, bin/web/budget
@@ -102,8 +112,10 @@ internal/core/store/       Persistence layer — raw SQL with native Postgres `$
 internal/core/db/          Postgres open (pgx) + embedded goose migrations
                            (migrations/postgres/).
 internal/core/config/      Viper config (budget.yaml / BUDGET_* env / CLI flags).
-internal/core/money/       Integer cents <-> human string parsing/formatting.
+internal/core/money/       Integer cents <-> human string parsing/formatting (locale-aware).
 internal/core/format/      Presentation helpers shared by TUI + web (goal/date wording).
+internal/core/i18n/        Locale type, go-i18n bundle + embedded TOML catalogs
+                           (locales/en-CA.toml, fr-CA.toml), number/date tables.
 internal/core/paydown/     Debt amortization projection (pure Go, no DB).
 
 internal/web/              Web app.
@@ -133,6 +145,45 @@ dialog, label, selectbox, ...), styled via Tailwind v4.
 - **Web is server-rendered**: Templ generates Go; HTMX drives partial updates.
   After editing a `.templ` file, run `task templ` (or `task test`, which does it)
   before building — the `*_templ.go` files are checked in.
+- **All user-facing text comes from the catalog.** Never write an English string
+  into a view or handler — add a key to `internal/core/i18n/locales/en-CA.toml`
+  and its `fr-CA.toml` counterpart, then call `i18n.T(ctx, "key")` (`Tf` to
+  interpolate, `Tn`/`Tnf` to pluralize). A test fails if the two catalogs
+  disagree on which keys exist. Put whole sentences in the catalog, never
+  fragments concatenated in Go — clause order differs between languages.
+- **Public marketing + legal pages are URL-per-language**, not cookie-driven:
+  English at `/`, `/privacy`, …; French at `/fr`, `/fr/privacy`, …. `pinLocale`
+  fixes the locale from the URL so a visitor's cookie can never change what a
+  given address returns — these are the pages that must be indexable and
+  shareable per language. Links between them go through `publicHref(ctx, path)`
+  to stay in-language; each page emits `hreflang` alternates plus a self
+  `canonical`. Adding a public page means adding it to `views.PublicPages` and
+  to the `publicHandlers` map in `server.go` — that one list drives route
+  registration for every language AND `/sitemap.xml`, so the two cannot drift
+  (a listed page with no handler panics at startup). `/robots.txt` is generated
+  from the same handler package (it needs the configured origin for its
+  `Sitemap:` line) and is allow-by-default — a new `Disallow:` that prefix-
+  matches a public page fails `robots_test.go`.
+- **Signed-out auth pages are bilingual**, not single-language: a visitor there
+  has no stored preference, only a guess from `Accept-Language`. Sign in, sign
+  up, forgot and reset render every supported language via `i18n.EveryLocale` —
+  short things slash-joined by `bi()`, sentences stacked by `biLines` — viewer's
+  locale first. Those views therefore take message **keys**, not rendered
+  strings. A stopgap sized for two languages; a third needs a switcher instead.
+- **Locale rides the context**, which Templ hands components as `ctx`. Resolved
+  for every request by `resolveLocale` (cookie → `Accept-Language`), then
+  overwritten by `requireAuth` with the signed-in user's `users.locale`.
+- **The first-run wizard owns starter-budget seeding.** `Register` creates the
+  user and nothing else; `/welcome` asks for the language first, then seeds the
+  categories in it (`store.SeedNewUser(ctx, uid, locale, groupKeys)`). Those
+  names become the user's own editable rows, so they are translated once at
+  seeding and never re-translated on a later language switch.
+  `users.onboarded_at` gates the app via `requireOnboarded`; the wizard's own
+  routes sit outside that gate.
+- **`money.Format`/`Parse` and the `format` date helpers take `ctx`** — en-CA is
+  `$1,234.56` and fr-CA is `1 234,56 $` with U+00A0 separators, and Go's
+  `time.Format` cannot localize month names at all, so never reach for a layout
+  string for anything a user reads.
 
 ## Key Rules
 

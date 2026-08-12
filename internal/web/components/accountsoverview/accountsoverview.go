@@ -6,7 +6,11 @@ import "github.com/sbengtson/budget/internal/core/store"
 // TotalCents is display-signed: liabilities are negated so debt reads as a
 // positive "amount owing" (see displayCents).
 type bucket struct {
-	Name       string
+	// Key names the group for the catalog ("cash", "credit", "loan"), not for
+	// the screen. group() stays a pure, context-free function this way, and its
+	// test keeps asserting a stable identifier rather than whatever the current
+	// locale happens to render.
+	Key        string
 	Accounts   []store.AccountWithBalance
 	TotalCents int64
 }
@@ -27,9 +31,9 @@ func displayCents(a store.AccountWithBalance) int64 {
 // Archived accounts are excluded so the summary reflects only active accounts,
 // regardless of whether the caller passed them in.
 func group(accts []store.AccountWithBalance) (buckets []bucket, netWorthCents int64) {
-	cash := bucket{Name: "Cash"}
-	credit := bucket{Name: "Credit"}
-	loan := bucket{Name: "Loan"}
+	cash := bucket{Key: "cash"}
+	credit := bucket{Key: "credit"}
+	loan := bucket{Key: "loan"}
 
 	for _, a := range accts {
 		if a.ArchivedAt != nil {

@@ -54,6 +54,10 @@ tasks:
   # Downloads the standalone tailwind binary only when TAILWIND points at a
   # missing file (mirrors the Makefile file-target). Skipped when TAILWIND is a
   # nix/PATH binary that already exists.
+  #
+  # Presence is all this checks, deliberately: whether the binary actually runs
+  # is scripts/tailwind-runnable.sh's problem, and it can fix a binary that does
+  # not, which re-downloading the same broken artifact cannot.
   tailwind-cli:
     internal: true
     status:
@@ -96,11 +100,17 @@ tasks:
         } > "$tmp"
         cmp -s "$tmp" {{.CSS_SOURCES}} && rm -f "$tmp" || mv "$tmp" {{.CSS_SOURCES}}
 
+  # TAILWIND goes through tailwind-runnable.sh rather than being invoked
+  # directly: the standalone CLI is Bun-compiled, and a Bun bug leaves the
+  # Mach-O signature truncated, which macOS 27 turns into a SIGKILL at exec
+  # (exit 137 on every run, including --help). The script hands back a re-signed
+  # copy. Resolved here in a command substitution, not a task var, so it runs
+  # after the tailwind-cli dep has had its chance to download the CLI.
   css:
     desc: Compile Tailwind CSS
     deps: [tailwind-cli, css-sources]
     cmds:
-      - "{{.TAILWIND}} -i {{.CSS_SRC}} -o {{.CSS_OUT}} --minify"
+      - '"$(./scripts/tailwind-runnable.sh "{{.TAILWIND}}")" -i {{.CSS_SRC}} -o {{.CSS_OUT}} --minify'
 
   tailwind:
     desc: Alias for css
@@ -110,7 +120,7 @@ tasks:
     desc: Watch + recompile Tailwind CSS
     deps: [tailwind-cli, css-sources]
     cmds:
-      - "{{.TAILWIND}} -i {{.CSS_SRC}} -o {{.CSS_OUT}} --watch"
+      - '"$(./scripts/tailwind-runnable.sh "{{.TAILWIND}}")" -i {{.CSS_SRC}} -o {{.CSS_OUT}} --watch'
 
   build:
     desc: Build the web binary (regenerates css + templ first)

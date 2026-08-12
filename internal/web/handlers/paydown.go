@@ -181,7 +181,7 @@ func (h *Handlers) PaydownSetPayment(c *gin.Context) {
 		return
 	}
 	if v := c.PostForm("amount"); v != "" {
-		cents, err := money.Parse(v)
+		cents, err := money.Parse(ctx, v)
 		if err != nil {
 			c.String(http.StatusBadRequest, err.Error())
 			return

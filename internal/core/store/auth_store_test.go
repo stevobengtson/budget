@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/sbengtson/budget/internal/core/i18n"
 )
 
 // countIncomeCats returns how many of a user's categories are the system Income
@@ -31,7 +33,7 @@ func TestSeedNewUserCreatesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SeedNewUser(ctx, uid); err != nil {
+	if err := s.SeedNewUser(ctx, uid, i18n.EnCA, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -39,8 +41,8 @@ func TestSeedNewUserCreatesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(groups) != 1+len(defaultGroups) { // Income group + defaults
-		t.Fatalf("groups = %d, want %d", len(groups), 1+len(defaultGroups))
+	if len(groups) != 1+len(StarterGroups) { // Income group + defaults
+		t.Fatalf("groups = %d, want %d", len(groups), 1+len(StarterGroups))
 	}
 
 	cats, err := s.ListCategories(ctx, uid, false)
@@ -48,7 +50,7 @@ func TestSeedNewUserCreatesDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := 1 // Income
-	for _, g := range defaultGroups {
+	for _, g := range StarterGroups {
 		want += len(g.Categories)
 	}
 	if len(cats) != want {
@@ -79,12 +81,12 @@ func TestSeedNewUserIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SeedNewUser(ctx, uid); err != nil {
+	if err := s.SeedNewUser(ctx, uid, i18n.EnCA, nil); err != nil {
 		t.Fatal(err)
 	}
 	before, _ := s.ListCategories(ctx, uid, false)
 	// Second call must be a no-op — no duplicated Income or default categories.
-	if err := s.SeedNewUser(ctx, uid); err != nil {
+	if err := s.SeedNewUser(ctx, uid, i18n.EnCA, nil); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := s.ListCategories(ctx, uid, false)
@@ -110,7 +112,7 @@ func TestSeedNewUserSkipsWhenBudgetExists(t *testing.T) {
 	}
 	before, _ := s.ListCategories(ctx, uid, false)
 
-	if err := s.SeedNewUser(ctx, uid); err != nil {
+	if err := s.SeedNewUser(ctx, uid, i18n.EnCA, nil); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := s.ListCategories(ctx, uid, false)

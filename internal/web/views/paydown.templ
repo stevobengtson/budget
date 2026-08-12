@@ -1,10 +1,13 @@
 package views
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/sbengtson/budget/internal/core/format"
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/paydown"
 	"github.com/sbengtson/budget/internal/core/store"
@@ -36,12 +39,12 @@ type PaydownData struct {
 }
 
 templ PaydownPage(d PaydownData, collapsed bool) {
-	@Layout("Paydown", "paydown", collapsed) {
+	@Layout(i18n.T(ctx, "nav.paydown"), "paydown", collapsed) {
 		<div class="flex flex-col gap-s4">
 			<div class="flex flex-wrap items-center justify-between gap-s3">
-				<h1 class="font-heading text-[28px] font-semibold">Debt paydown</h1>
+				<h1 class="font-heading text-[28px] font-semibold">{ i18n.T(ctx, "paydown.heading") }</h1>
 				<form method="get" action="/paydown" class="flex items-center gap-s2">
-					<label for="pd-horizon" class="text-[14px] text-muted-foreground">Project</label>
+					<label for="pd-horizon" class="text-[14px] text-muted-foreground">{ i18n.T(ctx, "paydown.project_label") }</label>
 					<input
 						id="pd-horizon"
 						type="number"
@@ -52,21 +55,20 @@ templ PaydownPage(d PaydownData, collapsed bool) {
 						step="12"
 						class="h-9 w-[76px] rounded-pill border border-input bg-surface-sunk px-s3 text-right text-[15px] tabular-nums outline-none focus-visible:border-primary"
 					/>
-					<span class="text-[14px] text-muted-foreground">months</span>
+					<span class="text-[14px] text-muted-foreground">{ i18n.T(ctx, "paydown.months_label") }</span>
 					@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Variant: button.VariantOutline, Class: "rounded-pill"}) {
-						Apply
+						{ i18n.T(ctx, "paydown.apply") }
 					}
 				</form>
 			</div>
 			<div class="grid grid-cols-1 gap-s3 sm:grid-cols-3">
-				@pdStat("Going to debt each month", money.Format(d.TotalMonthly), "bg-surface-ready", "text-surface-ready-fg")
-				@pdStat(fmt.Sprintf("Interest over %d months", d.Horizon), money.Format(d.TotalInterest), "bg-surface-attention", "text-surface-attention-fg")
-				@pdStat("Debt-free", debtFreeLabel(d.Plans), "bg-card", "text-foreground")
+				@pdStat(i18n.T(ctx, "paydown.stat_monthly"), money.Format(ctx, d.TotalMonthly), "bg-surface-ready", "text-surface-ready-fg")
+				@pdStat(i18n.Tnf(ctx, "paydown.stat_interest", d.Horizon, i18n.M{"Months": d.Horizon}), money.Format(ctx, d.TotalInterest), "bg-surface-attention", "text-surface-attention-fg")
+				@pdStat(i18n.T(ctx, "paydown.stat_debt_free"), debtFreeLabel(ctx, d.Plans), "bg-card", "text-foreground")
 			</div>
 			if len(d.Plans) == 0 {
 				<p class="text-[15px] text-muted-foreground">
-					Nothing is in the plan yet. Add an APR to an account — edit it from the
-					account list on the Budget page — to include it here.
+					{ i18n.T(ctx, "paydown.empty") }
 				</p>
 			}
 			for i, p := range d.Plans {
@@ -78,20 +80,20 @@ templ PaydownPage(d PaydownData, collapsed bool) {
 
 // debtFreeLabel is the month the last debt clears. "Not within the horizon"
 // when any plan never pays off — a date would be a lie there.
-func debtFreeLabel(plans []paydown.Plan) string {
+func debtFreeLabel(ctx context.Context, plans []paydown.Plan) string {
 	if len(plans) == 0 {
 		return "—"
 	}
 	var latest time.Time
 	for _, p := range plans {
 		if p.PayoffMonth.IsZero() {
-			return "Not yet"
+				return i18n.T(ctx, "paydown.not_yet")
 		}
 		if p.PayoffMonth.After(latest) {
 			latest = p.PayoffMonth
 		}
 	}
-	return latest.Format("Jan 2006")
+	return format.MonthYear(ctx, latest)
 }
 
 // PaymentCategoryName resolves the budget category feeding an account's
@@ -121,22 +123,22 @@ templ PaydownSection(p paydown.Plan, acct store.AccountWithBalance, horizon, pag
 		<div class="flex flex-wrap items-center gap-x-s3 gap-y-s2">
 			<h2 class="font-heading text-[20px] font-semibold">{ acct.Name }</h2>
 			<span class="rounded-pill bg-tag-neutral-bg px-2 py-0.5 text-[12px] font-semibold text-tag-neutral-fg tabular-nums">
-				{ fmt.Sprintf("%.2f%% APR", float64(p.AprBps)/100.0) }
+				{ i18n.Tf(ctx, "paydown.apr_tag", i18n.M{"Rate": format.Decimal(ctx, float64(p.AprBps)/100.0, 2)}) }
 			</span>
 			<span class="text-[14px] text-muted-foreground">
-				payment <span class="font-bold tabular-nums text-money-positive">{ money.Format(p.PaymentCents) }/mo</span>
+				{ i18n.T(ctx, "paydown.payment_label") } <span class="font-bold tabular-nums text-money-positive">{ money.Format(ctx, p.PaymentCents) }{ i18n.T(ctx, "budget.per_month_suffix") }</span>
 			</span>
 			<span class="text-[14px] text-muted-foreground">
-				start <span class="font-bold tabular-nums text-foreground">{ money.Format(p.StartCents) }</span>
+				{ i18n.T(ctx, "paydown.start_label") } <span class="font-bold tabular-nums text-foreground">{ money.Format(ctx, p.StartCents) }</span>
 			</span>
 			if !p.PayoffMonth.IsZero() {
 				<span class="text-[14px] text-muted-foreground">
-					clears <span class="font-bold text-foreground">{ p.PayoffMonth.Format("Jan 2006") }</span>
+					{ i18n.T(ctx, "paydown.clears_label") } <span class="font-bold text-foreground">{ format.MonthYear(ctx, p.PayoffMonth) }</span>
 				</span>
 			}
 			if p.Diverging {
 				<span class="rounded-pill bg-surface-attention px-2 py-0.5 text-[12px] font-semibold text-surface-attention-fg">
-					payment ≤ interest — debt grows
+					{ i18n.T(ctx, "paydown.diverging") }
 				</span>
 			}
 			<div class="ml-auto">
@@ -156,7 +158,7 @@ templ pdSectionMenu(acct store.AccountWithBalance) {
 	@dropdown.Dropdown() {
 		@dropdown.Trigger(dropdown.TriggerProps{
 			Class:      "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
-			Attributes: templ.Attributes{"title": "Account actions"},
+			Attributes: templ.Attributes{"title": i18n.T(ctx, "paydown.account_actions")},
 		}) {
 			⋮
 		}
@@ -168,7 +170,7 @@ templ pdSectionMenu(acct store.AccountWithBalance) {
 					"hx-swap":   "innerHTML",
 				},
 			}) {
-				Edit Payment
+				{ i18n.T(ctx, "paydown.menu_edit_payment") }
 			}
 			@dropdown.Item(dropdown.ItemProps{
 				Attributes: templ.Attributes{
@@ -177,17 +179,17 @@ templ pdSectionMenu(acct store.AccountWithBalance) {
 					"hx-swap":   "innerHTML",
 				},
 			}) {
-				Link Category
+				{ i18n.T(ctx, "paydown.menu_link_category") }
 			}
 			@dropdown.Separator()
 			@dropdown.Item(dropdown.ItemProps{
 				Class: "text-destructive",
 				Attributes: templ.Attributes{
 					"hx-post":    fmt.Sprintf("/paydown/%d/exclude", acct.ID),
-					"hx-confirm": "Remove from paydown?",
+					"hx-confirm": i18n.T(ctx, "paydown.remove_confirm"),
 				},
 			}) {
-				Remove
+				{ i18n.T(ctx, "paydown.menu_remove") }
 			}
 		}
 	}
@@ -222,21 +224,21 @@ templ PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int, catName s
 	@paydownSpinner(p.AccountID)
 	<div class="flex flex-col">
 		<div class={ pdGridCols, "px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground" }>
-			<span>Month</span>
-			<span class="text-right">Interest</span>
-			<span class="text-right">Payment</span>
-			<span class="hidden md:block">Where it comes from</span>
-			<span class="text-right">Balance</span>
+			<span>{ i18n.T(ctx, "paydown.col_month") }</span>
+			<span class="text-right">{ i18n.T(ctx, "paydown.col_interest") }</span>
+			<span class="text-right">{ i18n.T(ctx, "paydown.col_payment") }</span>
+			<span class="hidden md:block">{ i18n.T(ctx, "paydown.col_source") }</span>
+			<span class="text-right">{ i18n.T(ctx, "paydown.col_balance") }</span>
 		</div>
 		for _, r := range rows {
 			<div class={ pdGridCols, "border-t border-border px-s3 py-2 text-[15px]" }>
-				<span class="whitespace-nowrap">{ r.Month.Format("Jan 2006") }</span>
-				<span class="text-right tabular-nums text-money-negative">{ money.Format(r.InterestCents) }</span>
-				<span class="text-right tabular-nums">{ money.Format(r.PaymentCents) }</span>
+				<span class="whitespace-nowrap">{ format.MonthYear(ctx, r.Month) }</span>
+				<span class="text-right tabular-nums text-money-negative">{ money.Format(ctx, r.InterestCents) }</span>
+				<span class="text-right tabular-nums">{ money.Format(ctx, r.PaymentCents) }</span>
 				<span class="hidden truncate text-[14px] text-muted-foreground md:block">
 					@PaydownSource(r.PaymentSource, catName)
 				</span>
-				<span class="text-right font-bold tabular-nums">{ money.Format(r.BalanceCents) }</span>
+				<span class="text-right font-bold tabular-nums">{ money.Format(ctx, r.BalanceCents) }</span>
 			</div>
 		}
 	</div>
@@ -254,10 +256,10 @@ templ PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int, catName s
 				"hx-indicator": fmt.Sprintf("#pd-spin-%d", p.AccountID),
 			},
 		}) {
-			‹ prev
+			{ i18n.T(ctx, "common.prev_page") }
 		}
 		<span>
-			page { strconv.Itoa(page) } of { strconv.Itoa(pages) } · { strconv.Itoa(total) } months
+			{ i18n.Tf(ctx, "paydown.pager", i18n.M{"Page": page, "Pages": pages, "Months": total}) }
 		</span>
 		@button.Button(button.Props{
 			Type:     "button",
@@ -272,7 +274,7 @@ templ PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int, catName s
 				"hx-indicator": fmt.Sprintf("#pd-spin-%d", p.AccountID),
 			},
 		}) {
-			next ›
+			{ i18n.T(ctx, "common.next_page") }
 		}
 	</div>
 }
@@ -283,15 +285,15 @@ templ PaydownScheduleBody(p paydown.Plan, horizon, page, pageSize int, catName s
 // answer the question the column actually asks.
 templ PaydownSource(s paydown.PaymentSource, catName string) {
 	if s == paydown.SourceSpent && catName != "" {
-		<span>spent in { catName }</span>
+		<span>{ i18n.Tf(ctx, "paydown.source_spent_in", i18n.M{"Name": catName}) }</span>
 	} else if s == paydown.SourceSpent {
-		<span>what you spent</span>
+		<span>{ i18n.T(ctx, "paydown.source_spent") }</span>
 	} else if s == paydown.SourceAssigned && catName != "" {
-		<span>assigned in { catName }</span>
+		<span>{ i18n.Tf(ctx, "paydown.source_assigned_in", i18n.M{"Name": catName}) }</span>
 	} else if s == paydown.SourceAssigned {
-		<span>what you assigned</span>
+		<span>{ i18n.T(ctx, "paydown.source_assigned") }</span>
 	} else {
-		<span>default payment</span>
+		<span>{ i18n.T(ctx, "paydown.source_default") }</span>
 	}
 }
 
@@ -313,16 +315,16 @@ templ PaymentModal(acct store.AccountWithBalance) {
 	@dialogPanel("") {
 		@dialog.Header() {
 			@dialog.Title() {
-				Monthly payment — { acct.Name }
+				{ i18n.Tf(ctx, "paydown.payment_modal_title", i18n.M{"Name": acct.Name}) }
 			}
 		}
 		<form hx-post={ fmt.Sprintf("/paydown/%d/payment", acct.ID) } hx-target="body" hx-swap="outerHTML" class="grid gap-4">
-			@formRow("pd-payment", "Monthly payment") {
+			@formRow("pd-payment", i18n.T(ctx, "accounts.monthly_payment_field")) {
 				if acct.MonthlyPaymentCents != nil {
 					@input.Input(input.Props{
 						ID:          "pd-payment",
 						Name:        "amount",
-						Value:       money.Format(*acct.MonthlyPaymentCents),
+						Value:       money.Format(ctx, *acct.MonthlyPaymentCents),
 						Placeholder: "200.00",
 						Class:       "tabular-nums",
 						Attributes:  templ.Attributes{"autofocus": ""},
@@ -338,11 +340,7 @@ templ PaymentModal(acct store.AccountWithBalance) {
 				}
 			}
 			<p class="text-[14px] text-muted-foreground">
-				For each projected month the plan uses what you actually
-				<strong class="font-semibold text-foreground">spent</strong> in the linked
-				category, then what you
-				<strong class="font-semibold text-foreground">assigned</strong>, and only
-				falls back to this figure if neither exists. Leave it blank to clear.
+				{ i18n.T(ctx, "paydown.payment_modal_note") }
 			</p>
 			@dialog.Footer() {
 				@button.Button(button.Props{
@@ -350,10 +348,10 @@ templ PaymentModal(acct store.AccountWithBalance) {
 					Type:       "button",
 					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
-					cancel
+					{ i18n.T(ctx, "common.cancel") }
 				}
 				@button.Button(button.Props{Type: "submit"}) {
-					save
+					{ i18n.T(ctx, "common.save") }
 				}
 			}
 		</form>
@@ -369,22 +367,21 @@ templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups
 	@dialogPanel("") {
 		@dialog.Header() {
 			@dialog.Title() {
-				Link payment category — { acct.Name }
+				{ i18n.Tf(ctx, "paydown.category_modal_title", i18n.M{"Name": acct.Name}) }
 			}
 		}
 		<form hx-post={ fmt.Sprintf("/paydown/%d/category", acct.ID) } hx-target="body" hx-swap="outerHTML" class="grid gap-4">
-			@formRow("pd-category", "Category") {
+			@formRow("pd-category", i18n.T(ctx, "tx.field_category")) {
 				@SelectFieldGrouped(SelectFieldProps{
 					ID:    "pd-category",
 					Name:  "category_id",
 					Class: "w-full",
 				}, []Opt{
-					{Value: "", Label: "(none — fall back to default)", Selected: acct.PaymentCategoryID == nil},
+					{Value: "", Label: i18n.T(ctx, "paydown.category_none"), Selected: acct.PaymentCategoryID == nil},
 				}, categoryOptGroups(cats, groups, acct.PaymentCategoryID))
 			}
 			<p class="text-sm text-muted-foreground">
-				For each projected month the engine picks <strong>spent</strong> in this
-				category, then <strong>assigned</strong>, then the default monthly payment.
+				{ i18n.T(ctx, "paydown.category_modal_note") }
 			</p>
 			@dialog.Footer() {
 				@button.Button(button.Props{
@@ -392,10 +389,10 @@ templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups
 					Type:       "button",
 					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
-					cancel
+					{ i18n.T(ctx, "common.cancel") }
 				}
 				@button.Button(button.Props{Type: "submit"}) {
-					save
+					{ i18n.T(ctx, "common.save") }
 				}
 			}
 		</form>

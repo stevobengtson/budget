@@ -12,6 +12,7 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/billing"
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/handlers"
 	"github.com/sbengtson/budget/internal/web/views"
@@ -56,6 +57,38 @@ func requestLogger() gin.HandlerFunc {
 	}
 }
 
+// resolveLocale puts a locale on every request's context, signed in or not.
+//
+// It runs globally rather than inside requireAuth because the pages a visitor
+// sees before they have an account — login, registration, password reset — are
+// exactly the ones where getting the language right matters most: someone who
+// cannot read the sign-up form never becomes a user whose preference we could
+// have stored. Those pages resolve from the cookie, then Accept-Language.
+//
+// requireAuth runs after this and overwrites the value with the signed-in
+// user's stored preference, which is the authoritative choice.
+func resolveLocale() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		l := i18n.FromRequest(c.Request)
+		c.Request = c.Request.WithContext(i18n.WithLocale(c.Request.Context(), l))
+		c.Next()
+	}
+}
+
+// pinLocale forces a locale onto the request, overriding the cookie and
+// Accept-Language that resolveLocale worked out.
+//
+// It backs the public marketing and legal pages, which are served at one URL
+// per language (/privacy and /fr/privacy). There the URL is the whole point:
+// the pages have to be separately indexable and separately linkable, so a
+// visitor's cookie must not change which language a given address returns.
+func pinLocale(l i18n.Locale) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request = c.Request.WithContext(i18n.WithLocale(c.Request.Context(), l))
+		c.Next()
+	}
+}
+
 // requireAuth loads the session user into the context or redirects to /login.
 func requireAuth(svc *auth.Service, st *store.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -75,6 +108,10 @@ func requireAuth(svc *auth.Service, st *store.Store) gin.HandlerFunc {
 		c.Set("userID", user.ID)
 		c.Set("userEmail", user.Email)
 		c.Set("userIsAdmin", user.IsAdmin)
+		c.Set("userOnboarded", user.Onboarded())
+		// The stored preference wins over anything resolveLocale worked out from
+		// the cookie or the browser: a signed-in user has said what they want.
+		c.Request = c.Request.WithContext(i18n.WithLocale(c.Request.Context(), user.Locale))
 		// Also stash the name + email on the request context so the shared layout
 		// can render the sidebar user menu without every page threading it through.
 		ctx := views.WithUserEmail(c.Request.Context(), user.Email)
@@ -89,6 +126,25 @@ func requireAuth(svc *auth.Service, st *store.Store) gin.HandlerFunc {
 		ctx = views.WithEnabledAddOns(ctx, slugs)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
+	}
+}
+
+// requireOnboarded sends a user who has not finished the first-run wizard to it.
+//
+// It reads the flag requireAuth loaded on this request, so finishing the wizard
+// takes effect on the very next one. It must NOT be applied to /welcome itself,
+// or the redirect loops.
+//
+// The wizard sits behind the subscription gate rather than in front of it,
+// because it seeds a budget the user cannot reach without a subscription
+// anyway — a trial is started first, then the wizard runs.
+func requireOnboarded() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.GetBool("userOnboarded") {
+			c.Next()
+			return
+		}
+		gateRedirect(c, "/welcome")
 	}
 }
 

@@ -30,8 +30,8 @@ func TestGroupBucketsAndNetWorth(t *testing.T) {
 	if len(buckets) != 3 {
 		t.Fatalf("want 3 buckets, got %d", len(buckets))
 	}
-	if buckets[0].Name != "Cash" || buckets[1].Name != "Credit" || buckets[2].Name != "Loan" {
-		t.Fatalf("bucket order wrong: %s/%s/%s", buckets[0].Name, buckets[1].Name, buckets[2].Name)
+	if buckets[0].Key != "cash" || buckets[1].Key != "credit" || buckets[2].Key != "loan" {
+		t.Fatalf("bucket order wrong: %s/%s/%s", buckets[0].Key, buckets[1].Key, buckets[2].Key)
 	}
 	if got := buckets[0].TotalCents; got != 181336 { // 117855 + 63481
 		t.Errorf("cash total = %d, want 181336", got)
@@ -56,8 +56,8 @@ func TestGroupOmitsEmptyBuckets(t *testing.T) {
 	if len(buckets) != 2 {
 		t.Fatalf("want 2 buckets (no Loan), got %d", len(buckets))
 	}
-	if buckets[0].Name != "Cash" || buckets[1].Name != "Credit" {
-		t.Fatalf("unexpected buckets: %s/%s", buckets[0].Name, buckets[1].Name)
+	if buckets[0].Key != "cash" || buckets[1].Key != "credit" {
+		t.Fatalf("unexpected buckets: %s/%s", buckets[0].Key, buckets[1].Key)
 	}
 }
 

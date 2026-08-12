@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/views"
@@ -24,12 +25,12 @@ func (h *Handlers) BudgetIncomeCreate(c *gin.Context) {
 	month := monthOrNow(c)
 	name := strings.TrimSpace(c.PostForm("name"))
 	if name == "" {
-		c.String(http.StatusBadRequest, "name required")
+		c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.name_required"))
 		return
 	}
-	cents, err := money.Parse(c.PostForm("amount"))
+	cents, err := money.Parse(ctx, c.PostForm("amount"))
 	if err != nil {
-		c.String(http.StatusBadRequest, "amount: %v", err)
+		c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.invalid_amount"))
 		return
 	}
 	max, err := h.store.MaxIncomeSortOrder(ctx, uid, month)
@@ -80,15 +81,15 @@ func (h *Handlers) BudgetIncomeUpdate(c *gin.Context) {
 	if v, ok := c.GetPostForm("name"); ok {
 		name := strings.TrimSpace(v)
 		if name == "" {
-			c.String(http.StatusBadRequest, "name required")
+			c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.name_required"))
 			return
 		}
 		cur.Name = name
 	}
 	if v, ok := c.GetPostForm("amount"); ok {
-		cents, err := money.Parse(v)
+		cents, err := money.Parse(ctx, v)
 		if err != nil {
-			c.String(http.StatusBadRequest, "amount: %v", err)
+			c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.invalid_amount"))
 			return
 		}
 		cur.AmountCents = cents

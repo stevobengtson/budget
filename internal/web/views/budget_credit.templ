@@ -1,6 +1,7 @@
 package views
 
 import (
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
@@ -20,11 +21,11 @@ import (
 templ BudgetCreditPanel(d BudgetData) {
 	@dialogPanel("max-w-xl") {
 		<div class="flex items-center justify-between gap-s3">
-			<h2 class="font-heading text-[22px] font-semibold">Cards in { formatMonth(d.Month) }</h2>
+			<h2 class="font-heading text-[22px] font-semibold">{ i18n.Tf(ctx, "credit.panel_title", i18n.M{"Month": formatMonth(ctx, d.Month)}) }</h2>
 			<button
 				type="button"
 				class="inline-flex size-9 items-center justify-center rounded-pill text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground"
-				aria-label="Close"
+				aria-label={ i18n.T(ctx, "common.close") }
 				hx-on:click="document.getElementById('modal').innerHTML = ''"
 			>
 				@icon.X(icon.Props{Class: "size-[18px]"})
@@ -32,30 +33,30 @@ templ BudgetCreditPanel(d BudgetData) {
 		</div>
 		if len(d.CreditRows) == 0 {
 			<p class="text-[14px] text-muted-foreground">
-				No card activity this month.
+				{ i18n.T(ctx, "credit.no_activity") }
 			</p>
 		} else {
 			<div class="flex flex-col">
 				<div class="grid grid-cols-[1fr_110px_110px_110px] gap-s3 border-b border-border pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-					<span>Account</span>
-					<span class="text-right">Spent on it</span>
-					<span class="text-right">Paid off</span>
-					<span class="text-right">Owing</span>
+					<span>{ i18n.T(ctx, "credit.col_account") }</span>
+					<span class="text-right">{ i18n.T(ctx, "credit.col_spent_on_it") }</span>
+					<span class="text-right">{ i18n.T(ctx, "credit.col_paid_off") }</span>
+					<span class="text-right">{ i18n.T(ctx, "credit.col_owing") }</span>
 				</div>
 				for _, ca := range d.CreditRows {
 					<div class="grid grid-cols-[1fr_110px_110px_110px] items-center gap-s3 border-b border-border py-s2 text-[15px] last:border-b-0">
 						<span class="truncate font-semibold">{ ca.AccountName }</span>
-						<span class="text-right tabular-nums text-money-negative">{ money.Format(ca.PurchasesCents) }</span>
-						<span class="text-right tabular-nums text-money-positive">{ money.Format(ca.PaymentsCents) }</span>
+						<span class="text-right tabular-nums text-money-negative">{ money.Format(ctx, ca.PurchasesCents) }</span>
+						<span class="text-right tabular-nums text-money-positive">{ money.Format(ctx, ca.PaymentsCents) }</span>
 						<span class={ "text-right font-bold tabular-nums", owingColor(ca.OwingCents) }>
-							{ money.Format(ca.OwingCents) }
+							{ money.Format(ctx, ca.OwingCents) }
 						</span>
 					</div>
 				}
 				<div class="flex items-baseline justify-between gap-s2 border-t border-border pt-s3 text-[15px]">
-					<span class="font-semibold">Total owing</span>
+					<span class="font-semibold">{ i18n.T(ctx, "budget.total_owing") }</span>
 					{{ owing := creditOwingTotal(d.CreditRows) }}
-					<span class={ "font-bold tabular-nums", owingColor(owing) }>{ money.Format(owing) }</span>
+					<span class={ "font-bold tabular-nums", owingColor(owing) }>{ money.Format(ctx, owing) }</span>
 				</div>
 			</div>
 		}
@@ -67,7 +68,7 @@ templ BudgetCreditPanel(d BudgetData) {
 				Class:      "rounded-pill",
 				Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').innerHTML = ''"},
 			}) {
-				Done
+				{ i18n.T(ctx, "common.done") }
 			}
 		</div>
 	}

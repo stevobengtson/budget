@@ -1,6 +1,9 @@
 package views
 
-import "github.com/templui/templui/components/selectbox"
+import (
+	"github.com/sbengtson/budget/internal/core/i18n"
+	"github.com/templui/templui/components/selectbox"
+)
 
 // Opt is the view-local option model. It stands in for the selectbox option
 // type that the option-builder helpers used to return, so the helpers stay
@@ -60,7 +63,7 @@ templ SelectField(p SelectFieldProps, opts []Opt) {
 		}) {
 			@selectbox.Value(selectbox.ValueProps{Placeholder: p.Placeholder})
 		}
-		@selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch}) {
+		@selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch, SearchPlaceholder: i18n.T(ctx, "common.search_placeholder")}) {
 			for _, o := range opts {
 				@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected, Disabled: o.Disabled, Attributes: o.Attributes}) {
 					{ o.Label }
@@ -94,7 +97,7 @@ templ SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) {
 		}) {
 			@selectbox.Value(selectbox.ValueProps{Placeholder: p.Placeholder})
 		}
-		@selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch}) {
+		@selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch, SearchPlaceholder: i18n.T(ctx, "common.search_placeholder")}) {
 			for _, o := range lead {
 				@selectbox.Item(selectbox.ItemProps{Value: o.Value, Selected: o.Selected, Disabled: o.Disabled, Attributes: o.Attributes}) {
 					{ o.Label }

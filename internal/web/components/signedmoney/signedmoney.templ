@@ -12,10 +12,10 @@ import "github.com/sbengtson/budget/internal/core/money"
 // primitive so any page (and the future API views) can share it.
 templ Money(cents int64) {
 	if cents > 0 {
-		<span class="text-money-positive tabular-nums">{ money.Format(cents) }</span>
+		<span class="text-money-positive tabular-nums">{ money.Format(ctx, cents) }</span>
 	} else if cents < 0 {
-		<span class="text-money-negative tabular-nums">{ money.Format(cents) }</span>
+		<span class="text-money-negative tabular-nums">{ money.Format(ctx, cents) }</span>
 	} else {
-		<span class="text-money-zero tabular-nums">{ money.Format(cents) }</span>
+		<span class="text-money-zero tabular-nums">{ money.Format(ctx, cents) }</span>
 	}
 }

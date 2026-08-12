@@ -17,14 +17,20 @@ type Handlers struct {
 	store         *store.Store
 	auth          *auth.Service
 	billing       *billing.Service
-	secure        bool // Secure flag on the session cookie
-	sessionMaxAge int  // session cookie Max-Age in seconds (mirrors auth session TTL)
+	secure        bool   // Secure flag on the session cookie
+	sessionMaxAge int    // session cookie Max-Age in seconds (mirrors auth session TTL)
+	baseURL       string // public origin, for the absolute URLs a sitemap requires
 }
 
 // New constructs a Handlers wired to the supplied store, auth, and billing
-// services. sessionMaxAge is the session cookie lifetime in seconds.
-func New(s *store.Store, a *auth.Service, b *billing.Service, secure bool, sessionMaxAge int) *Handlers {
-	return &Handlers{store: s, auth: a, billing: b, secure: secure, sessionMaxAge: sessionMaxAge}
+// services. sessionMaxAge is the session cookie lifetime in seconds; baseURL is
+// the site's public origin, which the sitemap needs because sitemaps.org
+// requires absolute URLs.
+func New(s *store.Store, a *auth.Service, b *billing.Service, secure bool, sessionMaxAge int, baseURL string) *Handlers {
+	return &Handlers{
+		store: s, auth: a, billing: b,
+		secure: secure, sessionMaxAge: sessionMaxAge, baseURL: baseURL,
+	}
 }
 
 // sidebarCollapsed reports whether the sidebar should render collapsed, from the

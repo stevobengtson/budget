@@ -9,6 +9,7 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/db"
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
@@ -79,12 +80,13 @@ func (a *App) seedCmd() *cobra.Command {
 
 			// The test account is created after the admin so it is never the first
 			// user, and so it cannot claim the pre-auth rows. SeedNewUser gives it
-			// the same starter budget auth.Register would.
+			// the starter budget the first-run wizard would, so the account lands
+			// on a usable budget rather than in the wizard.
 			testID, err := seedUser(ctx, s, seedTestEmail)
 			if err != nil {
 				return err
 			}
-			if err := s.SeedNewUser(ctx, testID); err != nil {
+			if err := s.SeedNewUser(ctx, testID, i18n.Default, nil); err != nil {
 				return fmt.Errorf("seed test user budget: %w", err)
 			}
 
@@ -112,6 +114,13 @@ func seedUser(ctx context.Context, s *store.Store, email string) (int64, error) 
 		return 0, fmt.Errorf("create user %s: %w", email, err)
 	}
 	if err := s.SetEmailVerified(ctx, uid); err != nil {
+		return 0, err
+	}
+	// Both seeded accounts skip the first-run wizard. They exist to land on a
+	// working app — the admin on its demo budget, the test account on the
+	// free-trial flow — and an un-onboarded user is redirected to /welcome
+	// before reaching either.
+	if err := s.MarkOnboarded(ctx, uid); err != nil {
 		return 0, err
 	}
 	return uid, nil

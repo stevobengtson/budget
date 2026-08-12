@@ -1,8 +1,7 @@
 package views
 
 import (
-	"fmt"
-
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
 	"github.com/templui/templui/components/icon"
 )
@@ -34,7 +33,7 @@ templ BillingSection(d BillingData) {
 	<div class="space-y-6">
 		if !d.Configured {
 			<div class="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
-				Billing isn't configured in this environment.
+				{ i18n.T(ctx, "billing.not_configured") }
 			</div>
 		} else if d.State == "exempt" {
 			@billingExemptCard()
@@ -49,21 +48,21 @@ templ BillingSection(d BillingData) {
 // it matches sign in / sign up, and offers a log-out escape.
 templ billingStandalone(d BillingData) {
 	if d.State == "ended" {
-		@authLayout("Your trial has ended") {
-			<p class="text-sm text-muted-foreground">Subscribe to keep using Pigglet — $4.99 per month, in your local currency.</p>
+		@authLayout(i18n.T(ctx, "billing.trial_ended_title")) {
+			<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "billing.subscribe_pitch") }</p>
 			<div class="mt-6">
 				<form method="post" action="/billing/checkout">
-					@authButton("Subscribe")
+					@authButton(i18n.T(ctx, "billing.subscribe"))
 				</form>
 			</div>
 			@billingLogoutFooter()
 		}
 	} else {
-		@authLayout("Start your free trial") {
-			<p class="text-sm text-muted-foreground">Get 35 days of Pigglet free — no credit card required. It's $4.99 per month after that, in your local currency.</p>
+		@authLayout(i18n.T(ctx, "billing.start_trial_title")) {
+			<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "billing.trial_pitch") }</p>
 			<div class="mt-6">
 				<form method="post" action="/billing/checkout">
-					@authButton("Start free trial")
+					@authButton(i18n.T(ctx, "billing.start_trial"))
 				</form>
 			</div>
 			@billingLogoutFooter()
@@ -75,7 +74,7 @@ templ billingStandalone(d BillingData) {
 // form POST to /logout (the standalone shell doesn't load htmx).
 templ billingLogoutFooter() {
 	<form method="post" action="/logout" class="mt-6 text-center">
-		<button type="submit" class="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Log out</button>
+		<button type="submit" class="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">{ i18n.T(ctx, "menu.log_out") }</button>
 	</form>
 }
 
@@ -87,7 +86,7 @@ templ billingCard(d BillingData) {
 			<div class="flex items-start justify-between gap-4">
 				<div class="space-y-1">
 					<h2 class="text-sm font-semibold">Pigglet</h2>
-					<p class="text-sm text-muted-foreground">$4.99 per month, in your local currency.</p>
+					<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "billing.price_line") }</p>
 				</div>
 				@billingStatusBadge(d.State)
 			</div>
@@ -106,36 +105,48 @@ templ billingExemptCard() {
 		<div class="flex items-start gap-3">
 			@icon.BadgeCheck(icon.Props{Class: "size-5 shrink-0 text-primary"})
 			<div class="space-y-1">
-				<h2 class="text-sm font-semibold">Complimentary access</h2>
-				<p class="text-sm text-muted-foreground">You have full access to Pigglet at no charge — no subscription required.</p>
+				<h2 class="text-sm font-semibold">{ i18n.T(ctx, "billing.comp_title") }</h2>
+				<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "billing.comp_body") }</p>
 			</div>
 		</div>
 	</section>
 }
 
 // billingStatusLine is the human sentence describing where the user stands.
+// Each state is one whole sentence in the catalog, with the date (when there is
+// one) interpolated into it. The English original built these by concatenation —
+// "…set to cancel" + " on <date>" + ". You'll keep access until then." — which
+// pins English clause order onto every translation and gives a translator three
+// fragments none of which is a sentence. The trial line also lost its inner
+// <span class="font-medium"> around the day count for the same reason: keeping
+// it would mean either splitting the sentence again or letting catalog text
+// carry markup.
 templ billingStatusLine(d BillingData) {
 	switch d.State {
 		case "trialing":
 			<p class="text-sm">
-				Your free trial is active — <span class="font-medium">{ fmt.Sprintf("%d days left", d.TrialDaysLeft) }</span>
 				if d.TrialEnd != "" {
-					{ fmt.Sprintf(" (ends %s)", d.TrialEnd) }
+					{ i18n.Tnf(ctx, "billing.trial_active_until", d.TrialDaysLeft, i18n.M{"Days": d.TrialDaysLeft, "Date": d.TrialEnd}) }
+				} else {
+					{ i18n.Tn(ctx, "billing.trial_active", d.TrialDaysLeft) }
 				}
-				. Add a payment method to keep access when the trial ends.
 			</p>
 		case "active":
-			if d.CancelAtPeriodEnd {
-				<p class="text-sm">Your subscription is set to cancel{ renewalSuffix(d.RenewalDate) }. You'll keep access until then.</p>
+			if d.CancelAtPeriodEnd && d.RenewalDate != "" {
+				<p class="text-sm">{ i18n.Tf(ctx, "billing.cancelling_on", i18n.M{"Date": d.RenewalDate}) }</p>
+			} else if d.CancelAtPeriodEnd {
+				<p class="text-sm">{ i18n.T(ctx, "billing.cancelling") }</p>
+			} else if d.RenewalDate != "" {
+				<p class="text-sm">{ i18n.Tf(ctx, "billing.subscribed_renews", i18n.M{"Date": d.RenewalDate}) }</p>
 			} else {
-				<p class="text-sm">You're subscribed{ renewalSuffix(d.RenewalDate) }.</p>
+				<p class="text-sm">{ i18n.T(ctx, "billing.subscribed") }</p>
 			}
 		case "past_due":
-			<p class="text-sm text-destructive">Your last payment failed. Update your payment method to keep access.</p>
+			<p class="text-sm text-destructive">{ i18n.T(ctx, "billing.past_due") }</p>
 		case "ended":
-			<p class="text-sm">Your trial has ended. Subscribe to continue using Pigglet.</p>
+			<p class="text-sm">{ i18n.T(ctx, "billing.ended") }</p>
 		default:
-			<p class="text-sm">Start your { fmt.Sprintf("%d-day", 35) } free trial — no card required.</p>
+			<p class="text-sm">{ i18n.Tf(ctx, "billing.not_started", i18n.M{"Days": 35}) }</p>
 	}
 }
 
@@ -146,21 +157,21 @@ templ billingActions(d BillingData) {
 		case "none":
 			<form method="post" action="/billing/checkout">
 				@button.Button(button.Props{Type: button.TypeSubmit}) {
-					Start free trial
+					{ i18n.T(ctx, "billing.start_trial") }
 				}
 			</form>
 		case "ended":
 			<form method="post" action="/billing/checkout">
 				@button.Button(button.Props{Type: button.TypeSubmit}) {
-					Subscribe
+					{ i18n.T(ctx, "billing.subscribe") }
 				}
 			</form>
-			@manageButton("View billing history")
+			@manageButton(i18n.T(ctx, "billing.view_history"))
 		default:
 			// trialing / active / past_due — manage via the Stripe portal.
 			<form method="post" action="/billing/portal">
 				@button.Button(button.Props{Type: button.TypeSubmit}) {
-					Manage billing
+					{ i18n.T(ctx, "billing.manage") }
 				}
 			</form>
 	}
@@ -179,15 +190,15 @@ templ manageButton(label string) {
 templ billingStatusBadge(state string) {
 	switch state {
 		case "trialing":
-			@billingBadge("Trial", "border-primary/40 text-primary", icon.Clock(icon.Props{Class: "size-3"}))
+			@billingBadge(i18n.T(ctx, "billing.badge_trial"), "border-primary/40 text-primary", icon.Clock(icon.Props{Class: "size-3"}))
 		case "active":
-			@billingBadge("Active", "border-primary/40 text-primary", icon.Check(icon.Props{Class: "size-3"}))
+			@billingBadge(i18n.T(ctx, "billing.badge_active"), "border-primary/40 text-primary", icon.Check(icon.Props{Class: "size-3"}))
 		case "past_due":
-			@billingBadge("Past due", "border-destructive/40 text-destructive", icon.TriangleAlert(icon.Props{Class: "size-3"}))
+			@billingBadge(i18n.T(ctx, "billing.badge_past_due"), "border-destructive/40 text-destructive", icon.TriangleAlert(icon.Props{Class: "size-3"}))
 		case "ended":
-			@billingBadge("Ended", "border-border text-muted-foreground", icon.CircleX(icon.Props{Class: "size-3"}))
+			@billingBadge(i18n.T(ctx, "billing.badge_ended"), "border-border text-muted-foreground", icon.CircleX(icon.Props{Class: "size-3"}))
 		default:
-			@billingBadge("Not started", "border-border text-muted-foreground", icon.Circle(icon.Props{Class: "size-3"}))
+			@billingBadge(i18n.T(ctx, "billing.badge_not_started"), "border-border text-muted-foreground", icon.Circle(icon.Props{Class: "size-3"}))
 	}
 }
 
@@ -196,12 +207,4 @@ templ billingBadge(label, classes string, ic templ.Component) {
 		@ic
 		{ label }
 	</span>
-}
-
-// renewalSuffix appends " on <date>" when a date is known, else "".
-func renewalSuffix(date string) string {
-	if date == "" {
-		return ""
-	}
-	return " on " + date
 }

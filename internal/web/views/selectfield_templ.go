@@ -8,7 +8,10 @@ package views
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "github.com/templui/templui/components/selectbox"
+import (
+	"github.com/sbengtson/budget/internal/core/i18n"
+	"github.com/templui/templui/components/selectbox"
+)
 
 // Opt is the view-local option model. It stands in for the selectbox option
 // type that the option-builder helpers used to return, so the helpers stay
@@ -150,7 +153,7 @@ func SelectField(p SelectFieldProps, opts []Opt) templ.Component {
 						var templ_7745c5c3_Var6 string
 						templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 66, Col: 14}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 69, Col: 14}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 						if templ_7745c5c3_Err != nil {
@@ -165,7 +168,7 @@ func SelectField(p SelectFieldProps, opts []Opt) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch, SearchPlaceholder: i18n.T(ctx, "common.search_placeholder")}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -285,7 +288,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 						var templ_7745c5c3_Var12 string
 						templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 100, Col: 14}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 103, Col: 14}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 						if templ_7745c5c3_Err != nil {
@@ -326,7 +329,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 							var templ_7745c5c3_Var15 string
 							templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(g.Label)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 106, Col: 15}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 109, Col: 15}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 							if templ_7745c5c3_Err != nil {
@@ -354,7 +357,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 								var templ_7745c5c3_Var17 string
 								templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 110, Col: 16}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 113, Col: 16}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 								if templ_7745c5c3_Err != nil {
@@ -376,7 +379,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = selectbox.Content(selectbox.ContentProps{NoSearch: p.NoSearch, SearchPlaceholder: i18n.T(ctx, "common.search_placeholder")}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

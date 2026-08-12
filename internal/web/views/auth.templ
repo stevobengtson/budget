@@ -1,8 +1,11 @@
 package views
 
 import (
+	"context"
 	"fmt"
+	"strings"
 
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
@@ -19,7 +22,7 @@ var authInputClass = "flex h-10 w-full rounded-md border border-input bg-backgro
 // The title is both the document title and the card heading.
 templ authLayout(title string) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang={ string(i18n.LocaleFrom(ctx)) }>
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -56,15 +59,25 @@ templ authLayout(title string) {
 	</html>
 }
 
-templ formError(msg string) {
-	if msg != "" {
-		<div class="mb-4 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">{ msg }</div>
+// formError renders a validation error in every language, stacked. It takes a
+// message key, not text — the caller cannot know which language to render in.
+templ formError(errKey string) {
+	if errKey != "" {
+		<div class="mb-4 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+			for i, line := range i18n.EveryLocale(ctx, errKey) {
+				if i == 0 {
+					<p>{ line }</p>
+				} else {
+					<p class="mt-1 opacity-80">{ line }</p>
+				}
+			}
+		</div>
 	}
 }
 
 templ emailField(value string) {
 	<div class="space-y-1.5">
-		<label for="email" class="text-sm font-medium leading-none">Email</label>
+		<label for="email" class="text-sm font-medium leading-none">{ bi(ctx, "auth.email") }</label>
 		<input id="email" name="email" type="email" value={ value } placeholder="m@example.com" autocomplete="email" required class={ authInputClass }/>
 	</div>
 }
@@ -87,7 +100,7 @@ templ passwordField(label, name, placeholder, autocomplete, minLen string) {
 				}
 				class={ authInputClass + " pr-10" }
 			/>
-			<button type="button" tabindex="-1" onclick="togglePw(this)" aria-label="Toggle password visibility" class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground">
+			<button type="button" tabindex="-1" onclick="togglePw(this)" aria-label={ i18n.T(ctx, "auth.toggle_password_visibility") } class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground">
 				<span data-eye>
 					@icon.Eye(icon.Props{Class: "size-4"})
 				</span>
@@ -106,70 +119,130 @@ templ authButton(label string) {
 // authFooter renders a muted prompt followed by a "Sign In"/"Sign Up" link. An
 // empty prompt renders just the link.
 templ authFooter(prompt, href, linkText string) {
-	<p class="mt-6 text-center text-sm text-muted-foreground">
+	<div class="mt-6 text-center text-sm text-muted-foreground">
 		if prompt != "" {
-			{ prompt + " " }
+			// The link sits on its own line rather than running on from the prompt.
+			// Both are bilingual, so the pair is long enough to wrap — and it wrapped
+			// mid-link, splitting "Sign In / Se connecter" across two lines with the
+			// underline broken through it.
+			<p>{ prompt }</p>
 		}
-		<a href={ templ.SafeURL(href) } class="font-medium text-foreground underline underline-offset-4">{ linkText }</a>
-	</p>
+		<a
+			href={ templ.SafeURL(href) }
+			class="mt-1 inline-block font-medium text-foreground underline underline-offset-4"
+		>
+			{ linkText }
+		</a>
+	</div>
 }
 
-templ LoginPage(email, errMsg string) {
-	@authLayout("Sign In") {
-		@formError(errMsg)
-		<form method="post" action="/login" class="space-y-4">
-			@emailField(email)
-			@passwordField("Password", "password", "Password", "current-password", "")
-			@authButton("Sign In")
-		</form>
-		<p class="mt-4 text-center text-sm">
-			<a href="/forgot" class="text-muted-foreground underline underline-offset-4 hover:text-foreground">Forgot password?</a>
-		</p>
-		@authFooter("Need to create an account?", "/signup", "Sign Up")
+// The signed-out auth pages render every supported language at once rather than
+// picking one. A visitor here has no stored preference — only the browser's
+// Accept-Language, which is a guess — and someone who cannot read a wrong guess
+// cannot get far enough to correct it.
+//
+// Two shapes: short things (labels, buttons, links) join on one line as
+// "Email / Courriel"; sentences stack, the non-primary ones muted, because a
+// paragraph joined with a slash is unreadable in both languages at once.
+//
+// This is deliberately a stopgap for two languages. A third makes every one of
+// these three lines long, and at that point these pages want a language
+// switcher instead.
+
+// bi joins a message's renderings for inline use: "Email / Courriel".
+func bi(ctx context.Context, id string) string {
+	return strings.Join(i18n.EveryLocale(ctx, id), " / ")
+}
+
+// biLines stacks a message's renderings, the context's own locale first and the
+// rest muted beneath it.
+templ biLines(id string) {
+	@biLinesOf(i18n.EveryLocale(ctx, id))
+}
+
+// biLinesF is biLines for a message that interpolates named values.
+templ biLinesF(id string, data i18n.M) {
+	@biLinesOf(i18n.EveryLocaleF(ctx, id, data))
+}
+
+templ biLinesOf(lines []string) {
+	for i, line := range lines {
+		if i == 0 {
+			<p class="text-sm text-muted-foreground">{ line }</p>
+		} else {
+			<p class="mt-1 text-sm text-muted-foreground/70">{ line }</p>
+		}
 	}
 }
 
-templ SignupPage(email, errMsg string) {
-	@authLayout("Sign Up") {
-		@formError(errMsg)
+// LoginPage and the other auth pages take message KEYS, not rendered strings: a
+// rendered string can only be one language, and these pages show every one.
+templ LoginPage(email, errKey string) {
+	@authLayout(bi(ctx, "auth.sign_in")) {
+		@formError(errKey)
+		<form method="post" action="/login" class="space-y-4">
+			@emailField(email)
+			@passwordField(bi(ctx, "auth.password"), "password", "", "current-password", "")
+			@authButton(bi(ctx, "auth.sign_in"))
+		</form>
+		<p class="mt-4 text-center text-sm">
+			<a href="/forgot" class="text-muted-foreground underline underline-offset-4 hover:text-foreground">{ bi(ctx, "auth.forgot_password") }</a>
+		</p>
+		@authFooter(bi(ctx, "auth.need_account"), "/signup", bi(ctx, "auth.sign_up"))
+	}
+}
+
+templ SignupPage(email, errKey string) {
+	@authLayout(bi(ctx, "auth.sign_up")) {
+		@formError(errKey)
 		<form method="post" action="/signup" class="space-y-4">
 			@emailField(email)
-			@passwordField("Password", "password", "Password", "new-password", "8")
-			@authButton("Sign Up")
+			@passwordField(bi(ctx, "auth.password"), "password", "", "new-password", "8")
+			@authButton(bi(ctx, "auth.sign_up"))
 		</form>
-		@authFooter("Already have an account?", "/login", "Sign In")
+		@authFooter(bi(ctx, "auth.have_account"), "/login", bi(ctx, "auth.sign_in"))
 	}
 }
 
 // MessagePage is the notice card (email verification sent, verified, reset done,
-// etc). signInPrompt is the muted text before the Sign In link ("" for none).
-templ MessagePage(heading, body, signInPrompt string) {
-	@authLayout(heading) {
-		<p class="text-sm text-muted-foreground">{ body }</p>
-		@authFooter(signInPrompt, "/login", "Sign In")
+// etc). headingKey and bodyKey are message keys; bodyData carries any values the
+// body interpolates (nil when it has none). promptKey is the muted text before
+// the Sign In link, "" for none.
+templ MessagePage(headingKey, bodyKey string, bodyData i18n.M, promptKey string) {
+	@authLayout(bi(ctx, headingKey)) {
+		if bodyData != nil {
+			@biLinesF(bodyKey, bodyData)
+		} else {
+			@biLines(bodyKey)
+		}
+		if promptKey != "" {
+			@authFooter(bi(ctx, promptKey), "/login", bi(ctx, "auth.sign_in"))
+		} else {
+			@authFooter("", "/login", bi(ctx, "auth.sign_in"))
+		}
 	}
 }
 
-templ ForgotPage(errMsg string) {
-	@authLayout("Forgot Password") {
-		@formError(errMsg)
+templ ForgotPage(errKey string) {
+	@authLayout(bi(ctx, "auth.forgot_title")) {
+		@formError(errKey)
 		<form method="post" action="/forgot" class="space-y-4">
 			@emailField("")
-			@authButton("Send reset link")
+			@authButton(bi(ctx, "auth.send_reset_link"))
 		</form>
-		@authFooter("Remember your password?", "/login", "Sign In")
+		@authFooter(bi(ctx, "auth.remember_password"), "/login", bi(ctx, "auth.sign_in"))
 	}
 }
 
-templ ResetPage(token, errMsg string) {
-	@authLayout("Reset Password") {
-		@formError(errMsg)
+templ ResetPage(token, errKey string) {
+	@authLayout(bi(ctx, "auth.reset_title")) {
+		@formError(errKey)
 		<form method="post" action="/reset" class="space-y-4">
 			<input type="hidden" name="token" value={ token }/>
-			@passwordField("Password", "password", "New password", "new-password", "8")
-			@authButton("Reset Password")
+			@passwordField(bi(ctx, "auth.new_password"), "password", "", "new-password", "8")
+			@authButton(bi(ctx, "auth.reset_title"))
 		</form>
-		@authFooter("Remember your password?", "/login", "Sign In")
+		@authFooter(bi(ctx, "auth.remember_password"), "/login", bi(ctx, "auth.sign_in"))
 	}
 }
 
@@ -210,26 +283,26 @@ type AccountData struct {
 }
 
 templ AccountPage(d AccountData) {
-	@Layout("Account", "account", d.Collapsed) {
+	@Layout(i18n.T(ctx, "menu.settings"), "account", d.Collapsed) {
 		<div class="mx-auto w-full max-w-2xl space-y-6">
-			<h1 class="text-2xl font-semibold tracking-tight">Settings</h1>
+			<h1 class="text-2xl font-semibold tracking-tight">{ i18n.T(ctx, "menu.settings") }</h1>
 			@tabs.Tabs() {
 				@tabs.List() {
 					@tabs.Trigger(tabs.TriggerProps{Value: "account", IsActive: d.ActiveTab == "account"}) {
 						@icon.User(icon.Props{Class: "size-4"})
-						Account
+						{ i18n.T(ctx, "settings.tab_account") }
 					}
 					@tabs.Trigger(tabs.TriggerProps{Value: "security", IsActive: d.ActiveTab == "security"}) {
 						@icon.Shield(icon.Props{Class: "size-4"})
-						Security
+						{ i18n.T(ctx, "settings.tab_security") }
 					}
 					@tabs.Trigger(tabs.TriggerProps{Value: "addons", IsActive: d.ActiveTab == "addons"}) {
 						@icon.Blocks(icon.Props{Class: "size-4"})
-						Add-ons
+						{ i18n.T(ctx, "settings.tab_addons") }
 					}
 					@tabs.Trigger(tabs.TriggerProps{Value: "billing", IsActive: d.ActiveTab == "billing"}) {
 						@icon.CreditCard(icon.Props{Class: "size-4"})
-						Billing
+						{ i18n.T(ctx, "menu.billing") }
 					}
 				}
 				@tabs.Content(tabs.ContentProps{Value: "account", IsActive: d.ActiveTab == "account", Class: "mt-6"}) {
@@ -251,7 +324,7 @@ templ AccountPage(d AccountData) {
 					} else {
 						<div hx-get="/account/billing" hx-trigger="load" hx-swap="outerHTML">
 							<div class="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
-								Loading your plan…
+								{ i18n.T(ctx, "settings.loading_plan") }
 							</div>
 						</div>
 					}
@@ -277,16 +350,16 @@ templ AddOnToggleResult(d AccountData) {
 // settings page being re-rendered for a name change.
 templ AccountProfileSection(d AccountData) {
 	<section id="account-profile" data-inline-errors class="space-y-2">
-		<h2 class="text-sm font-semibold">User profile</h2>
+		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "settings.profile_heading") }</h2>
 		<div class="overflow-hidden rounded-xl border bg-card">
 			<div class="space-y-4 p-4 sm:p-6">
 				<div class="space-y-1.5">
-					<label class="text-sm font-medium leading-none">Avatar</label>
+					<label class="text-sm font-medium leading-none">{ i18n.T(ctx, "menu.avatar_alt") }</label>
 					<div class="flex items-center gap-3">
 						@userAvatar(d.Name, d.AvatarVersion, "size-14 rounded-lg text-lg")
 						<form hx-post="/account/avatar" hx-trigger="change" hx-target="#account-profile" hx-swap="outerHTML" hx-encoding="multipart/form-data" enctype="multipart/form-data">
 							<label class="inline-flex h-8 cursor-pointer items-center rounded-full border border-input bg-background px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
-								Change avatar
+								{ i18n.T(ctx, "settings.change_avatar") }
 								<input
 									type="file"
 									name="avatar"
@@ -303,7 +376,7 @@ templ AccountProfileSection(d AccountData) {
 									Size:    button.SizeSm,
 									Class:   "text-muted-foreground hover:text-destructive",
 								}) {
-									Remove
+									{ i18n.T(ctx, "paydown.menu_remove") }
 								}
 							</form>
 						}
@@ -311,14 +384,14 @@ templ AccountProfileSection(d AccountData) {
 					@settingsMessages(d.AvatarErr, d.AvatarOK)
 				</div>
 				<form id="profile-form" hx-post="/account/profile" hx-target="#account-profile" hx-swap="outerHTML" class="space-y-1.5">
-					<label for="profile-name" class="text-sm font-medium leading-none">Name</label>
+					<label for="profile-name" class="text-sm font-medium leading-none">{ i18n.T(ctx, "settings.name_label") }</label>
 					@input.Input(input.Props{ID: "profile-name", Name: "name", Value: d.Name, Attributes: templ.Attributes{"required": true, "autocomplete": "name"}})
 					@settingsMessages(d.ProfileErr, d.ProfileOK)
 				</form>
 			</div>
 			<div class="flex items-center border-t bg-muted/30 px-4 py-3 sm:px-6">
 				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm, Form: "profile-form"}) {
-					Save changes
+					{ i18n.T(ctx, "settings.save_changes") }
 				}
 			</div>
 		</div>
@@ -330,27 +403,27 @@ templ AccountProfileSection(d AccountData) {
 // link is clicked, so a pending change is surfaced here.
 templ AccountEmailSection(d AccountData) {
 	<section id="account-email" data-inline-errors class="space-y-2">
-		<h2 class="text-sm font-semibold">Change email</h2>
+		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "settings.email_heading") }</h2>
 		<form hx-post="/account/email" hx-target="#account-email" hx-swap="outerHTML" class="overflow-hidden rounded-xl border bg-card">
 			<div class="space-y-4 p-4 sm:p-6">
 				if d.PendingEmail != "" {
 					<div class="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-muted-foreground">
-						Pending confirmation for <span class="font-medium text-foreground">{ d.PendingEmail }</span>. Your login email stays { d.Email } until that link is clicked.
+						{ i18n.Tf(ctx, "settings.email_pending", i18n.M{"Pending": d.PendingEmail, "Current": d.Email}) }
 					</div>
 				}
 				<div class="space-y-1.5">
-					<label for="new-email" class="text-sm font-medium leading-none">New email</label>
+					<label for="new-email" class="text-sm font-medium leading-none">{ i18n.T(ctx, "settings.new_email_label") }</label>
 					@input.Input(input.Props{ID: "new-email", Name: "new_email", Type: input.TypeEmail, Placeholder: d.Email, Attributes: templ.Attributes{"required": true, "autocomplete": "email"}})
 				</div>
 				<div class="space-y-1.5">
-					<label for="email-password" class="text-sm font-medium leading-none">Current password</label>
+					<label for="email-password" class="text-sm font-medium leading-none">{ i18n.T(ctx, "auth.current_password") }</label>
 					@input.Input(input.Props{ID: "email-password", Name: "password", Type: input.TypePassword, Attributes: templ.Attributes{"required": true, "autocomplete": "current-password"}})
 				</div>
 				@settingsMessages(d.EmailErr, d.EmailOK)
 			</div>
 			<div class="flex items-center border-t bg-muted/30 px-4 py-3 sm:px-6">
 				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm}) {
-					Update email
+					{ i18n.T(ctx, "settings.update_email") }
 				}
 			</div>
 		</form>
@@ -362,42 +435,38 @@ templ AccountEmailSection(d AccountData) {
 // deletion, re-typing the account email). Both submit as full-page POSTs.
 templ accountDangerSection(d AccountData) {
 	<section id="account-danger" data-inline-errors class="space-y-2">
-		<h2 class="text-sm font-semibold text-destructive">Danger zone</h2>
+		<h2 class="text-sm font-semibold text-destructive">{ i18n.T(ctx, "settings.danger_heading") }</h2>
 		<div class="divide-y overflow-hidden rounded-xl border border-destructive/40 bg-card">
 			<div class="space-y-4 p-4 sm:p-6">
 				<div class="space-y-1">
-					<h3 class="text-sm font-medium">Start fresh</h3>
+					<h3 class="text-sm font-medium">{ i18n.T(ctx, "settings.start_fresh_heading") }</h3>
 					<p class="text-sm text-muted-foreground">
-						Delete all your accounts, categories, transactions and goals and start
-						over with the default starter budget. Your login and subscription are
-						kept. This can't be undone.
+						{ i18n.T(ctx, "settings.start_fresh_body") }
 					</p>
 				</div>
 				<form method="post" action="/account/start-fresh" class="space-y-4">
 					@dangerPassword("sf_password")
 					@settingsMessages(d.StartFreshErr, "")
-					@dangerButton("Delete all data")
+					@dangerButton(i18n.T(ctx, "settings.delete_all_data"))
 				</form>
 			</div>
 			<div class="space-y-4 p-4 sm:p-6">
 				<div class="space-y-1">
-					<h3 class="text-sm font-medium">Delete account</h3>
+					<h3 class="text-sm font-medium">{ i18n.T(ctx, "settings.delete_account_heading") }</h3>
 					<p class="text-sm text-muted-foreground">
-						Permanently delete your account and everything in it. Your subscription
-						is set to cancel at the end of the current period and won't renew. This
-						can't be undone.
+						{ i18n.T(ctx, "settings.delete_account_body") }
 					</p>
 				</div>
 				<form method="post" action="/account/delete" class="space-y-4">
 					@dangerPassword("del_password")
 					<div class="space-y-1.5">
 						<label for="confirm_email" class="text-sm font-medium leading-none">
-							Type <span class="font-semibold text-foreground">{ d.Email }</span> to confirm
+							{ i18n.Tf(ctx, "settings.type_to_confirm", i18n.M{"Email": d.Email}) }
 						</label>
 						<input id="confirm_email" name="confirm_email" type="email" autocomplete="off" required placeholder={ d.Email } class={ authInputClass }/>
 					</div>
 					@settingsMessages(d.DeleteErr, "")
-					@dangerButton("Delete my account")
+					@dangerButton(i18n.T(ctx, "settings.delete_my_account"))
 				</form>
 			</div>
 		</div>
@@ -409,7 +478,7 @@ templ accountDangerSection(d AccountData) {
 // read).
 templ dangerPassword(id string) {
 	<div class="space-y-1.5">
-		<label for={ id } class="text-sm font-medium leading-none">Current password</label>
+		<label for={ id } class="text-sm font-medium leading-none">{ i18n.T(ctx, "auth.current_password") }</label>
 		<input id={ id } name="password" type="password" autocomplete="current-password" required class={ authInputClass }/>
 	</div>
 }
@@ -422,16 +491,16 @@ templ dangerButton(label string) {
 // AccountSecuritySection is the Security tab's "Change password" card.
 templ AccountSecuritySection(d AccountData) {
 	<section id="account-security" data-inline-errors class="space-y-2">
-		<h2 class="text-sm font-semibold">Change password</h2>
+		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "settings.password_heading") }</h2>
 		<form hx-post="/account/password" hx-target="#account-security" hx-swap="outerHTML" class="overflow-hidden rounded-xl border bg-card">
 			<div class="space-y-4 p-4 sm:p-6">
-				@passwordField("Current password", "current", "Enter your current password", "current-password", "")
-				@passwordField("New password", "next", "New password", "new-password", "8")
+				@passwordField(i18n.T(ctx, "auth.current_password"), "current", i18n.T(ctx, "auth.enter_current_password"), "current-password", "")
+				@passwordField(i18n.T(ctx, "auth.new_password"), "next", i18n.T(ctx, "auth.new_password"), "new-password", "8")
 				@settingsMessages(d.PasswordErr, d.PasswordOK)
 			</div>
 			<div class="flex items-center border-t bg-muted/30 px-4 py-3 sm:px-6">
 				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm}) {
-					Update password
+					{ i18n.T(ctx, "settings.update_password") }
 				}
 			</div>
 		</form>
@@ -443,8 +512,8 @@ templ AccountSecuritySection(d AccountData) {
 // (a full-page POST), so the sidebar nav reflects the change on re-render.
 templ AccountAddOnsSection(d AccountData) {
 	<section id="account-addons" data-inline-errors class="space-y-2">
-		<h2 class="text-sm font-semibold">Add-ons</h2>
-		<p class="text-sm text-muted-foreground">Turn on only the features you need. Enable more any time.</p>
+		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "settings.tab_addons") }</h2>
+		<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "settings.addons_intro") }</p>
 		@settingsMessages(d.AddOnErr, d.AddOnOK)
 		<div class="divide-y overflow-hidden rounded-xl border bg-card">
 			for _, a := range d.AddOns {
@@ -461,27 +530,40 @@ templ addOnRow(a store.AddOn) {
 	<div class="flex items-start justify-between gap-4 p-4 sm:p-6">
 		<div class="min-w-0 space-y-1">
 			<div class="flex items-center gap-2">
-				<span class="text-sm font-medium">{ a.Name }</span>
-				<span class="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">{ addOnPrice(a.PriceCents) }</span>
+				<span class="text-sm font-medium">{ addOnName(ctx, a) }</span>
+				<span class="rounded-full border px-2 py-0.5 text-xs text-muted-foreground">{ addOnPrice(ctx, a.PriceCents) }</span>
 			</div>
-			<p class="text-sm text-muted-foreground">{ a.Description }</p>
+			<p class="text-sm text-muted-foreground">{ addOnDescription(ctx, a) }</p>
 		</div>
 		<form hx-post={ addOnAction(a.Slug) } hx-trigger="change" hx-target="#account-addons" hx-swap="outerHTML" class="shrink-0 pt-0.5">
 			@switchcomp.Switch(switchcomp.Props{
 				Name:       "enabled",
 				Checked:    a.Enabled,
-				Attributes: templ.Attributes{"aria-label": "Toggle " + a.Name},
+				Attributes: templ.Attributes{"aria-label": i18n.Tf(ctx, "settings.toggle_addon", i18n.M{"Name": addOnName(ctx, a)})},
 			})
 		</form>
 	</div>
 }
 
 // addOnPrice renders an add-on's monthly price, or "Free" when it's zero.
-func addOnPrice(cents int64) string {
+func addOnPrice(ctx context.Context, cents int64) string {
 	if cents == 0 {
-		return "Free"
+		return i18n.T(ctx, "settings.addon_free")
 	}
-	return money.Format(cents) + "/mo"
+	return money.Format(ctx, cents) + i18n.T(ctx, "budget.per_month_suffix")
+}
+
+// addOnName and addOnDescription translate the add-on catalog, which is stored
+// in the database but authored by us, not by the user. The row stays the source
+// of truth for which add-ons exist; the catalog supplies the words. An add-on
+// added to the database before its catalog entry falls back to its English row
+// text rather than rendering a message ID.
+func addOnName(ctx context.Context, a store.AddOn) string {
+	return i18n.TOr(ctx, "addons.name."+a.Slug, a.Name)
+}
+
+func addOnDescription(ctx context.Context, a store.AddOn) string {
+	return i18n.TOr(ctx, "addons.description."+a.Slug, a.Description)
 }
 
 // addOnAction builds the toggle endpoint for an add-on slug.

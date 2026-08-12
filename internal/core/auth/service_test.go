@@ -11,6 +11,8 @@ import (
 	"github.com/sbengtson/budget/internal/core/db"
 	"github.com/sbengtson/budget/internal/core/mail"
 	"github.com/sbengtson/budget/internal/core/store"
+
+	"github.com/sbengtson/budget/internal/core/i18n"
 )
 
 type capMailer struct{ last mail.Message }
@@ -114,6 +116,20 @@ func TestSecondUserGetsOwnIncomeCategory(t *testing.T) {
 	// Second user must get their OWN Income category, not the owner's.
 	if err := svc.Register(ctx, "second@example.com", "password2"); err != nil {
 		t.Fatal(err)
+	}
+
+	// Registration deliberately seeds nothing — the first-run wizard does, once
+	// it knows the user's language. Seed both here the way the wizard would, so
+	// this test still covers what it is for: that the owner, who claimed the
+	// migration-seeded global Income, does not end up with a second one.
+	for _, email := range []string{"owner@example.com", "second@example.com"} {
+		u, err := st.GetUserByEmail(ctx, email)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := st.SeedNewUser(ctx, u.ID, i18n.EnCA, nil); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	countIncome := func(email string) int {

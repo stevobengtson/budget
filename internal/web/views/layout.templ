@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sbengtson/budget/internal/core/i18n"
+
 	"github.com/templui/templui/components/checkbox"
 	"github.com/templui/templui/components/collapsible"
 	"github.com/templui/templui/components/datepicker"
@@ -23,7 +25,7 @@ import (
 // Layout is the outer HTML shell. Pages embed their content via children.
 templ Layout(title string, active string, collapsed bool) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang={ string(i18n.LocaleFrom(ctx)) }>
 		@headTag(title)
 		<body class="min-h-screen bg-background text-foreground">
 			@appShell(active, collapsed) {
@@ -121,7 +123,7 @@ templ appShell(active string, collapsed bool) {
 				}
 				@sidebar.Group(sidebar.GroupProps{Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden"}) {
 					@sidebar.GroupLabel() {
-						Accounts
+						{ i18n.T(ctx, "nav.accounts_group") }
 					}
 					@accountsPanel("sidebar-overview")
 				}
@@ -164,15 +166,15 @@ templ PrimaryNav(active string, oob bool) {
 	}
 	<div { attrs... }>
 		@sidebar.Menu() {
-			@navItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-[18px]"}), active)
+			@navItem("budget", i18n.T(ctx, "nav.budget"), icon.Wallet(icon.Props{Class: "size-[18px]"}), active)
 			// Transactions is reached through the account list below — "All
 			// Accounts" heads it — rather than as its own nav entry, so the sidebar
 			// names places to be, not a second route to the same screen. That list
 			// is hidden in the collapsed icon rail though, so the rail keeps its own
 			// way in.
-			@collapsedOnlyNavItem("transactions", "All Accounts", icon.List(icon.Props{Class: "size-[18px]"}), active)
+			@collapsedOnlyNavItem("transactions", i18n.T(ctx, "nav.all_accounts"), icon.List(icon.Props{Class: "size-[18px]"}), active)
 			if AddOnEnabled(ctx, "paydown") {
-				@navItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-[18px]"}), active)
+				@navItem("paydown", i18n.T(ctx, "nav.paydown"), icon.TrendingDown(icon.Props{Class: "size-[18px]"}), active)
 			}
 		}
 	</div>
@@ -247,13 +249,13 @@ templ tabBarNav(active string, oob bool) {
 	}
 	<nav
 		{ attrs... }
-		aria-label="Primary"
+		aria-label={ i18n.T(ctx, "nav.primary_label") }
 		class="fixed inset-x-0 bottom-0 z-40 flex justify-around rounded-t-[30px] bg-card px-s3 pt-s2 pb-s4 shadow-organic-lg md:hidden"
 	>
-		@tabItem("budget", "Budget", icon.Wallet(icon.Props{Class: "size-[22px]"}), active)
-		@tabItem("transactions", "Activity", icon.List(icon.Props{Class: "size-[22px]"}), active)
+		@tabItem("budget", i18n.T(ctx, "nav.budget"), icon.Wallet(icon.Props{Class: "size-[22px]"}), active)
+		@tabItem("transactions", i18n.T(ctx, "nav.activity"), icon.List(icon.Props{Class: "size-[22px]"}), active)
 		if AddOnEnabled(ctx, "paydown") {
-			@tabItem("paydown", "Paydown", icon.TrendingDown(icon.Props{Class: "size-[22px]"}), active)
+			@tabItem("paydown", i18n.T(ctx, "nav.paydown"), icon.TrendingDown(icon.Props{Class: "size-[22px]"}), active)
 		}
 	</nav>
 }
@@ -324,25 +326,38 @@ templ userMenu() {
 				@dropdown.SubTrigger() {
 					<span class="flex items-center gap-2">
 						@icon.Sun(icon.Props{Class: "size-4"})
-						Theme
+						{ i18n.T(ctx, "menu.theme") }
 					</span>
 				}
 				@dropdown.SubContent() {
-					@themeOption("system", "System", icon.Monitor(icon.Props{Class: "size-4"}))
-					@themeOption("light", "Light", icon.Sun(icon.Props{Class: "size-4"}))
-					@themeOption("dark", "Dark", icon.Moon(icon.Props{Class: "size-4"}))
+					@themeOption("system", i18n.T(ctx, "menu.theme_system"), icon.Monitor(icon.Props{Class: "size-4"}))
+					@themeOption("light", i18n.T(ctx, "menu.theme_light"), icon.Sun(icon.Props{Class: "size-4"}))
+					@themeOption("dark", i18n.T(ctx, "menu.theme_dark"), icon.Moon(icon.Props{Class: "size-4"}))
+				}
+			}
+			@dropdown.Sub() {
+				@dropdown.SubTrigger() {
+					<span class="flex items-center gap-2">
+						@icon.Languages(icon.Props{Class: "size-4"})
+						{ i18n.T(ctx, "menu.language") }
+					</span>
+				}
+				@dropdown.SubContent() {
+					for _, l := range i18n.Supported {
+						@localeOption(l, l == i18n.LocaleFrom(ctx))
+					}
 				}
 			}
 			@dropdown.Item(dropdown.ItemProps{Href: "/account"}) {
 				<span class="flex items-center gap-2">
 					@icon.Settings(icon.Props{Class: "size-4"})
-					Settings
+					{ i18n.T(ctx, "menu.settings") }
 				</span>
 			}
 			@dropdown.Item(dropdown.ItemProps{Href: "/account?tab=billing"}) {
 				<span class="flex items-center gap-2">
 					@icon.CreditCard(icon.Props{Class: "size-4"})
-					Billing
+					{ i18n.T(ctx, "menu.billing") }
 				</span>
 			}
 			if IsAdmin(ctx) {
@@ -350,7 +365,7 @@ templ userMenu() {
 				@dropdown.Item(dropdown.ItemProps{Href: "/admin"}) {
 					<span class="flex items-center gap-2">
 						@icon.Shield(icon.Props{Class: "size-4"})
-						Admin
+						{ i18n.T(ctx, "menu.admin") }
 					</span>
 				}
 			}
@@ -361,7 +376,7 @@ templ userMenu() {
 			}) {
 				<span class="flex items-center gap-2">
 					@icon.LogOut(icon.Props{Class: "size-4"})
-					Log out
+					{ i18n.T(ctx, "menu.log_out") }
 				</span>
 			}
 		}
@@ -375,7 +390,7 @@ templ userAvatar(name string, avatarVersion int64, class string) {
 	if avatarVersion > 0 {
 		<img
 			src={ fmt.Sprintf("/account/avatar?v=%d", avatarVersion) }
-			alt="Avatar"
+			alt={ i18n.T(ctx, "menu.avatar_alt") }
 			class={ "shrink-0 overflow-hidden rounded-lg object-cover " + class }
 		/>
 	} else {
@@ -418,6 +433,30 @@ templ themeOption(value string, label string, ic templ.Component) {
 		<span data-theme-check class="invisible">
 			@icon.Check(icon.Props{Class: "size-4"})
 		</span>
+	}
+}
+
+// localeOption is one row of the Language submenu.
+//
+// Unlike themeOption, which is a pure client-side localStorage flip, changing
+// the language is a server round-trip: the choice is stored on the account, and
+// every string on the page is re-rendered. Hence hx-post plus the HX-Refresh the
+// handler answers with, rather than an onclick.
+//
+// Each language is named in itself ("Français (Canada)"), never in the language
+// currently displayed — someone who cannot read the current one still has to be
+// able to find their own.
+templ localeOption(l i18n.Locale, active bool) {
+	@dropdown.Item(dropdown.ItemProps{
+		Attributes: templ.Attributes{
+			"hx-post": "/locale",
+			"hx-vals": fmt.Sprintf(`{"locale": %q}`, string(l)),
+		},
+	}) {
+		<span class="flex items-center gap-2">{ l.Name() }</span>
+		if active {
+			@icon.Check(icon.Props{Class: "size-4"})
+		}
 	}
 }
 

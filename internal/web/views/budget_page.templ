@@ -1,8 +1,10 @@
 package views
 
 import (
+	"context"
 	"time"
 
+	"github.com/sbengtson/budget/internal/core/format"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/monthselector"
 )
@@ -45,7 +47,7 @@ templ BudgetPage(d BudgetData, collapsed bool) {
 
 templ BudgetMonthSelector(d BudgetData) {
 	<div class="flex items-center justify-between gap-4 pb-2">
-		<h1 class="text-2xl font-semibold tracking-tight">{ formatMonth(d.Month) }</h1>
+		<h1 class="text-2xl font-semibold tracking-tight">{ formatMonth(ctx, d.Month) }</h1>
 		@monthselector.MonthSelector(bgMonthHref(d.PrevMonth), bgMonthHref(nowMonth()), bgMonthHref(d.NextMonth), d.Month == nowMonth())
 	</div>
 }
@@ -93,12 +95,12 @@ templ budgetRegion(d BudgetData, oob bool) {
 	</div>
 }
 
-func formatMonth(m string) string {
+func formatMonth(ctx context.Context, m string) string {
 	t, err := time.Parse("2006-01", m)
 	if err != nil {
 		return m
 	}
-	return t.Format("Jan 2006")
+	return format.MonthYear(ctx, t)
 }
 
 func nowMonth() string { return time.Now().Format("2006-01") }

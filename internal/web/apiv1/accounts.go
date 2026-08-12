@@ -184,7 +184,7 @@ func (a *API) CreateTransaction(c *gin.Context) {
 		date = d
 	}
 
-	cents, err := money.Parse(req.Amount)
+	cents, err := money.Parse(ctx, req.Amount)
 	if err != nil || cents <= 0 {
 		writeError(c, http.StatusBadRequest, "invalid_request", "Enter an amount greater than zero.")
 		return
@@ -282,7 +282,7 @@ func (a *API) UpdateTransaction(c *gin.Context) {
 		date = d
 	}
 
-	cents, err := money.Parse(req.Amount)
+	cents, err := money.Parse(ctx, req.Amount)
 	if err != nil || cents <= 0 {
 		writeError(c, http.StatusBadRequest, "invalid_request", "Enter an amount greater than zero.")
 		return

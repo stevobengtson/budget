@@ -1,6 +1,7 @@
 package monthselector
 
 import (
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
 )
 
@@ -9,13 +10,13 @@ import (
 // disabled — clicking it would just reload the same page.
 templ MonthSelector(prevMonth string, currentMonth string, nextMonth string, atCurrent bool) {
   <div class="flex items-center gap-2">
-    @button.Button(button.Props{Href: prevMonth, Variant: button.VariantOutline, Size: button.SizeIcon, Class: "text-lg", Attributes: templ.Attributes{"aria-label": "Previous month"}}) {
+    @button.Button(button.Props{Href: prevMonth, Variant: button.VariantOutline, Size: button.SizeIcon, Class: "text-lg", Attributes: templ.Attributes{"aria-label": i18n.T(ctx, "budget.prev_month")}}) {
       ‹
     }
     @button.Button(button.Props{Href: currentMonth, Variant: button.VariantOutline, Size: button.SizeDefault, Disabled: atCurrent}) {
-      today
+      { i18n.T(ctx, "budget.today") }
     }
-    @button.Button(button.Props{Href: nextMonth, Variant: button.VariantOutline, Size: button.SizeIcon, Class: "text-lg", Attributes: templ.Attributes{"aria-label": "Next month"}}) {
+    @button.Button(button.Props{Href: nextMonth, Variant: button.VariantOutline, Size: button.SizeIcon, Class: "text-lg", Attributes: templ.Attributes{"aria-label": i18n.T(ctx, "budget.next_month")}}) {
       ›
     }
   </div>

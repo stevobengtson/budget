@@ -15,8 +15,8 @@ import (
 )
 
 // seedCategory creates one group + category with an assignment, so the budget
-// page has a real row to render. It also creates an account: with none, /budget
-// renders the first-run screen instead of the budget.
+// page has a real row to render, plus an account so the sidebar overview and
+// the rail's figures have something behind them.
 func seedCategory(t *testing.T, s *store.Store, uid int64, month string, cents int64) int64 {
 	t.Helper()
 	ctx := context.Background()
@@ -394,52 +394,27 @@ func accountFieldClass(t *testing.T, body string) string {
 	return m[1]
 }
 
-// TestFirstRunShownUntilAnAccountExists covers the new empty state. Nothing can
-// be budgeted until money exists somewhere, so a user with no accounts gets the
-// first-run screen; adding one account replaces it with the real budget.
-func TestFirstRunShownUntilAnAccountExists(t *testing.T) {
+// TestBudgetRendersWithNoAccounts covers what replaced the retired first-run
+// screen. Reaching /budget means the wizard is done, so the categories exist;
+// an account-less budget is someone who archived their last account, and it
+// must render the real budget rather than a setup screen they already finished.
+func TestBudgetRendersWithNoAccounts(t *testing.T) {
 	s := store.New(openTestDB(t))
 	ts, client, uid := serveAuthed(t, s)
 
 	body := readAll(t, mustGetOK(t, client, ts.URL+"/budget"))
-	if !strings.Contains(body, "Let&#39;s find out what your money is doing.") {
-		t.Error("a user with no accounts should see the first-run screen")
-	}
-	if strings.Contains(body, `id="budget-rail"`) {
-		t.Error("first run should not render the budget rail")
+	if !strings.Contains(body, `id="budget-rail"`) {
+		t.Error("a budget with no accounts should still render the rail")
 	}
 
+	// And it keeps rendering once an account exists.
 	if _, err := s.CreateAccount(context.Background(), uid,
-		store.Account{Name: "Checking", Type: "checking"}); err != nil {
+		store.Account{Name: "Chequing", Type: "checking"}); err != nil {
 		t.Fatal(err)
 	}
 	body = readAll(t, mustGetOK(t, client, ts.URL+"/budget"))
 	if !strings.Contains(body, `id="budget-rail"`) {
-		t.Error("once an account exists the budget should render")
-	}
-	if strings.Contains(body, "Let&#39;s find out what your money is doing.") {
-		t.Error("first-run screen should be gone once an account exists")
-	}
-}
-
-// TestFirstRunRedirectsIntoBudget checks the first-run form's distinct response:
-// there is no modal to close, so the handler sends the browser to /budget.
-func TestFirstRunRedirectsIntoBudget(t *testing.T) {
-	s := store.New(openTestDB(t))
-	ts, client, _ := serveAuthed(t, s)
-
-	resp, err := client.PostForm(ts.URL+"/accounts", url.Values{
-		"first_run":        {"1"},
-		"name":             {"Main Checking"},
-		"type":             {"checking"},
-		"starting_balance": {"500.00"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if got := resp.Header.Get("HX-Redirect"); got != "/budget" {
-		t.Errorf("HX-Redirect = %q, want /budget", got)
+		t.Error("budget should render once an account exists")
 	}
 }
 

@@ -66,9 +66,13 @@ func (s *Service) Register(ctx context.Context, email, password string) error {
 	}
 	// The first user ever becomes the owner and inherits all pre-auth data
 	// (accounts, transactions, categories including the migration-seeded global
-	// Income) via ClaimOrphanData. Then every user is seeded a starter Income
-	// category — SeedNewUser is idempotent, so the owner (who just claimed the
-	// global Income) is a no-op and never ends up with a duplicate.
+	// Income) via ClaimOrphanData.
+	//
+	// The starter budget is deliberately NOT seeded here. It is seeded by the
+	// first-run wizard, which asks for the interface language before it does so
+	// — seeding at registration would have to guess a language, and the category
+	// names it inserts immediately become the user's own editable rows, so a
+	// wrong guess is not something a later language switch can undo.
 	n, err := s.store.CountUsers(ctx)
 	if err != nil {
 		return err
@@ -77,9 +81,6 @@ func (s *Service) Register(ctx context.Context, email, password string) error {
 		if err := s.store.ClaimOrphanData(ctx, userID); err != nil {
 			return err
 		}
-	}
-	if err := s.store.SeedNewUser(ctx, userID); err != nil {
-		return err
 	}
 	return s.sendToken(ctx, userID, email, "email_verify", "/verify",
 		"Verify your Pigglet email",

@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
@@ -58,7 +59,7 @@ templ BudgetTable(d BudgetData) {
 		data-month={ d.Month }
 	>
 		<div class="flex items-center justify-between gap-s2 pb-s2">
-			<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">Categories</span>
+			<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">{ i18n.T(ctx, "budget.categories_heading") }</span>
 			<div class="flex items-center gap-s2">
 				@button.Button(button.Props{
 					Type:    "button",
@@ -69,10 +70,10 @@ templ BudgetTable(d BudgetData) {
 						"hx-get":    "/budget/income/panel?month=" + d.Month,
 						"hx-target": "#modal",
 						"hx-swap":   "innerHTML",
-						"title":     "Manage income sources",
+						"title":     i18n.T(ctx, "budget.income_button_title"),
 					},
 				}) {
-					Income
+					{ i18n.T(ctx, "budget.income_button") }
 				}
 				@button.Button(button.Props{
 					Type:    "button",
@@ -83,10 +84,10 @@ templ BudgetTable(d BudgetData) {
 						"hx-get":    "/budget/credit/panel?month=" + d.Month,
 						"hx-target": "#modal",
 						"hx-swap":   "innerHTML",
-						"title":     "Card activity this month",
+						"title":     i18n.T(ctx, "budget.cards_button_title"),
 					},
 				}) {
-					Cards
+					{ i18n.T(ctx, "budget.cards_button") }
 				}
 				// Only when there is something archived: this is the sole route back
 				// from archiving, so it must be present whenever it can do anything —
@@ -102,10 +103,10 @@ templ BudgetTable(d BudgetData) {
 							"hx-get":    "/budget/archived/panel?month=" + d.Month,
 							"hx-target": "#modal",
 							"hx-swap":   "innerHTML",
-							"title":     "Archived categories",
+							"title":     i18n.T(ctx, "budget.archived_button_title"),
 						},
 					}) {
-						Archived
+						{ i18n.T(ctx, "budget.archived_button") }
 					}
 				}
 				@button.Button(button.Props{
@@ -117,10 +118,10 @@ templ BudgetTable(d BudgetData) {
 						"hx-get":    "/budget/group/new",
 						"hx-target": "#budget-groups",
 						"hx-swap":   "afterbegin",
-						"title":     "Add category group",
+						"title":     i18n.T(ctx, "budget.add_group_title"),
 					},
 				}) {
-					Add group
+					{ i18n.T(ctx, "budget.add_group") }
 				}
 			</div>
 		</div>
@@ -132,8 +133,8 @@ templ BudgetTable(d BudgetData) {
 		</div>
 		if d.UncategorizedSpent != 0 {
 			<div class="flex items-center justify-between gap-s3 px-s3 py-2 text-muted-foreground">
-				<span class="truncate text-[15px]">Uncategorized</span>
-				<span class="text-[13px] tabular-nums">spent { money.Format(d.UncategorizedSpent) }</span>
+				<span class="truncate text-[15px]">{ i18n.T(ctx, "budget.uncategorized") }</span>
+				<span class="text-[13px] tabular-nums">{ i18n.Tf(ctx, "budget.uncategorized_spent", i18n.M{"Amount": money.Format(ctx, d.UncategorizedSpent)}) }</span>
 			</div>
 		}
 	</div>
@@ -148,11 +149,11 @@ templ BudgetTable(d BudgetData) {
 // 2 and the 5th at tier 3 without either being positioned by hand.
 templ budgetColumnHeads() {
 	<div class={ budgetGridCols, "hidden px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground @min-[660px]:grid" }>
-		<span>Category</span>
-		<span>Goal</span>
-		<span class="text-right">Assigned</span>
-		<span class="hidden @min-[950px]:block">Progress</span>
-		<span class="text-right">Available</span>
+		<span>{ i18n.T(ctx, "budget.col_category") }</span>
+		<span>{ i18n.T(ctx, "budget.col_goal") }</span>
+		<span class="text-right">{ i18n.T(ctx, "budget.col_assigned") }</span>
+		<span class="hidden @min-[950px]:block">{ i18n.T(ctx, "budget.col_progress") }</span>
+		<span class="text-right">{ i18n.T(ctx, "budget.col_available") }</span>
 	</div>
 }
 
@@ -189,7 +190,7 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 	<div class="flex items-center gap-s2 px-s3 pb-s1 pt-s3" { attrs... }>
 		<span
 			class="js-group-handle inline-flex cursor-grab touch-none items-center text-warm-400 hover:text-foreground"
-			title="Drag to reorder group"
+			title={ i18n.T(ctx, "budget.drag_group") }
 			aria-hidden="true"
 		>
 			@icon.GripVertical(icon.Props{Class: "size-4"})
@@ -198,8 +199,8 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 			type="button"
 			class="inline-flex items-center rounded-sm hover:text-foreground"
 			data-collapse-group={ fmt.Sprintf("%d", g.ID) }
-			title="Collapse or expand group"
-			aria-label="Toggle group"
+			title={ i18n.T(ctx, "budget.collapse_group") }
+			aria-label={ i18n.T(ctx, "budget.toggle_group") }
 		>
 			@icon.ChevronRight(icon.Props{Class: "js-group-caret size-4 text-muted-foreground transition-transform"})
 		</button>
@@ -212,7 +213,7 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 			<button
 				type="button"
 				class="js-name-display cursor-text truncate rounded-sm px-1 py-0.5 font-heading text-[17px] font-semibold ring-1 ring-transparent hover:ring-border"
-				title="Click to rename"
+				title={ i18n.T(ctx, "common.click_to_rename") }
 			>
 				{ g.Name }
 			</button>
@@ -228,7 +229,7 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 			{{ avail := groupAvailableTotal(g.Rows) }}
 			<span class="js-group-total-header">
 				<span class={ "js-group-total-value text-[13px] font-bold tabular-nums", availColorClass(avail) }>
-					{ money.Format(avail) }
+					{ money.Format(ctx, avail) }
 				</span>
 			</span>
 			@button.Button(button.Props{
@@ -240,11 +241,11 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 					"hx-get":      fmt.Sprintf("/budget/group/%d/category/new?month=%s", g.ID, month),
 					"hx-target":   fmt.Sprintf("#group-%d", g.ID),
 					"hx-swap":     "beforeend",
-					"title":       "Add category",
+					"title":       i18n.T(ctx, "budget.add_category"),
 					"hx-on:click": fmt.Sprintf("document.getElementById('group-%d').classList.remove('group-collapsed')", g.ID),
 				},
 			}) {
-				Add category
+				{ i18n.T(ctx, "budget.add_category") }
 			}
 			if len(g.Rows) == 0 {
 				@button.Button(button.Props{
@@ -256,8 +257,8 @@ templ budgetGroupHeader(month string, g BudgetGroup, oob bool) {
 						"hx-post":    fmt.Sprintf("/budget/group/%d/delete?month=%s", g.ID, month),
 						"hx-target":  "#budget-region",
 						"hx-swap":    "outerHTML",
-						"hx-confirm": "Delete this empty group?",
-						"title":      "Delete empty group",
+						"hx-confirm": i18n.T(ctx, "budget.delete_empty_group_confirm"),
+						"title":      i18n.T(ctx, "budget.delete_empty_group"),
 					},
 				}) {
 					@icon.X(icon.Props{Class: "size-4"})
@@ -277,7 +278,7 @@ templ BudgetGroupNewRow() {
 				name="name"
 				autocomplete="off"
 				autofocus
-				placeholder="New group name"
+				placeholder={ i18n.T(ctx, "budget.new_group_placeholder") }
 				class="js-name-new h-9 w-[220px] rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			/>
 		</form>

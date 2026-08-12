@@ -10,6 +10,7 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/avatar"
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/views"
 )
@@ -24,14 +25,14 @@ func (h *Handlers) Login(c *gin.Context) {
 	pw := c.PostForm("password")
 	raw, err := h.auth.Login(c.Request.Context(), email, pw, c.Request.UserAgent(), c.ClientIP())
 	if err != nil {
-		msg := "Invalid email or password."
+		errKey := "auth.err_invalid_credentials"
 		switch {
 		case errors.Is(err, auth.ErrEmailNotVerified):
-			msg = "Please verify your email before logging in."
+			errKey = "auth.err_verify_first"
 		case errors.Is(err, auth.ErrAccountDisabled):
-			msg = "This account has been disabled. Contact support if you think this is a mistake."
+			errKey = "auth.err_disabled"
 		}
-		render(c, http.StatusUnauthorized, views.LoginPage(email, msg))
+		render(c, http.StatusUnauthorized, views.LoginPage(email, errKey))
 		return
 	}
 	SetSessionCookie(c, raw, h.sessionMaxAge, h.secure)
@@ -44,41 +45,37 @@ func (h *Handlers) Signup(c *gin.Context) {
 	email := c.PostForm("email")
 	pw := c.PostForm("password")
 	if len(pw) < 8 {
-		render(c, http.StatusBadRequest, views.SignupPage(email, "Password must be at least 8 characters."))
+		render(c, http.StatusBadRequest, views.SignupPage(email, "auth.err_password_short"))
 		return
 	}
 	if err := h.auth.Register(c.Request.Context(), email, pw); err != nil {
 		if errors.Is(err, auth.ErrEmailTaken) {
-			render(c, http.StatusConflict, views.SignupPage(email, "That email is already registered."))
+			render(c, http.StatusConflict, views.SignupPage(email, "auth.err_email_taken"))
 			return
 		}
 		_ = c.Error(err)
-		render(c, http.StatusInternalServerError, views.SignupPage(email, "Something went wrong. Try again."))
+		render(c, http.StatusInternalServerError, views.SignupPage(email, "common.err_generic_retry"))
 		return
 	}
-	render(c, http.StatusOK, views.MessagePage("Verify Email",
-		"Check your email for a verification link. We sent one to "+email+".",
-		"Already verified your email?"))
+	render(c, http.StatusOK, views.MessagePage("auth.msg_verify_title", "auth.msg_verify_body",
+		i18n.M{"Email": email}, "auth.msg_verify_prompt"))
 }
 
 func (h *Handlers) Verify(c *gin.Context) {
 	token := c.Query("token")
 	if err := h.auth.VerifyEmail(c.Request.Context(), token); err != nil {
-		render(c, http.StatusBadRequest, views.MessagePage("Verification Failed",
-			"That link is invalid or expired. Try signing up again.", ""))
+		render(c, http.StatusBadRequest, views.MessagePage("auth.msg_verify_failed_title", "auth.msg_verify_failed_body", nil, ""))
 		return
 	}
-	render(c, http.StatusOK, views.MessagePage("Email Verified",
-		"Your email is verified — you can now sign in.", ""))
+	render(c, http.StatusOK, views.MessagePage("auth.msg_verified_title", "auth.msg_verified_body", nil, ""))
 }
 
 func (h *Handlers) ForgotForm(c *gin.Context) { render(c, http.StatusOK, views.ForgotPage("")) }
 
 func (h *Handlers) Forgot(c *gin.Context) {
 	_ = h.auth.RequestPasswordReset(c.Request.Context(), c.PostForm("email"))
-	render(c, http.StatusOK, views.MessagePage("Check Your Email",
-		"If that email has an account, a reset link is on its way.",
-		"Remember your password?"))
+	render(c, http.StatusOK, views.MessagePage("auth.msg_check_email_title", "auth.msg_check_email_body",
+		nil, "auth.remember_password"))
 }
 
 func (h *Handlers) ResetForm(c *gin.Context) {
@@ -89,15 +86,14 @@ func (h *Handlers) Reset(c *gin.Context) {
 	token := c.PostForm("token")
 	pw := c.PostForm("password")
 	if len(pw) < 8 {
-		render(c, http.StatusBadRequest, views.ResetPage(token, "Password must be at least 8 characters."))
+		render(c, http.StatusBadRequest, views.ResetPage(token, "auth.err_password_short"))
 		return
 	}
 	if err := h.auth.ResetPassword(c.Request.Context(), token, pw); err != nil {
-		render(c, http.StatusBadRequest, views.ResetPage(token, "That reset link is invalid or expired."))
+		render(c, http.StatusBadRequest, views.ResetPage(token, "auth.err_reset_invalid"))
 		return
 	}
-	render(c, http.StatusOK, views.MessagePage("Password Reset",
-		"Your password was updated — you can now sign in.", ""))
+	render(c, http.StatusOK, views.MessagePage("auth.msg_reset_title", "auth.msg_reset_body", nil, ""))
 }
 
 func (h *Handlers) Logout(c *gin.Context) {
@@ -170,6 +166,7 @@ func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountDa
 // Add-ons tab. The switch submits its enclosing form on change; a checked
 // switch posts enabled=on, an unchecked one posts nothing.
 func (h *Handlers) ToggleAddOn(c *gin.Context) {
+	ctx := c.Request.Context()
 	uid := currentUserID(c)
 	slug := c.Param("slug")
 	enabled := c.PostForm("enabled") == "on"
@@ -177,11 +174,11 @@ func (h *Handlers) ToggleAddOn(c *gin.Context) {
 	if err := h.store.SetAddOnEnabled(c.Request.Context(), uid, slug, enabled); err != nil {
 		d := h.accountData(c, "addons")
 		if errors.Is(err, store.ErrAddOnNotFound) {
-			d.AddOnErr = "That add-on doesn't exist."
+			d.AddOnErr = i18n.T(ctx, "settings.err_addon_missing")
 			render(c, http.StatusNotFound, views.AccountAddOnsSection(d))
 			return
 		}
-		d.AddOnErr = "Could not update the add-on."
+		d.AddOnErr = i18n.T(ctx, "settings.err_addon_update")
 		render(c, http.StatusInternalServerError, views.AccountAddOnsSection(d))
 		return
 	}
@@ -193,9 +190,9 @@ func (h *Handlers) ToggleAddOn(c *gin.Context) {
 
 	d := h.accountData(c, "addons")
 	if enabled {
-		d.AddOnOK = "Add-on enabled."
+		d.AddOnOK = i18n.T(ctx, "settings.ok_addon_enabled")
 	} else {
-		d.AddOnOK = "Add-on disabled."
+		d.AddOnOK = i18n.T(ctx, "settings.ok_addon_disabled")
 	}
 	render(c, http.StatusOK, views.AddOnToggleResult(d))
 }
@@ -204,6 +201,7 @@ func (h *Handlers) ToggleAddOn(c *gin.Context) {
 // re-checks the password and emails a confirmation link to the new address. The
 // login email is unchanged until that link is confirmed.
 func (h *Handlers) RequestEmailChange(c *gin.Context) {
+	ctx := c.Request.Context()
 	uid := currentUserID(c)
 	newEmail := c.PostForm("new_email")
 	password := c.PostForm("password")
@@ -213,15 +211,15 @@ func (h *Handlers) RequestEmailChange(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrInvalidCredentials):
-			d.EmailErr = "Current password is incorrect."
+			d.EmailErr = i18n.T(ctx, "auth.err_wrong_password")
 		case errors.Is(err, auth.ErrInvalidEmail):
-			d.EmailErr = "Enter a valid email address."
+			d.EmailErr = i18n.T(ctx, "settings.err_email_invalid")
 		case errors.Is(err, auth.ErrSameEmail):
-			d.EmailErr = "That is already your email."
+			d.EmailErr = i18n.T(ctx, "settings.err_email_same")
 		case errors.Is(err, auth.ErrEmailTaken):
-			d.EmailErr = "That email is already in use."
+			d.EmailErr = i18n.T(ctx, "settings.err_email_in_use")
 		default:
-			d.EmailErr = "Could not start the email change."
+			d.EmailErr = i18n.T(ctx, "settings.err_email_change")
 		}
 		render(c, http.StatusBadRequest, views.AccountEmailSection(d))
 		return
@@ -235,17 +233,16 @@ func (h *Handlers) RequestEmailChange(c *gin.Context) {
 // the token authorizes it.
 func (h *Handlers) ConfirmEmailChange(c *gin.Context) {
 	if err := h.auth.ConfirmEmailChange(c.Request.Context(), c.Query("token")); err != nil {
-		render(c, http.StatusBadRequest, views.MessagePage("Email Change Failed",
-			"That link is invalid or expired.", ""))
+		render(c, http.StatusBadRequest, views.MessagePage("auth.msg_email_change_failed_title", "auth.msg_link_invalid", nil, ""))
 		return
 	}
-	render(c, http.StatusOK, views.MessagePage("Email Updated",
-		"Your login email has been updated.", ""))
+	render(c, http.StatusOK, views.MessagePage("auth.msg_email_updated_title", "auth.msg_email_updated_body", nil, ""))
 }
 
 // UpdateAvatar accepts a multipart image upload, normalizes it (square 256px
 // PNG), stores it, and re-renders the Account tab.
 func (h *Handlers) UpdateAvatar(c *gin.Context) {
+	ctx := c.Request.Context()
 	uid := currentUserID(c)
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAvatarBytes+1024)
 
@@ -257,28 +254,28 @@ func (h *Handlers) UpdateAvatar(c *gin.Context) {
 
 	file, _, err := c.Request.FormFile("avatar")
 	if err != nil {
-		fail(http.StatusBadRequest, "Choose an image to upload.")
+		fail(http.StatusBadRequest, i18n.T(ctx, "settings.err_avatar_choose"))
 		return
 	}
 	defer func() { _ = file.Close() }()
 
 	data, err := io.ReadAll(io.LimitReader(file, maxAvatarBytes+1))
 	if err != nil {
-		fail(http.StatusBadRequest, "Could not read the uploaded file.")
+		fail(http.StatusBadRequest, i18n.T(ctx, "settings.err_avatar_read"))
 		return
 	}
 	if len(data) > maxAvatarBytes {
-		fail(http.StatusRequestEntityTooLarge, "Image is too large (max 10 MB).")
+		fail(http.StatusRequestEntityTooLarge, i18n.T(ctx, "settings.err_avatar_large"))
 		return
 	}
 
 	png, err := avatar.Process(data)
 	if err != nil {
-		fail(http.StatusBadRequest, "That file isn't a supported image (PNG, JPEG, GIF, or WEBP).")
+		fail(http.StatusBadRequest, i18n.T(ctx, "settings.err_avatar_type"))
 		return
 	}
 	if err := h.store.SetUserAvatar(c.Request.Context(), uid, png); err != nil {
-		fail(http.StatusInternalServerError, "Could not save your avatar.")
+		fail(http.StatusInternalServerError, i18n.T(ctx, "settings.err_avatar_save"))
 		return
 	}
 
@@ -287,23 +284,24 @@ func (h *Handlers) UpdateAvatar(c *gin.Context) {
 	u, _ := h.store.GetUserByID(c.Request.Context(), uid)
 	c.Request = c.Request.WithContext(views.WithUserAvatarVersion(c.Request.Context(), u.AvatarVersion()))
 	d := h.accountData(c, "account")
-	d.AvatarOK = "Avatar updated."
+	d.AvatarOK = i18n.T(ctx, "settings.ok_avatar_updated")
 	render(c, http.StatusOK, views.AccountProfileSection(d))
 }
 
 // RemoveAvatar clears the user's custom avatar, reverting to the monogram.
 func (h *Handlers) RemoveAvatar(c *gin.Context) {
+	ctx := c.Request.Context()
 	uid := currentUserID(c)
 	if err := h.store.RemoveUserAvatar(c.Request.Context(), uid); err != nil {
 		d := h.accountData(c, "account")
-		d.AvatarErr = "Could not remove your avatar."
+		d.AvatarErr = i18n.T(ctx, "settings.err_avatar_remove")
 		render(c, http.StatusInternalServerError, views.AccountProfileSection(d))
 		return
 	}
 	// Drop the avatar from this render's sidebar too (back to the monogram).
 	c.Request = c.Request.WithContext(views.WithUserAvatarVersion(c.Request.Context(), 0))
 	d := h.accountData(c, "account")
-	d.AvatarOK = "Avatar removed."
+	d.AvatarOK = i18n.T(ctx, "settings.ok_avatar_removed")
 	render(c, http.StatusOK, views.AccountProfileSection(d))
 }
 
@@ -321,17 +319,18 @@ func (h *Handlers) ServeAvatar(c *gin.Context) {
 
 // UpdateProfile saves the user's display name from the Account tab.
 func (h *Handlers) UpdateProfile(c *gin.Context) {
+	ctx := c.Request.Context()
 	uid := currentUserID(c)
 	name := strings.TrimSpace(c.PostForm("name"))
 	if name == "" {
 		d := h.accountData(c, "account")
-		d.ProfileErr = "Name can't be empty."
+		d.ProfileErr = i18n.T(ctx, "settings.err_name_empty")
 		render(c, http.StatusBadRequest, views.AccountProfileSection(d))
 		return
 	}
 	if err := h.store.UpdateUserName(c.Request.Context(), uid, name); err != nil {
 		d := h.accountData(c, "account")
-		d.ProfileErr = "Could not save your profile."
+		d.ProfileErr = i18n.T(ctx, "settings.err_profile_save")
 		render(c, http.StatusInternalServerError, views.AccountProfileSection(d))
 		return
 	}
@@ -339,7 +338,7 @@ func (h *Handlers) UpdateProfile(c *gin.Context) {
 	// from the pre-update user).
 	c.Request = c.Request.WithContext(views.WithUserName(c.Request.Context(), name))
 	d := h.accountData(c, "account")
-	d.ProfileOK = "Profile updated."
+	d.ProfileOK = i18n.T(ctx, "settings.ok_profile_updated")
 	render(c, http.StatusOK, views.AccountProfileSection(d))
 }
 
@@ -347,26 +346,29 @@ func (h *Handlers) UpdateProfile(c *gin.Context) {
 // default starter budget, keeping their account, login and subscription. It's
 // gated on the current password. On success the user lands on their clean budget.
 func (h *Handlers) StartFresh(c *gin.Context) {
+	ctx := c.Request.Context()
 	uid := currentUserID(c)
 	if err := h.auth.VerifyUserPassword(c.Request.Context(), uid, c.PostForm("password")); err != nil {
 		d := h.accountData(c, "account")
-		d.StartFreshErr = "Current password is incorrect."
+		d.StartFreshErr = i18n.T(ctx, "auth.err_wrong_password")
 		render(c, http.StatusBadRequest, views.AccountPage(d))
 		return
 	}
 	if err := h.store.WipeUserData(c.Request.Context(), uid); err != nil {
 		_ = c.Error(err)
 		d := h.accountData(c, "account")
-		d.StartFreshErr = "Could not reset your data. Please try again."
+		d.StartFreshErr = i18n.T(ctx, "settings.err_start_fresh")
 		render(c, http.StatusInternalServerError, views.AccountPage(d))
 		return
 	}
-	// Re-provision the starter budget so the user lands in the same clean state as
-	// a brand-new account rather than an empty (and Income-less) budget.
-	if err := h.store.SeedNewUser(c.Request.Context(), uid); err != nil {
+	// Re-provision the starter budget so the user lands in a usable budget rather
+	// than an empty (and Income-less) one. Seeded in the user's current language,
+	// and with every group — "start fresh" restores the full starter budget, it
+	// does not re-run the first-run wizard's pick-your-groups step.
+	if err := h.store.SeedNewUser(c.Request.Context(), uid, i18n.LocaleFrom(ctx), nil); err != nil {
 		_ = c.Error(err)
 		d := h.accountData(c, "account")
-		d.StartFreshErr = "Your data was cleared, but re-creating the starter budget failed."
+		d.StartFreshErr = i18n.T(ctx, "settings.err_start_fresh_partial")
 		render(c, http.StatusInternalServerError, views.AccountPage(d))
 		return
 	}
@@ -379,11 +381,12 @@ func (h *Handlers) StartFresh(c *gin.Context) {
 // (best-effort — a Stripe failure is logged but does not block deletion, since
 // removing the account is the user's primary intent).
 func (h *Handlers) DeleteAccount(c *gin.Context) {
+	ctx := c.Request.Context()
 	uid := currentUserID(c)
 	u, err := h.store.GetUserByID(c.Request.Context(), uid)
 	if err != nil {
 		_ = c.Error(err)
-		c.String(http.StatusInternalServerError, "Something went wrong.")
+		c.String(http.StatusInternalServerError, i18n.T(ctx, "common.err_generic"))
 		return
 	}
 
@@ -393,7 +396,7 @@ func (h *Handlers) DeleteAccount(c *gin.Context) {
 		render(c, http.StatusBadRequest, views.AccountPage(d))
 	}
 	if err := h.auth.VerifyUserPassword(c.Request.Context(), uid, c.PostForm("password")); err != nil {
-		fail("Current password is incorrect.")
+		fail(i18n.T(ctx, "auth.err_wrong_password"))
 		return
 	}
 	if !strings.EqualFold(strings.TrimSpace(c.PostForm("confirm_email")), u.Email) {
@@ -416,8 +419,7 @@ func (h *Handlers) DeleteAccount(c *gin.Context) {
 	}
 
 	ClearSessionCookie(c)
-	render(c, http.StatusOK, views.MessagePage("Account deleted",
-		"Your account and all your data have been permanently deleted. We're sorry to see you go.", ""))
+	render(c, http.StatusOK, views.MessagePage("auth.msg_account_deleted_title", "auth.msg_account_deleted_body", nil, ""))
 }
 
 func (h *Handlers) ChangePassword(c *gin.Context) {

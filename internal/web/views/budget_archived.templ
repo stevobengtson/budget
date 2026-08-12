@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
@@ -22,11 +23,11 @@ import (
 templ BudgetArchivedPanel(d BudgetData, rows []store.ArchivedCategory) {
 	@dialogPanel("max-w-xl") {
 		<div class="flex items-center justify-between gap-s3">
-			<h2 class="font-heading text-[22px] font-semibold">Archived categories</h2>
+			<h2 class="font-heading text-[22px] font-semibold">{ i18n.T(ctx, "budget.archived_button_title") }</h2>
 			<button
 				type="button"
 				class="inline-flex size-9 items-center justify-center rounded-pill text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground"
-				aria-label="Close"
+				aria-label={ i18n.T(ctx, "common.close") }
 				hx-on:click="document.getElementById('modal').innerHTML = ''"
 			>
 				@icon.X(icon.Props{Class: "size-[18px]"})
@@ -43,7 +44,7 @@ templ BudgetArchivedPanel(d BudgetData, rows []store.ArchivedCategory) {
 				Class:      "rounded-pill",
 				Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').innerHTML = ''"},
 			}) {
-				Done
+				{ i18n.T(ctx, "common.done") }
 			}
 		</div>
 	}
@@ -61,13 +62,13 @@ templ BudgetArchivedListResult(d BudgetData, rows []store.ArchivedCategory) {
 templ budgetArchivedList(d BudgetData, rows []store.ArchivedCategory) {
 	if len(rows) == 0 {
 		<p class="text-[14px] text-muted-foreground">
-			Nothing archived. Archiving a category from its row menu parks it here.
+			{ i18n.T(ctx, "archived.empty") }
 		</p>
 	} else {
 		<div class="flex flex-col">
 			<div class="grid grid-cols-[1fr_140px_110px] gap-s3 border-b border-border pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-				<span>Category</span>
-				<span class="text-right">Still holds</span>
+				<span>{ i18n.T(ctx, "budget.col_category") }</span>
+				<span class="text-right">{ i18n.T(ctx, "archived.still_holds") }</span>
 				<span></span>
 			</div>
 			for _, a := range rows {
@@ -77,7 +78,7 @@ templ budgetArchivedList(d BudgetData, rows []store.ArchivedCategory) {
 						<span class="truncate text-[13px] text-muted-foreground">{ a.GroupName }</span>
 					</span>
 					<span class={ "text-right font-bold tabular-nums", availColorClass(a.AvailableCents) }>
-						{ money.Format(a.AvailableCents) }
+						{ money.Format(ctx, a.AvailableCents) }
 					</span>
 					<span class="flex justify-end">
 						@button.Button(button.Props{
@@ -91,14 +92,13 @@ templ budgetArchivedList(d BudgetData, rows []store.ArchivedCategory) {
 								"hx-swap":   "innerHTML",
 							},
 						}) {
-							Unarchive
+							{ i18n.T(ctx, "archived.unarchive") }
 						}
 					</span>
 				</div>
 			}
 			<p class="pt-s3 text-[13px] text-muted-foreground">
-				A balance shown here counts nowhere on the budget page. Unarchiving
-				returns the category and its balance to the table.
+				{ i18n.T(ctx, "archived.footnote") }
 			</p>
 		</div>
 	}

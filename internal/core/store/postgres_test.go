@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/sbengtson/budget/internal/core/i18n"
 )
 
 // newTestPostgresStore opens the shared Postgres test database (see
@@ -104,7 +106,7 @@ func TestPostgresSeedNewUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SeedNewUser(ctx, uid2); err != nil {
+	if err := s.SeedNewUser(ctx, uid2, i18n.EnCA, nil); err != nil {
 		t.Fatalf("SeedNewUser on postgres: %v", err)
 	}
 	cats, err := s.ListCategories(ctx, uid2, false)

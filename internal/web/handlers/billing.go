@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/sbengtson/budget/internal/core/format"
 	"github.com/sbengtson/budget/internal/web/views"
 )
 
@@ -56,13 +57,13 @@ func (h *Handlers) billingData(c *gin.Context) views.BillingData {
 		case "trialing":
 			d.State = "trialing"
 			if sub.TrialEnd != nil {
-				d.TrialEnd = sub.TrialEnd.Format("January 2, 2006")
+				d.TrialEnd = format.DateLong(c.Request.Context(), *sub.TrialEnd)
 				d.TrialDaysLeft = daysUntil(*sub.TrialEnd)
 			}
 		case "active":
 			d.State = "active"
 			if sub.CurrentPeriodEnd != nil {
-				d.RenewalDate = sub.CurrentPeriodEnd.Format("January 2, 2006")
+				d.RenewalDate = format.DateLong(c.Request.Context(), *sub.CurrentPeriodEnd)
 			}
 		case "past_due":
 			d.State = "past_due"

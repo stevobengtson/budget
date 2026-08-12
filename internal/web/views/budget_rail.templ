@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/templui/templui/components/icon"
@@ -47,17 +48,17 @@ templ railMonthNav(d BudgetData) {
 		<div class="flex items-center gap-s2">
 			<a
 				href={ templ.SafeURL(bgMonthHref(d.PrevMonth)) }
-				aria-label="Previous month"
+				aria-label={ i18n.T(ctx, "budget.prev_month") }
 				class="inline-flex size-9 shrink-0 items-center justify-center rounded-pill border border-border text-foreground hover:bg-foreground/[0.07] active:bg-foreground/[0.14]"
 			>
 				@icon.ChevronLeft(icon.Props{Class: "size-[18px]"})
 			</a>
 			<span class="flex-1 text-center font-heading text-[22px] font-semibold">
-				{ formatMonth(d.Month) }
+				{ formatMonth(ctx, d.Month) }
 			</span>
 			<a
 				href={ templ.SafeURL(bgMonthHref(d.NextMonth)) }
-				aria-label="Next month"
+				aria-label={ i18n.T(ctx, "budget.next_month") }
 				class="inline-flex size-9 shrink-0 items-center justify-center rounded-pill border border-border text-foreground hover:bg-foreground/[0.07] active:bg-foreground/[0.14]"
 			>
 				@icon.ChevronRight(icon.Props{Class: "size-[18px]"})
@@ -65,7 +66,7 @@ templ railMonthNav(d BudgetData) {
 		</div>
 		if d.Month != nowMonth() {
 			<a href={ templ.SafeURL(bgMonthHref(nowMonth())) } class="text-center text-[13px] text-muted-foreground underline-offset-2 hover:underline">
-				back to this month
+				{ i18n.T(ctx, "budget.back_to_this_month") }
 			</a>
 		}
 	</div>
@@ -77,14 +78,14 @@ templ railMonthNav(d BudgetData) {
 templ railReadyToAssign(d BudgetData) {
 	<div class="flex flex-col gap-s2 rounded-xl bg-surface-ready p-s4 shadow-organic-sm">
 		<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-surface-ready-fg">
-			Ready to assign
+			{ i18n.T(ctx, "budget.ready_to_assign") }
 		</span>
 		<span class="font-heading text-[40px] font-semibold leading-[1.1] tabular-nums text-surface-ready-fg">
-			{ money.Format(d.Remain) }
+			{ money.Format(ctx, d.Remain) }
 		</span>
 		if d.Remain < 0 {
 			<span class="text-[13px] text-surface-ready-fg">
-				You have assigned more than you expect to earn this month.
+				{ i18n.T(ctx, "budget.over_assigned") }
 			</span>
 		}
 	</div>
@@ -100,11 +101,11 @@ templ railTotals(d BudgetData) {
 	// $60 carried in and $5 assigned reported $4 left when it held $64.
 	{{ assigned, spent, available := budgetTotals(d.Groups) }}
 	<div class="flex flex-col gap-s2 rounded-xl bg-card p-s4 shadow-organic-sm">
-		@railTotalRow("Income", money.Format(d.Estimated), "")
-		@railTotalRow("Assigned", money.Format(assigned), "")
-		@railTotalRow("Spent", money.Format(spent), "")
+		@railTotalRow(i18n.T(ctx, "budget.total_income"), money.Format(ctx, d.Estimated), "")
+		@railTotalRow(i18n.T(ctx, "budget.total_assigned"), money.Format(ctx, assigned), "")
+		@railTotalRow(i18n.T(ctx, "budget.total_spent"), money.Format(ctx, spent), "")
 		<div class="h-px bg-border"></div>
-		@railTotalRow("Still in envelopes", money.Format(available), availColorClass(available))
+		@railTotalRow(i18n.T(ctx, "budget.total_still_in_envelopes"), money.Format(ctx, available), availColorClass(available))
 	</div>
 }
 
@@ -127,7 +128,7 @@ templ railNeedsAttention(d BudgetData) {
 	{{ over := overspentRows(d.Groups) }}
 	if len(over) > 0 {
 		<div class="flex flex-col gap-s2 rounded-xl bg-surface-attention p-s4 text-surface-attention-fg shadow-organic-sm">
-			<span class="text-[12px] font-bold uppercase tracking-[0.08em]">Needs attention</span>
+			<span class="text-[12px] font-bold uppercase tracking-[0.08em]">{ i18n.T(ctx, "budget.needs_attention") }</span>
 			for _, r := range over {
 				// On a phone this is the way into the assign sheet: an overspend is
 				// the thing you most want to act on, so it is a 48px tap target
@@ -140,9 +141,9 @@ templ railNeedsAttention(d BudgetData) {
 					hx-target="#modal"
 					hx-swap="innerHTML"
 				>
-					<span class="truncate">{ r.CategoryName } overspent</span>
+					<span class="truncate">{ i18n.Tf(ctx, "budget.row_overspent", i18n.M{"Name": r.CategoryName}) }</span>
 					<span class="flex shrink-0 items-center gap-1">
-						<span class="font-bold tabular-nums">{ money.Format(r.AvailableCents) }</span>
+						<span class="font-bold tabular-nums">{ money.Format(ctx, r.AvailableCents) }</span>
 						@icon.ChevronRight(icon.Props{Class: "size-4 md:hidden"})
 					</span>
 				</button>
@@ -161,7 +162,7 @@ templ railCardsOwing(d BudgetData) {
 		<div class="flex flex-col gap-s2 rounded-xl bg-card p-s4 shadow-organic-sm">
 			<div class="flex items-baseline justify-between gap-s2">
 				<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-					On your cards
+					{ i18n.T(ctx, "budget.on_your_cards") }
 				</span>
 				<button
 					type="button"
@@ -170,23 +171,23 @@ templ railCardsOwing(d BudgetData) {
 					hx-target="#modal"
 					hx-swap="innerHTML"
 				>
-					details
+					{ i18n.T(ctx, "common.details") }
 				</button>
 			</div>
 			for _, c := range owing {
 				<div class="flex items-baseline justify-between gap-s2 text-[14px]">
 					<span class="truncate text-muted-foreground">{ c.AccountName }</span>
 					<span class="shrink-0 font-bold tabular-nums text-money-negative">
-						{ money.Format(c.OwingCents) }
+						{ money.Format(ctx, c.OwingCents) }
 					</span>
 				</div>
 			}
 			if len(owing) > 1 {
 				<div class="h-px bg-border"></div>
 				<div class="flex items-baseline justify-between gap-s2 text-[14px]">
-					<span class="text-muted-foreground">Total owing</span>
+					<span class="text-muted-foreground">{ i18n.T(ctx, "budget.total_owing") }</span>
 					<span class="font-bold tabular-nums text-money-negative">
-						{ money.Format(creditOwingTotal(owing)) }
+						{ money.Format(ctx, creditOwingTotal(owing)) }
 					</span>
 				</div>
 			}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/views"
@@ -39,12 +40,10 @@ func (h *Handlers) BudgetIndex(c *gin.Context) {
 		return
 	}
 	_ = rows
-	// Nothing can be budgeted until money exists somewhere, so a user with no
-	// accounts gets the first-run screen instead of an empty budget.
-	if len(data.Accounts) == 0 {
-		render(c, http.StatusOK, views.FirstRunPage(month, sidebarCollapsed(c)))
-		return
-	}
+	// No special case for a user with no accounts. Reaching here means the
+	// first-run wizard is done, so the budget always has its categories; an
+	// account-less budget is someone who archived their last account, and the
+	// sidebar's Add Account is right there.
 	setCollapseState(c, &data)
 	render(c, http.StatusOK, views.BudgetPage(data, sidebarCollapsed(c)))
 }
@@ -192,9 +191,9 @@ func (h *Handlers) BudgetAssign(c *gin.Context) {
 		month = store.MonthKey(time.Now())
 	}
 
-	cents, err := money.Parse(c.PostForm("amount"))
+	cents, err := money.Parse(ctx, c.PostForm("amount"))
 	if err != nil {
-		c.String(http.StatusBadRequest, "invalid amount: %v", err)
+		c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.invalid_amount"))
 		return
 	}
 	if err := h.store.SetAssigned(ctx, uid, month, catID, cents); err != nil {
@@ -321,7 +320,7 @@ func (h *Handlers) BudgetGoalPreview(c *gin.Context) {
 	month := monthOrNow(c)
 	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
 
-	goalCents, err := money.Parse(strings.TrimSpace(c.PostForm("goal_cents")))
+	goalCents, err := money.Parse(ctx, strings.TrimSpace(c.PostForm("goal_cents")))
 	if err != nil || goalCents <= 0 {
 		render(c, http.StatusOK, views.GoalNeed(0))
 		return
@@ -357,9 +356,9 @@ func (h *Handlers) BudgetGoal(c *gin.Context) {
 	}
 	cur.GoalCents = nil
 	if v := strings.TrimSpace(c.PostForm("goal_cents")); v != "" {
-		cents, err := money.Parse(v)
+		cents, err := money.Parse(ctx, v)
 		if err != nil {
-			c.String(http.StatusBadRequest, "goal: %v", err)
+			c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.invalid_goal_amount"))
 			return
 		}
 		cur.GoalCents = &cents
@@ -368,7 +367,7 @@ func (h *Handlers) BudgetGoal(c *gin.Context) {
 	if v := strings.TrimSpace(c.PostForm("goal_due")); v != "" {
 		t, err := time.Parse("2006-01-02", v)
 		if err != nil {
-			c.String(http.StatusBadRequest, "goal due: %v", err)
+			c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.invalid_date"))
 			return
 		}
 		cur.GoalDueDate = &t
@@ -399,7 +398,7 @@ func (h *Handlers) BudgetGroupCreate(c *gin.Context) {
 	month := monthOrNow(c)
 	name := strings.TrimSpace(c.PostForm("name"))
 	if name == "" {
-		c.String(http.StatusBadRequest, "name required")
+		c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.name_required"))
 		return
 	}
 	min, err := h.store.MinGroupSortOrder(ctx, uid)
@@ -511,7 +510,7 @@ func (h *Handlers) BudgetGroupRename(c *gin.Context) {
 	gid, _ := strconv.ParseInt(c.Param("gid"), 10, 64)
 	name := strings.TrimSpace(c.PostForm("name"))
 	if name == "" {
-		c.String(http.StatusBadRequest, "name required")
+		c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.name_required"))
 		return
 	}
 
@@ -588,7 +587,7 @@ func (h *Handlers) BudgetCategoryCreate(c *gin.Context) {
 	gid, _ := strconv.ParseInt(c.Param("gid"), 10, 64)
 	name := strings.TrimSpace(c.PostForm("name"))
 	if name == "" {
-		c.String(http.StatusBadRequest, "name required")
+		c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.name_required"))
 		return
 	}
 	max, err := h.store.MaxCategorySortOrder(ctx, uid, gid)
@@ -619,7 +618,7 @@ func (h *Handlers) BudgetCategoryRename(c *gin.Context) {
 	catID, _ := strconv.ParseInt(c.Param("catID"), 10, 64)
 	name := strings.TrimSpace(c.PostForm("name"))
 	if name == "" {
-		c.String(http.StatusBadRequest, "name required")
+		c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.name_required"))
 		return
 	}
 	cur, err := h.findCategory(ctx, uid, catID)

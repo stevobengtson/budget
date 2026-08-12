@@ -27,3 +27,14 @@ func Asset(path string) string {
 	}
 	return path
 }
+
+// AssetExists reports whether a static path is one the server actually embeds.
+// Used to fall back to another file rather than emitting a URL that 404s.
+//
+// Before SetAssetHashes runs (view unit tests) the map is nil and everything
+// reports missing, so callers fall back to their default — which is the right
+// answer there too.
+func AssetExists(path string) bool {
+	_, ok := assetHashes[path]
+	return ok
+}

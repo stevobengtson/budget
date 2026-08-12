@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
 	"github.com/sbengtson/budget/internal/web/components/ui/buttongroup"
@@ -43,19 +44,19 @@ templ AccountForm(d AccountFormData) {
 			@dialog.Header() {
 				@dialog.Title() {
 					if d.Editing {
-						Edit account
+						{ i18n.T(ctx, "accounts.edit_title") }
 					} else {
-						New account
+						{ i18n.T(ctx, "accounts.new_title") }
 					}
 				}
 			}
 			<div class="grid gap-3">
-				@formRow("acct-name", "Name") {
+				@formRow("acct-name", i18n.T(ctx, "accounts.name_field")) {
 					@input.Input(input.Props{ID: "acct-name", Name: "name", Value: d.Name, Required: true})
 				}
 				<div class="grid gap-1.5">
 					@label.Label(label.Props{For: "acct-type"}) {
-						Type
+						{ i18n.T(ctx, "accounts.type_label") }
 					}
 					@buttongroup.ButtonGroup(buttongroup.Props{
 						ID:    "acct-type",
@@ -63,25 +64,25 @@ templ AccountForm(d AccountFormData) {
 						Value: accountTypeOrDefault(d.Type),
 						Class: "w-full rounded-pill",
 						Options: []buttongroup.Option{
-							{Value: "checking", Label: "Checking"},
-							{Value: "savings", Label: "Savings"},
-							{Value: "credit", Label: "Credit"},
-							{Value: "loan", Label: "Loan"},
+							{Value: "checking", Label: i18n.T(ctx, "accounts.type_chequing")},
+							{Value: "savings", Label: i18n.T(ctx, "accounts.type_savings")},
+							{Value: "credit", Label: i18n.T(ctx, "accounts.type_credit")},
+							{Value: "loan", Label: i18n.T(ctx, "accounts.type_loan")},
 						},
 					})
 				</div>
 				<div class="grid grid-cols-2 gap-3">
-					@formRow("acct-start", "Amount owed / balance") {
+					@formRow("acct-start", i18n.T(ctx, "accounts.balance_field")) {
 						@input.Input(input.Props{ID: "acct-start", Name: "starting_balance", Value: d.StartingBalance, Placeholder: "0.00", Class: "tabular-nums"})
 					}
-					@formRow("acct-limit", "Credit limit") {
-						@input.Input(input.Props{ID: "acct-limit", Name: "credit_limit", Value: d.CreditLimit, Placeholder: "(optional)", Class: "tabular-nums"})
+					@formRow("acct-limit", i18n.T(ctx, "accounts.credit_limit_field")) {
+						@input.Input(input.Props{ID: "acct-limit", Name: "credit_limit", Value: d.CreditLimit, Placeholder: i18n.T(ctx, "common.optional_placeholder"), Class: "tabular-nums"})
 					}
-					@formRow("acct-apr", "APR %") {
+					@formRow("acct-apr", i18n.T(ctx, "accounts.apr_field")) {
 						@input.Input(input.Props{ID: "acct-apr", Name: "apr", Value: d.APR, Placeholder: "19.99", Class: "tabular-nums"})
 					}
-					@formRow("acct-pay", "Monthly payment") {
-						@input.Input(input.Props{ID: "acct-pay", Name: "monthly_payment", Value: d.MonthlyPayment, Placeholder: "(optional)", Class: "tabular-nums"})
+					@formRow("acct-pay", i18n.T(ctx, "accounts.monthly_payment_field")) {
+						@input.Input(input.Props{ID: "acct-pay", Name: "monthly_payment", Value: d.MonthlyPayment, Placeholder: i18n.T(ctx, "common.optional_placeholder"), Class: "tabular-nums"})
 					}
 				</div>
 				<div class="flex items-center gap-2">
@@ -92,18 +93,17 @@ templ AccountForm(d AccountFormData) {
 						Checked: d.IncludeInPaydown,
 					})
 					@label.Label(label.Props{For: "acct-paydown"}) {
-						Include in paydown
+						{ i18n.T(ctx, "accounts.include_in_paydown") }
 					}
 				</div>
 				<p class="text-[13px] text-muted-foreground">
-					On a card or loan, enter what you owe as a positive number — Pigglet
-					keeps the sign right.
+					{ i18n.T(ctx, "wizard.account_sign_note") }
 				</p>
-				@formRow("acct-paycat", "Payment category") {
+				@formRow("acct-paycat", i18n.T(ctx, "accounts.payment_category_field")) {
 					@SelectField(SelectFieldProps{
 						ID:          "acct-paycat",
 						Name:        "payment_category_id",
-						Placeholder: "(none)",
+						Placeholder: i18n.T(ctx, "common.none_placeholder"),
 					}, paymentCategoryOptions(d.Categories, d.PaymentCategoryID))
 				}
 			</div>
@@ -113,10 +113,10 @@ templ AccountForm(d AccountFormData) {
 					Type:    "button",
 					Attributes:   templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
 				}) {
-					Cancel
+					{ i18n.T(ctx, "common.cancel") }
 				}
 				@button.Button(button.Props{Type: "submit"}) {
-					Save account
+					{ i18n.T(ctx, "accounts.save") }
 				}
 			}
 		</form>
@@ -149,7 +149,7 @@ func paymentCategoryOptions(cats []store.Category, selected *int64) []Opt {
 }
 
 // accountTypeOrDefault defaults a new account to checking — the account most
-// people add first, and the one the first-run screen pre-selects.
+// people add first, and the one the first-run wizard pre-selects.
 func accountTypeOrDefault(s string) string {
 	if s == "" {
 		return "checking"

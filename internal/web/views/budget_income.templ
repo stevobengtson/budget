@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
@@ -20,18 +21,18 @@ import (
 templ BudgetIncomePanel(d BudgetData) {
 	@dialogPanel("max-w-xl") {
 		<div class="flex items-center justify-between gap-s3">
-			<h2 class="font-heading text-[22px] font-semibold">Income for { formatMonth(d.Month) }</h2>
+			<h2 class="font-heading text-[22px] font-semibold">{ i18n.Tf(ctx, "income.panel_title", i18n.M{"Month": formatMonth(ctx, d.Month)}) }</h2>
 			<button
 				type="button"
 				class="inline-flex size-9 items-center justify-center rounded-pill text-muted-foreground hover:bg-foreground/[0.07] hover:text-foreground"
-				aria-label="Close"
+				aria-label={ i18n.T(ctx, "common.close") }
 				hx-on:click="document.getElementById('modal').innerHTML = ''"
 			>
 				@icon.X(icon.Props{Class: "size-[18px]"})
 			</button>
 		</div>
 		<p class="text-[14px] text-muted-foreground">
-			What you expect to earn this month. This is what Ready to assign is measured against.
+			{ i18n.T(ctx, "income.panel_intro") }
 		</p>
 		<div id="income-rows" class="flex flex-col">
 			for _, r := range d.IncomeRows {
@@ -49,11 +50,11 @@ templ BudgetIncomePanel(d BudgetData) {
 					"hx-post":    "/budget/income/copy-prev?month=" + d.Month,
 					"hx-target":  "#modal",
 					"hx-swap":    "innerHTML",
-					"hx-confirm": "Copy all entries from the previous month into this one?",
-					"title":      "Copy every entry from the previous month",
+					"hx-confirm": i18n.T(ctx, "income.copy_prev_confirm"),
+					"title":      i18n.T(ctx, "income.copy_prev_title"),
 				},
 			}) {
-				Same as last month
+				{ i18n.T(ctx, "budget.menu_same_as_last_month") }
 			}
 			@button.Button(button.Props{
 				Type:    "button",
@@ -63,10 +64,10 @@ templ BudgetIncomePanel(d BudgetData) {
 					"hx-get":    "/budget/income/new?month=" + d.Month,
 					"hx-target": "#income-rows",
 					"hx-swap":   "beforeend",
-					"title":     "Add income",
+					"title":     i18n.T(ctx, "income.add_income_title"),
 				},
 			}) {
-				Add a source
+				{ i18n.T(ctx, "income.add_a_source") }
 			}
 		</div>
 	}
@@ -81,9 +82,9 @@ templ IncomeTotalsRow(d BudgetData, oob bool) {
 		{{ attrs["hx-swap-oob"] = "true" }}
 	}
 	<div class="flex items-baseline justify-between gap-s2 border-t border-border pt-s3 text-[15px]" { attrs... }>
-		<span class="font-semibold">Total income</span>
+		<span class="font-semibold">{ i18n.T(ctx, "income.total_income") }</span>
 		<span class="js-income-total-value font-bold tabular-nums text-money-positive">
-			{ money.Format(incomeTotal(d.IncomeRows)) }
+			{ money.Format(ctx, incomeTotal(d.IncomeRows)) }
 		</span>
 	</div>
 }
@@ -102,16 +103,16 @@ func incomeTotal(rows []store.Income) (total int64) {
 templ IncomeRow(month string, r store.Income) {
 	<div id={ fmt.Sprintf("income-%d", r.ID) } class="group flex items-center gap-s3 border-b border-border py-s2 last:border-b-0">
 		<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="flex min-w-0 flex-1 items-center">
-			<button type="button" class="js-name-display cursor-text truncate rounded-sm px-1 py-0.5 text-[15px] font-semibold ring-1 ring-transparent hover:ring-border" title="Click to rename">
+			<button type="button" class="js-name-display cursor-text truncate rounded-sm px-1 py-0.5 text-[15px] font-semibold ring-1 ring-transparent hover:ring-border" title={ i18n.T(ctx, "common.click_to_rename") }>
 				{ r.Name }
 			</button>
 			<input type="text" name="name" value={ r.Name } autocomplete="off" class="js-name-input hidden h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
 		</form>
 		<form hx-put={ fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month) } hx-target={ fmt.Sprintf("#income-%d", r.ID) } hx-swap="outerHTML" class="js-assign flex w-[140px] shrink-0 items-center justify-end">
-			<button type="button" class="js-assign-display h-9 w-full cursor-text rounded-pill bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums text-money-positive ring-1 ring-transparent hover:ring-border" title="Click to edit">
-				{ money.Format(r.AmountCents) }
+			<button type="button" class="js-assign-display h-9 w-full cursor-text rounded-pill bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums text-money-positive ring-1 ring-transparent hover:ring-border" title={ i18n.T(ctx, "common.click_to_edit") }>
+				{ money.Format(ctx, r.AmountCents) }
 			</button>
-			<input type="text" name="amount" value={ money.Format(r.AmountCents) } inputmode="decimal" autocomplete="off" class="js-assign-input hidden h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+			<input type="text" name="amount" value={ money.Format(ctx, r.AmountCents) } inputmode="decimal" autocomplete="off" class="js-assign-input hidden h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
 		</form>
 		@button.Button(button.Props{
 			Type:    "button",
@@ -122,8 +123,8 @@ templ IncomeRow(month string, r store.Income) {
 				"hx-delete":  fmt.Sprintf("/budget/income/%d?month=%s", r.ID, month),
 				"hx-target":  fmt.Sprintf("#income-%d", r.ID),
 				"hx-swap":    "outerHTML",
-				"hx-confirm": "Delete this income entry?",
-				"title":      "Delete",
+				"hx-confirm": i18n.T(ctx, "income.delete_confirm"),
+				"title":      i18n.T(ctx, "common.delete"),
 			},
 		}) {
 			@icon.X(icon.Props{Class: "size-4"})
@@ -137,12 +138,12 @@ templ IncomeRow(month string, r store.Income) {
 templ IncomeNewRow(month string) {
 	<div data-newrow class="flex items-center gap-s3 border-b border-border py-s2 last:border-b-0">
 		<form id="income-new-form" hx-post={ "/budget/income?month=" + month } hx-target="closest [data-newrow]" hx-swap="outerHTML" class="flex min-w-0 flex-1 items-center">
-			<input type="text" name="name" autofocus placeholder="Source" autocomplete="off" class="h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+			<input type="text" name="name" autofocus placeholder={ i18n.T(ctx, "income.source_placeholder") } autocomplete="off" class="h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
 		</form>
 		<input type="text" form="income-new-form" name="amount" placeholder="0.00" inputmode="decimal" autocomplete="off" class="h-9 w-[140px] shrink-0 rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
 		<div class="flex shrink-0 items-center gap-s2">
 			@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Class: "rounded-pill", Attributes: templ.Attributes{"form": "income-new-form"}}) {
-				Save
+				{ i18n.T(ctx, "common.save") }
 			}
 			@button.Button(button.Props{
 				Type:       "button",
@@ -151,7 +152,7 @@ templ IncomeNewRow(month string) {
 				Class:      "rounded-pill",
 				Attributes: templ.Attributes{"hx-on:click": "this.closest('[data-newrow]').remove()"},
 			}) {
-				Cancel
+				{ i18n.T(ctx, "common.cancel") }
 			}
 		</div>
 	</div>

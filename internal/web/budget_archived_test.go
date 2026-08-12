@@ -11,7 +11,7 @@ import (
 )
 
 // archiveFixture builds a budget with one category holding $124.50 and returns
-// its id. An account is required or /budget renders the first-run screen.
+// its id.
 func archiveFixture(t *testing.T, s *store.Store, uid int64) int64 {
 	t.Helper()
 	ctx := context.Background()

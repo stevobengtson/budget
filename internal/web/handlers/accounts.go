@@ -6,6 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/sbengtson/budget/internal/core/format"
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/accountsoverview"
@@ -56,19 +58,19 @@ func (h *Handlers) AccountsEdit(c *gin.Context) {
 	cats, _ := h.store.ListCategories(ctx, uid, false)
 	d := views.AccountFormData{
 		Editing: true, ID: a.ID, Name: a.Name, Type: string(a.Type),
-		StartingBalance:   money.Format(a.StartingBalanceCents),
+		StartingBalance:   money.Format(ctx, a.StartingBalanceCents),
 		IncludeInPaydown:  a.IncludeInPaydown,
 		PaymentCategoryID: a.PaymentCategoryID,
 		Categories:        cats,
 	}
 	if a.CreditLimitCents != nil {
-		d.CreditLimit = money.Format(*a.CreditLimitCents)
+		d.CreditLimit = money.Format(ctx, *a.CreditLimitCents)
 	}
 	if a.AprBps != nil {
-		d.APR = strconv.FormatFloat(float64(*a.AprBps)/100.0, 'f', 2, 64)
+		d.APR = format.Decimal(ctx, float64(*a.AprBps)/100.0, 2)
 	}
 	if a.MonthlyPaymentCents != nil {
-		d.MonthlyPayment = money.Format(*a.MonthlyPaymentCents)
+		d.MonthlyPayment = money.Format(ctx, *a.MonthlyPaymentCents)
 	}
 	render(c, http.StatusOK, views.AccountForm(d))
 }
@@ -96,9 +98,9 @@ func (h *Handlers) upsertAccount(c *gin.Context, id int64) {
 	a := store.Account{ID: id, Name: c.PostForm("name"), Type: store.AccountType(c.PostForm("type"))}
 
 	if v := c.PostForm("starting_balance"); v != "" {
-		cents, err := money.Parse(v)
+		cents, err := money.Parse(ctx, v)
 		if err != nil {
-			c.String(http.StatusBadRequest, "starting balance: %v", err)
+			c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.invalid_balance"))
 			return
 		}
 		// Liability convenience: positive owed → store negative.
@@ -108,18 +110,20 @@ func (h *Handlers) upsertAccount(c *gin.Context, id int64) {
 		a.StartingBalanceCents = cents
 	}
 	if v := c.PostForm("credit_limit"); v != "" {
-		if cents, err := money.Parse(v); err == nil {
+		if cents, err := money.Parse(ctx, v); err == nil {
 			a.CreditLimitCents = &cents
 		}
 	}
 	if v := c.PostForm("apr"); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
+		// Locale-aware: a French user types 19,99. Parsing with strconv alone
+		// silently dropped the rate for them, since the error is ignored here.
+		if f, err := format.ParseDecimal(ctx, v); err == nil {
 			bps := int64(f * 100)
 			a.AprBps = &bps
 		}
 	}
 	if v := c.PostForm("monthly_payment"); v != "" {
-		if cents, err := money.Parse(v); err == nil {
+		if cents, err := money.Parse(ctx, v); err == nil {
 			a.MonthlyPaymentCents = &cents
 		}
 	}
@@ -141,13 +145,6 @@ func (h *Handlers) upsertAccount(c *gin.Context, id int64) {
 			writeStoreErr(c, err)
 			return
 		}
-	}
-	// The first-run screen has no modal to close and no sidebar to refresh — the
-	// whole page is about to become the budget — so send the browser there.
-	if c.PostForm("first_run") == "1" {
-		c.Header("HX-Redirect", "/budget")
-		c.Writer.WriteHeader(http.StatusOK)
-		return
 	}
 	// Close the modal (empty #modal) and let the sidebar overview + accounts
 	// table refresh via the accountsChanged event, keeping the user on the

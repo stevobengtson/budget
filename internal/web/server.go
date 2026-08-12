@@ -20,6 +20,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/billing"
 	"github.com/sbengtson/budget/internal/core/config"
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/mail"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/apiv1"
@@ -52,6 +53,10 @@ func NewServer(s *store.Store, cfg config.Config) *Server {
 	if cfg.Sentry.DSN != "" {
 		r.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
 	}
+	// Every request carries a locale from here on, so no renderer has to cope
+	// with its absence. requireAuth later replaces it with the signed-in user's
+	// stored preference.
+	r.Use(resolveLocale())
 
 	authSvc := auth.NewService(s, newMailer(cfg), cfg.Web.BaseURL, auth.Config{
 		SessionTTL: cfg.Auth.SessionTTL,
@@ -170,22 +175,57 @@ func newMailer(cfg config.Config) mail.Mailer {
 }
 
 func (s *Server) routes(cfg config.Config) {
-	hs := handlers.New(s.store, s.auth, s.billing, cfg.Auth.CookieSecure, int(cfg.Auth.SessionTTL.Seconds()))
+	hs := handlers.New(s.store, s.auth, s.billing, cfg.Auth.CookieSecure, int(cfg.Auth.SessionTTL.Seconds()), cfg.Web.BaseURL)
 
 	// Ops readiness probe: pings the DB so an uptime monitor learns of a
 	// Postgres outage, not just a live HTTP process. (The mobile app's
 	// /api/v1/health stays a pure liveness check by design.)
 	s.engine.GET("/healthz", s.healthz)
 
-	// Public marketing landing page. Logged-in visitors are redirected into the
-	// app by the handler; everyone else sees the landing page.
-	s.engine.GET("/", hs.Home)
+	// Public marketing + legal pages, served at one URL per language: the English
+	// set at the root and the French set under /fr. The locale comes from the URL
+	// rather than the visitor's cookie, because these are the pages that have to
+	// be indexable and linkable per language — a shared link must open in the
+	// language it was read in, and a crawler must find both.
+	//
+	// The app itself stays cookie/preference-driven; only these five pages are
+	// mirrored. Logged-in visitors to "/" are redirected into the app by Home.
+	//
+	// Registration is driven by views.PublicPages, the same list the sitemap
+	// enumerates, so a page cannot end up routed but unlisted (or the reverse).
+	publicHandlers := map[string]gin.HandlerFunc{
+		"/":        hs.Home,
+		"/privacy": hs.PrivacyPage,
+		"/terms":   hs.TermsPage,
+		"/refund":  hs.RefundPage,
+		"/contact": hs.ContactPage,
+	}
+	for _, locale := range i18n.Supported {
+		g := s.engine.Group(publicPrefix(locale))
+		g.Use(pinLocale(locale))
+		for _, page := range views.PublicPages {
+			h, ok := publicHandlers[page]
+			if !ok {
+				// Startup, not a 404 on some later request: a page listed for the
+				// sitemap with nothing to serve it is a build mistake.
+				panic("web: no handler for public page " + page)
+			}
+			// An empty relative path resolves to the group's own base path, which
+			// is "/" for the root group and "/fr" for the French one. Passing the
+			// prefix here instead would register "/fr/fr".
+			rel := page
+			if rel == "/" {
+				rel = ""
+			}
+			g.GET(rel, h)
+		}
+	}
 
-	// Public informational / legal pages, linked from the marketing footer.
-	s.engine.GET("/contact", hs.ContactPage)
-	s.engine.GET("/privacy", hs.PrivacyPage)
-	s.engine.GET("/refund", hs.RefundPage)
-	s.engine.GET("/terms", hs.TermsPage)
+	// The sitemap lists every language's URL for every public page. Not itself
+	// language-scoped, so it sits outside those groups. robots.txt points at it,
+	// which is how a crawler finds the sitemap without it being submitted by hand.
+	s.engine.GET("/sitemap.xml", hs.Sitemap)
+	s.engine.GET("/robots.txt", hs.Robots)
 
 	// Public auth routes (no session required).
 	s.engine.GET("/login", hs.LoginForm)
@@ -201,6 +241,10 @@ func (s *Server) routes(cfg config.Config) {
 	s.engine.GET("/reset", hs.ResetForm)
 	s.engine.POST("/reset", hs.Reset)
 	s.engine.POST("/logout", hs.Logout)
+	// Public: the language has to be switchable on the login and sign-up pages,
+	// before there is a session to attach the choice to. Persists to the user
+	// record as well when the request does carry one.
+	s.engine.POST("/locale", hs.SetLocale)
 
 	// Stripe webhooks: public (no session), authenticated by the Stripe signature.
 	s.engine.POST("/webhooks/stripe", hs.StripeWebhook)
@@ -264,8 +308,21 @@ func (s *Server) routes(cfg config.Config) {
 	// Core app: gated behind an active trial or paid subscription. A user without
 	// access is redirected to /billing. The gate is a no-op when billing isn't
 	// configured (empty base price), so dev without Stripe still works.
-	gated := app.Group("")
-	gated.Use(requireSubscription(s.store, s.billing))
+	subscribed := app.Group("")
+	subscribed.Use(requireSubscription(s.store, s.billing))
+
+	// The first-run wizard. Subscription-gated like the rest of the app, but
+	// deliberately outside requireOnboarded — it is what clears that gate.
+	subscribed.GET("/welcome", hs.WelcomeStart)
+	subscribed.POST("/welcome/language", hs.WelcomeLanguage)
+	subscribed.POST("/welcome/categories", hs.WelcomeCategories)
+	subscribed.POST("/welcome/back", hs.WelcomeBack)
+	subscribed.POST("/welcome/finish", hs.WelcomeFinish)
+
+	// Everything past here additionally requires the wizard to be done, so no
+	// screen has to cope with a user who has no categories yet.
+	gated := subscribed.Group("")
+	gated.Use(requireOnboarded())
 
 	gated.GET("/budget", hs.BudgetIndex)
 	gated.POST("/budget/assign/:catID", hs.BudgetAssign)
@@ -330,4 +387,15 @@ func (s *Server) routes(cfg config.Config) {
 	paydown.GET("/:acctID/category-form", hs.PaydownCategoryForm)
 	paydown.POST("/:acctID/payment", hs.PaydownSetPayment)
 	paydown.POST("/:acctID/category", hs.PaydownSetCategory)
+}
+
+// publicPrefix is the URL prefix a locale's public pages live under: none for
+// the default language, /<base-language> for the rest. Mirrors views.PublicHref,
+// which builds the same URLs for links and the sitemap.
+func publicPrefix(l i18n.Locale) string {
+	if l == i18n.Default {
+		return ""
+	}
+	base, _, _ := strings.Cut(string(l), "-")
+	return "/" + base
 }
