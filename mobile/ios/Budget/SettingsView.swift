@@ -18,12 +18,17 @@ struct SettingsView: View {
                     LabeledContent("Name", value: user.name)
                     LabeledContent("Email", value: user.email)
                 }
+                .listRowBackground(Color.appCard)
                 Section {
                     Button("Sign out", role: .destructive) {
                         Task { await session.signOut() }
                     }
+                    .foregroundStyle(Color.appDestructive)
                 }
+                .listRowBackground(Color.appCard)
             }
+            .scrollContentBackground(.hidden)
         }
+        .background(Color.appBackground.ignoresSafeArea())
     }
 }

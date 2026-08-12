@@ -23,6 +23,7 @@ struct BudgetView: View {
                 Color.clear
             }
         }
+        .background(Color.appBackground.ignoresSafeArea())
         .task(id: session.selectedMonth) { await load() }
         .alert("Assign to \(editing?.name ?? "")", isPresented: showingEditor) {
             TextField("Amount", text: $editAmount)
@@ -59,8 +60,9 @@ struct BudgetView: View {
                     summaryRow("Income", budget.summary.incomeCents, tint: .primary)
                     summaryRow("Assigned", budget.summary.budgetedCents, tint: .primary)
                     summaryRow("Left to assign", budget.summary.remainingCents,
-                               tint: budget.summary.remainingCents < 0 ? .red : .green)
+                               tint: budget.summary.remainingCents < 0 ? .moneyNegative : .moneyPositive)
                 }
+                .listRowBackground(Color.appCard)
                 ForEach(budget.groups) { group in
                     Section(group.name) {
                         if group.categories.isEmpty {
@@ -72,9 +74,11 @@ struct BudgetView: View {
                             }
                         }
                     }
+                    .listRowBackground(Color.appCard)
                 }
             }
             .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
             .refreshable { await load() }
         }
     }
@@ -126,8 +130,8 @@ struct BudgetView: View {
     }
 
     private func availableColor(_ cents: Int64) -> Color {
-        if cents > 0 { return .green }
-        if cents < 0 { return .red }
+        if cents > 0 { return .moneyPositive }
+        if cents < 0 { return .moneyNegative }
         return .secondary
     }
 

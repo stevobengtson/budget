@@ -210,7 +210,7 @@ private fun SummaryCard(summary: BudgetSummary) {
         SummaryRow(
             "Left to assign",
             summary.remainingCents,
-            if (summary.remainingCents < 0) Color(0xFFC62828) else Color(0xFF2E7D32),
+            if (summary.remainingCents < 0) moneyNegative else moneyPositive,
         )
     }
     HorizontalDivider()
@@ -256,10 +256,11 @@ private fun CategoryRow(cat: BudgetCategory, onClick: () -> Unit) {
     }
 }
 
+@Composable
 private fun availableColor(cents: Long): Color = when {
-    cents > 0 -> Color(0xFF2E7D32)
-    cents < 0 -> Color(0xFFC62828)
-    else -> Color.Gray
+    cents > 0 -> moneyPositive
+    cents < 0 -> moneyNegative
+    else -> moneyZero
 }
 
 // monthLabel turns "2026-07" into "July 2026".

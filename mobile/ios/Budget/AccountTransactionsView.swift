@@ -17,6 +17,7 @@ struct AccountTransactionsView: View {
             }
             content
         }
+        .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle(account.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -57,6 +58,7 @@ struct AccountTransactionsView: View {
                 }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .refreshable { await load() }
         } else if loading {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -94,7 +96,7 @@ struct AccountTransactionsView: View {
             Spacer()
             Text(Money.format(tx.amountCents))
                 .monospacedDigit()
-                .foregroundStyle(tx.amountCents > 0 ? .green : .primary)
+                .foregroundStyle(tx.amountCents > 0 ? Color.moneyPositive : .primary)
         }
     }
 

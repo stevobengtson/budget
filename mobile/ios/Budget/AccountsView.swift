@@ -22,6 +22,7 @@ struct AccountsView: View {
 
                 content
             }
+            .background(Color.appBackground.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
         .task(id: session.selectedMonth) { await load() }
@@ -36,7 +37,9 @@ struct AccountsView: View {
                 } label: {
                     accountRow(account)
                 }
+                .listRowBackground(Color.appCard)
             }
+            .scrollContentBackground(.hidden)
             .refreshable { await load() }
         } else if loading {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -74,7 +77,7 @@ struct AccountsView: View {
             Spacer()
             Text(Money.format(account.balanceCents))
                 .monospacedDigit()
-                .foregroundStyle(account.balanceCents < 0 ? .red : .primary)
+                .foregroundStyle(account.balanceCents < 0 ? Color.moneyNegative : .primary)
         }
     }
 

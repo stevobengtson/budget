@@ -55,7 +55,7 @@ struct AddTransactionView: View {
                 metadata
 
                 if let error {
-                    Text(error).foregroundStyle(.red).font(.footnote)
+                    Text(error).foregroundStyle(Color.appDestructive).font(.footnote)
                 }
 
                 Spacer(minLength: 0)
@@ -63,6 +63,11 @@ struct AddTransactionView: View {
                 AmountKeypad(onDigit: appendDigit, onBackspace: backspace)
             }
             .padding()
+            .background(Color.appBackground.ignoresSafeArea())
+            // Keep the form anchored when the OS keyboard slides in for the
+            // payee/notes fields: without this, keyboard avoidance shoves the
+            // whole card (tabs + amount) up under the title.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .navigationTitle(editing == nil ? "Add Transaction" : "Edit Transaction")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -104,7 +109,7 @@ struct AddTransactionView: View {
             TextField("Notes", text: $notes)
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.appCard))
     }
 
     private var selectedCategoryName: String {

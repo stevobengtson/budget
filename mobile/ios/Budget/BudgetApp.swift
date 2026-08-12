@@ -18,6 +18,7 @@ struct BudgetApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(session)
+                .tint(.appPrimary)
                 .task { await session.bootstrap() }
         }
     }

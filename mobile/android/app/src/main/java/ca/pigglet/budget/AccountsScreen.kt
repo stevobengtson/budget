@@ -35,7 +35,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -143,7 +142,7 @@ private fun AccountRow(account: Account, onClick: () -> Unit) {
         }
         Text(
             Money.format(account.balanceCents),
-            color = if (account.balanceCents < 0) Color(0xFFC62828) else MaterialTheme.colorScheme.onSurface,
+            color = if (account.balanceCents < 0) moneyNegative else MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -368,7 +367,7 @@ private fun TransactionRow(tx: TransactionItem, onClick: (() -> Unit)? = null) {
         }
         Text(
             Money.format(tx.amountCents),
-            color = if (tx.amountCents > 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface,
+            color = if (tx.amountCents > 0) moneyPositive else MaterialTheme.colorScheme.onSurface,
         )
     }
 }

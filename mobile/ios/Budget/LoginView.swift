@@ -27,7 +27,7 @@ struct LoginView: View {
 
             if let error = session.loginError {
                 Text(error)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.appDestructive)
                     .font(.footnote)
             }
 
@@ -42,6 +42,8 @@ struct LoginView: View {
             .disabled(submitting || email.isEmpty || password.isEmpty)
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.appBackground.ignoresSafeArea())
     }
 
     private func submit() {
