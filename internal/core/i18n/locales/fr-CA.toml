@@ -263,6 +263,8 @@ category_delete_confirm = "Supprimer cette catégorie de la prévision?"
 summary_income = "Revenus"
 summary_expenses = "Dépenses"
 summary_difference = "Différence"
+col_initial = "Initial"
+col_initial_title = "Le montant alloué au moment de la création de cette prévision. À titre indicatif seulement."
 
 [billing]
 trial_ended_title = "Votre essai est terminé"

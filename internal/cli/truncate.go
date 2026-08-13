@@ -63,6 +63,9 @@ migration will run again to put them back.`,
 			if err := seedGlobalIncome(ctx, conn); err != nil {
 				return err
 			}
+			if err := seedAddOnCatalog(ctx, conn); err != nil {
+				return err
+			}
 			fmt.Println("truncated successfully")
 			return nil
 		},
@@ -124,6 +127,23 @@ func seedGlobalIncome(ctx context.Context, conn *sql.DB) error {
 		 WHERE g.name = 'Income'
 		   AND NOT EXISTS (SELECT 1 FROM categories WHERE name = 'Income' AND is_income = TRUE)`); err != nil {
 		return fmt.Errorf("restore income category: %w", err)
+	}
+	return nil
+}
+
+// seedAddOnCatalog restores the add-on catalog rows that migrations insert
+// (paydown from 00011, estimates from 00017). Like the Income category, they
+// exist only because a migration inserted them, so truncating removes them and
+// nothing would ever put them back — leaving the Add-ons settings page empty.
+// ON CONFLICT keeps a second run harmless. New catalog add-ons must be added
+// here as well as in their migration.
+func seedAddOnCatalog(ctx context.Context, conn *sql.DB) error {
+	if _, err := conn.ExecContext(ctx,
+		`INSERT INTO add_ons (slug, name, description, price_cents) VALUES
+		 ('paydown', 'Debt Paydown', 'Project payoff timelines and total interest across your debt accounts.', 0),
+		 ('estimates', 'Budget Estimate', 'Snapshot your budget and income, then adjust the copy to plan changes without touching the real thing.', 0)
+		 ON CONFLICT (slug) DO NOTHING`); err != nil {
+		return fmt.Errorf("restore add-on catalog: %w", err)
 	}
 	return nil
 }

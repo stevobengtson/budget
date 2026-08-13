@@ -273,6 +273,8 @@ category_delete_confirm = "Delete this category from the estimate?"
 summary_income = "Income"
 summary_expenses = "Expenses"
 summary_difference = "Difference"
+col_initial = "Initial"
+col_initial_title = "What was assigned when this estimate was created. For reference only."
 
 [billing]
 trial_ended_title = "Your trial has ended"

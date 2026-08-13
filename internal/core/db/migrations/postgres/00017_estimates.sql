@@ -24,13 +24,17 @@ CREATE TABLE estimate_groups (
 );
 CREATE INDEX idx_estimate_groups_estimate ON estimate_groups(estimate_id);
 
+-- initial_assigned_cents freezes what was assigned when the snapshot was
+-- taken, as a read-only reference column beside the editable value. Categories
+-- added after the snapshot keep the 0 default — they had no original value.
 CREATE TABLE estimate_categories (
-    id             BIGSERIAL PRIMARY KEY,
-    user_id        BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    group_id       BIGINT NOT NULL REFERENCES estimate_groups(id) ON DELETE CASCADE,
-    name           TEXT NOT NULL,
-    assigned_cents BIGINT NOT NULL DEFAULT 0,
-    sort_order     BIGINT NOT NULL DEFAULT 0
+    id                     BIGSERIAL PRIMARY KEY,
+    user_id                BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    group_id               BIGINT NOT NULL REFERENCES estimate_groups(id) ON DELETE CASCADE,
+    name                   TEXT NOT NULL,
+    assigned_cents         BIGINT NOT NULL DEFAULT 0,
+    initial_assigned_cents BIGINT NOT NULL DEFAULT 0,
+    sort_order             BIGINT NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_estimate_categories_group ON estimate_categories(group_id);
 

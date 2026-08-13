@@ -30,9 +30,10 @@ type EstimateViewGroup struct {
 	Rows  []store.EstimateCategory
 }
 
-// estGridCols is the editor's shared two-column track (name, assigned),
-// declared once so heads and rows cannot drift apart.
-const estGridCols = "grid grid-cols-[1fr_140px_36px] items-center gap-x-s3"
+// estGridCols is the editor's shared column track (name, initial, assigned,
+// delete), declared once so heads and rows cannot drift apart. Initial is the
+// read-only snapshot reference beside the editable Assigned figure.
+const estGridCols = "grid grid-cols-[1fr_110px_140px_36px] items-center gap-x-s3"
 
 templ EstimatesListPage(d EstimatesListData, collapsed bool) {
 	@Layout(i18n.T(ctx, "nav.estimates"), "estimates", collapsed) {
@@ -223,10 +224,11 @@ templ estimateTable(d EstimateData) {
 		</div>
 		<div class={ estGridCols, "px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground" }>
 			<span>{ i18n.T(ctx, "budget.col_category") }</span>
+			<span class="text-right">{ i18n.T(ctx, "estimates.col_initial") }</span>
 			<span class="text-right">{ i18n.T(ctx, "budget.col_assigned") }</span>
 			<span></span>
 		</div>
-		<div id="estimate-groups" class="flex flex-col">
+		<div id="estimate-groups" class="js-group-list flex flex-col">
 			for _, g := range d.Groups {
 				@EstimateGroupTbody(g)
 			}
@@ -368,6 +370,11 @@ templ EstimateCategoryRow(estimateID int64, r store.EstimateCategory) {
 				/>
 			</form>
 		</div>
+		// The snapshot-time value: a fixed reference the user compares edits
+		// against, so it renders as plain text with no edit affordance.
+		<span class="text-right text-[14px] tabular-nums text-muted-foreground" title={ i18n.T(ctx, "estimates.col_initial_title") }>
+			{ money.Format(ctx, r.InitialAssignedCents) }
+		</span>
 		<form
 			hx-post={ fmt.Sprintf("/estimates/%d/category/%d/assign", estimateID, r.ID) }
 			hx-target={ fmt.Sprintf("#est-cat-%d", r.ID) }

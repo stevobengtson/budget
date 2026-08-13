@@ -27,7 +27,11 @@ type EstimateCategory struct {
 	GroupID       int64
 	Name          string
 	AssignedCents int64
-	SortOrder     int64
+	// InitialAssignedCents is the assigned value frozen at snapshot time, shown
+	// as a read-only reference beside the editable figure. Categories created
+	// after the snapshot stay at 0.
+	InitialAssignedCents int64
+	SortOrder            int64
 }
 
 type EstimateIncome struct {
@@ -123,8 +127,8 @@ func (s *Store) CreateEstimateSnapshot(ctx context.Context, userID int64, name, 
 			return 0, fmt.Errorf("snapshot group %q: %w", g.name, err)
 		}
 		if _, err := s.txExec(ctx, tx,
-			`INSERT INTO estimate_categories(user_id, group_id, name, assigned_cents, sort_order)
-			 SELECT c.user_id, $1, c.name, COALESCE(b.assigned_cents, 0), c.sort_order
+			`INSERT INTO estimate_categories(user_id, group_id, name, assigned_cents, initial_assigned_cents, sort_order)
+			 SELECT c.user_id, $1, c.name, COALESCE(b.assigned_cents, 0), COALESCE(b.assigned_cents, 0), c.sort_order
 			 FROM categories c
 			 LEFT JOIN budgets b ON b.category_id = c.id AND b.month = $2 AND b.user_id = c.user_id
 			 WHERE c.group_id = $3 AND c.user_id = $4 AND c.archived_at IS NULL AND c.is_income = FALSE`,
@@ -303,7 +307,7 @@ func (s *Store) DeleteEstimateCategory(ctx context.Context, userID, id int64) er
 // grouping under ListEstimateGroups' order.
 func (s *Store) ListEstimateCategories(ctx context.Context, userID, estimateID int64) ([]EstimateCategory, error) {
 	rows, err := s.queryAll(ctx,
-		`SELECT c.id, c.group_id, c.name, c.assigned_cents, c.sort_order
+		`SELECT c.id, c.group_id, c.name, c.assigned_cents, c.initial_assigned_cents, c.sort_order
 		 FROM estimate_categories c
 		 JOIN estimate_groups g ON g.id = c.group_id AND g.user_id = c.user_id
 		 WHERE g.estimate_id = $1 AND c.user_id = $2
@@ -315,7 +319,7 @@ func (s *Store) ListEstimateCategories(ctx context.Context, userID, estimateID i
 	var out []EstimateCategory
 	for rows.Next() {
 		var c EstimateCategory
-		if err := rows.Scan(&c.ID, &c.GroupID, &c.Name, &c.AssignedCents, &c.SortOrder); err != nil {
+		if err := rows.Scan(&c.ID, &c.GroupID, &c.Name, &c.AssignedCents, &c.InitialAssignedCents, &c.SortOrder); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -414,9 +418,9 @@ func (s *Store) GetEstimateIncome(ctx context.Context, userID, id int64) (Estima
 func (s *Store) GetEstimateCategory(ctx context.Context, userID, id int64) (EstimateCategory, error) {
 	var c EstimateCategory
 	err := s.queryOne(ctx,
-		`SELECT id, group_id, name, assigned_cents, sort_order FROM estimate_categories
+		`SELECT id, group_id, name, assigned_cents, initial_assigned_cents, sort_order FROM estimate_categories
 		 WHERE id = $1 AND user_id = $2`, id, userID).
-		Scan(&c.ID, &c.GroupID, &c.Name, &c.AssignedCents, &c.SortOrder)
+		Scan(&c.ID, &c.GroupID, &c.Name, &c.AssignedCents, &c.InitialAssignedCents, &c.SortOrder)
 	return c, err
 }
 

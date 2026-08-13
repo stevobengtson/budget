@@ -126,7 +126,7 @@ templ BudgetTable(d BudgetData) {
 			</div>
 		</div>
 		@budgetColumnHeads()
-		<div id="budget-groups" class="flex flex-col">
+		<div id="budget-groups" class="js-group-list flex flex-col">
 			for _, g := range d.Groups {
 				@BudgetGroupTbody(d.Month, g)
 			}

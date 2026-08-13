@@ -87,6 +87,26 @@ func TestEstimateSnapshot(t *testing.T) {
 	if byName["Hydro"].AssignedCents != 0 {
 		t.Errorf("Hydro assigned = %d, want 0", byName["Hydro"].AssignedCents)
 	}
+	// The snapshot freezes the reference value alongside the editable one.
+	if byName["Rent"].InitialAssignedCents != 120_000 {
+		t.Errorf("Rent initial = %d, want 120000", byName["Rent"].InitialAssignedCents)
+	}
+
+	// Editing the assigned value must not move the frozen initial value, and a
+	// category created after the snapshot has no initial value.
+	if err := s.SetEstimateAssigned(ctx, uid, byName["Rent"].ID, 99_000); err != nil {
+		t.Fatalf("set assigned: %v", err)
+	}
+	if c, _ := s.GetEstimateCategory(ctx, uid, byName["Rent"].ID); c.AssignedCents != 99_000 || c.InitialAssignedCents != 120_000 {
+		t.Errorf("after edit: assigned = %d initial = %d, want 99000 / 120000", c.AssignedCents, c.InitialAssignedCents)
+	}
+	newID, err := s.CreateEstimateCategory(ctx, uid, groups[0].ID, "New thing", 5_000, 99)
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+	if c, _ := s.GetEstimateCategory(ctx, uid, newID); c.InitialAssignedCents != 0 {
+		t.Errorf("new category initial = %d, want 0", c.InitialAssignedCents)
+	}
 
 	incs, err := s.ListEstimateIncomes(ctx, uid, eid)
 	if err != nil {
