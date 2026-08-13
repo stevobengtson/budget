@@ -132,7 +132,7 @@ func seedGlobalIncome(ctx context.Context, conn *sql.DB) error {
 }
 
 // seedAddOnCatalog restores the add-on catalog rows that migrations insert
-// (paydown from 00011, estimates from 00017). Like the Income category, they
+// (paydown from 00011, estimates from 00017, bank_sync from 00019). Like the Income category, they
 // exist only because a migration inserted them, so truncating removes them and
 // nothing would ever put them back — leaving the Add-ons settings page empty.
 // ON CONFLICT keeps a second run harmless. New catalog add-ons must be added
@@ -141,7 +141,8 @@ func seedAddOnCatalog(ctx context.Context, conn *sql.DB) error {
 	if _, err := conn.ExecContext(ctx,
 		`INSERT INTO add_ons (slug, name, description, price_cents) VALUES
 		 ('paydown', 'Debt Paydown', 'Project payoff timelines and total interest across your debt accounts.', 0),
-		 ('estimates', 'Budget Estimate', 'Snapshot your budget and income, then adjust the copy to plan changes without touching the real thing.', 0)
+		 ('estimates', 'Budget Estimate', 'Snapshot your budget and income, then adjust the copy to plan changes without touching the real thing.', 0),
+		 ('bank_sync', 'Bank Sync', 'Connect your bank through Plaid and import transactions automatically.', 199)
 		 ON CONFLICT (slug) DO NOTHING`); err != nil {
 		return fmt.Errorf("restore add-on catalog: %w", err)
 	}

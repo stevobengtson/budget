@@ -21,7 +21,12 @@ type Transaction struct {
 	OutflowCents      int64
 	InflowCents       int64
 	Cleared           bool
-	CreatedAt         time.Time
+	// PlaidTransactionID marks a row imported by bank sync (nil = manual entry);
+	// NeedsReview flags imports the user hasn't looked at yet. Both are written
+	// by ApplyPlaidSync, not by the manual create/update paths.
+	PlaidTransactionID *string
+	NeedsReview        bool
+	CreatedAt          time.Time
 }
 
 // TransferInput describes a transfer between two accounts.
@@ -88,25 +93,72 @@ func (s *Store) UpdateTransaction(ctx context.Context, userID int64, t Transacti
 			return err
 		}
 	}
+	// Assigning a category to a needs-review import IS the review, so the flag
+	// clears itself; an update that leaves the row uncategorized keeps it.
 	_, err := s.run(ctx,
 		`UPDATE transactions
-		 SET date=$1, account_id=$2, category_id=$3, payee=$4, notes=$5, outflow_cents=$6, inflow_cents=$7, cleared=$8
+		 SET date=$1, account_id=$2, category_id=$3, payee=$4, notes=$5, outflow_cents=$6, inflow_cents=$7, cleared=$8,
+		     needs_review = CASE WHEN $3::bigint IS NOT NULL THEN FALSE ELSE needs_review END
 		 WHERE id=$9 AND user_id=$10`,
 		t.Date.Format("2006-01-02"), t.AccountID, nullInt(t.CategoryID),
 		nullStr(t.Payee), nullStr(t.Notes), t.OutflowCents, t.InflowCents, t.Cleared, t.ID, userID)
 	return err
 }
 
+// SetTransactionReviewed clears one transaction's needs_review flag (the row's
+// "mark reviewed" action).
+func (s *Store) SetTransactionReviewed(ctx context.Context, userID, id int64) error {
+	_, err := s.run(ctx,
+		`UPDATE transactions SET needs_review=FALSE WHERE id=$1 AND user_id=$2`, id, userID)
+	return err
+}
+
+// MarkAllReviewed clears needs_review on every transaction matching the
+// filter's account/category/month scope, returning how many rows changed.
+func (s *Store) MarkAllReviewed(ctx context.Context, userID int64, f TxFilter) (int64, error) {
+	q := `UPDATE transactions SET needs_review=FALSE WHERE user_id=$1 AND needs_review`
+	args := []any{userID}
+	if f.AccountID != nil {
+		args = append(args, *f.AccountID)
+		q += fmt.Sprintf(` AND account_id=$%d`, len(args))
+	}
+	if f.CategoryID != nil {
+		args = append(args, *f.CategoryID)
+		q += fmt.Sprintf(` AND category_id=$%d`, len(args))
+	}
+	if f.Month != "" {
+		args = append(args, f.Month)
+		q += fmt.Sprintf(` AND %s = $%d`, monthExpr("date"), len(args))
+	}
+	res, err := s.run(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// CountNeedsReview is the user's total unreviewed-import count, shown as the
+// nav badge. Cheap: served by the partial index on (user_id) WHERE needs_review.
+func (s *Store) CountNeedsReview(ctx context.Context, userID int64) (int64, error) {
+	var n int64
+	err := s.queryOne(ctx,
+		`SELECT COUNT(*) FROM transactions WHERE user_id=$1 AND needs_review`, userID).Scan(&n)
+	return n, err
+}
+
 // GetTransaction fetches a single transaction by id.
 func (s *Store) GetTransaction(ctx context.Context, userID, id int64) (*Transaction, error) {
 	q := `SELECT id, date, account_id, category_id, transfer_account_id, transfer_pair_id,
-	             payee, notes, outflow_cents, inflow_cents, cleared, created_at
+	             payee, notes, outflow_cents, inflow_cents, cleared,
+	             plaid_transaction_id, needs_review, created_at
 	      FROM transactions WHERE id=$1 AND user_id=$2`
 	var t Transaction
 	var cat, transferAcc, pair sql.NullInt64
-	var payee, notes sql.NullString
+	var payee, notes, plaidID sql.NullString
 	err := s.queryOne(ctx, q, id, userID).Scan(&t.ID, &t.Date, &t.AccountID, &cat, &transferAcc, &pair,
-		&payee, &notes, &t.OutflowCents, &t.InflowCents, &t.Cleared, &t.CreatedAt)
+		&payee, &notes, &t.OutflowCents, &t.InflowCents, &t.Cleared,
+		&plaidID, &t.NeedsReview, &t.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +167,7 @@ func (s *Store) GetTransaction(ctx context.Context, userID, id int64) (*Transact
 	t.TransferPairID = intPtr(pair)
 	t.Payee = strPtr(payee)
 	t.Notes = strPtr(notes)
+	t.PlaidTransactionID = strPtr(plaidID)
 	return &t, nil
 }
 
@@ -336,15 +389,17 @@ func (s *Store) CreateTransfer(ctx context.Context, userID int64, in TransferInp
 }
 
 type TxFilter struct {
-	AccountID  *int64
-	CategoryID *int64
-	Month      string // "YYYY-MM"; empty = no month filter
-	Limit      int
+	AccountID   *int64
+	CategoryID  *int64
+	Month       string // "YYYY-MM"; empty = no month filter
+	NeedsReview bool   // true = only unreviewed bank-sync imports
+	Limit       int
 }
 
 func (s *Store) ListTransactions(ctx context.Context, userID int64, f TxFilter) ([]Transaction, error) {
 	q := `SELECT id, date, account_id, category_id, transfer_account_id, transfer_pair_id,
-	             payee, notes, outflow_cents, inflow_cents, cleared, created_at
+	             payee, notes, outflow_cents, inflow_cents, cleared,
+	             plaid_transaction_id, needs_review, created_at
 	      FROM transactions WHERE user_id=$1`
 	args := []any{userID}
 	if f.AccountID != nil {
@@ -358,6 +413,9 @@ func (s *Store) ListTransactions(ctx context.Context, userID int64, f TxFilter) 
 	if f.Month != "" {
 		args = append(args, f.Month)
 		q += fmt.Sprintf(` AND %s = $%d`, monthExpr("date"), len(args))
+	}
+	if f.NeedsReview {
+		q += ` AND needs_review`
 	}
 	q += ` ORDER BY date DESC, id DESC`
 	if f.Limit > 0 {
@@ -374,9 +432,10 @@ func (s *Store) ListTransactions(ctx context.Context, userID int64, f TxFilter) 
 	for rows.Next() {
 		var t Transaction
 		var cat, transferAcc, pair sql.NullInt64
-		var payee, notes sql.NullString
+		var payee, notes, plaidID sql.NullString
 		if err := rows.Scan(&t.ID, &t.Date, &t.AccountID, &cat, &transferAcc, &pair,
-			&payee, &notes, &t.OutflowCents, &t.InflowCents, &t.Cleared, &t.CreatedAt); err != nil {
+			&payee, &notes, &t.OutflowCents, &t.InflowCents, &t.Cleared,
+			&plaidID, &t.NeedsReview, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		t.CategoryID = intPtr(cat)
@@ -384,6 +443,7 @@ func (s *Store) ListTransactions(ctx context.Context, userID int64, f TxFilter) 
 		t.TransferPairID = intPtr(pair)
 		t.Payee = strPtr(payee)
 		t.Notes = strPtr(notes)
+		t.PlaidTransactionID = strPtr(plaidID)
 		out = append(out, t)
 	}
 	return out, rows.Err()

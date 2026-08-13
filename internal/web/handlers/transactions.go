@@ -47,10 +47,11 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 	if page < 1 {
 		page = 1
 	}
+	reviewOnly := c.Query("review") == "1"
 
 	uid := currentUserID(c)
 	rows, err := h.store.ListTransactions(ctx, uid, store.TxFilter{
-		AccountID: acctPtr, CategoryID: catPtr, Month: month, Limit: 5000,
+		AccountID: acctPtr, CategoryID: catPtr, Month: month, NeedsReview: reviewOnly, Limit: 5000,
 	})
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
@@ -88,6 +89,8 @@ func (h *Handlers) TransactionsIndex(c *gin.Context) {
 		FilterAccount:  acctPtr,
 		FilterCategory: catPtr,
 		FilterMonth:    month,
+		FilterReview:   reviewOnly,
+		ReviewCount:    views.ReviewCountFrom(ctx),
 		PrevMonth:      prev,
 		NextMonth:      next,
 		Today:          store.MonthKey(time.Now()),
@@ -242,6 +245,59 @@ func (h *Handlers) TransactionsToggleCleared(c *gin.Context) {
 	accts, _ := h.store.ListAccounts(ctx, uid, true)
 	cats, _ := h.store.ListCategories(ctx, uid, true)
 	render(c, http.StatusOK, views.TransactionRow(*t, accts, cats, false))
+}
+
+// TransactionsMarkReviewed clears one import's needs-review flag and re-renders
+// the row (the amber tag doubles as the action).
+func (h *Handlers) TransactionsMarkReviewed(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err := h.store.SetTransactionReviewed(ctx, uid, id); err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	t, err := h.store.GetTransaction(ctx, uid, id)
+	if err != nil {
+		c.String(http.StatusNotFound, "tx not found")
+		return
+	}
+	accts, _ := h.store.ListAccounts(ctx, uid, true)
+	cats, _ := h.store.ListCategories(ctx, uid, true)
+	render(c, http.StatusOK, views.TransactionRow(*t, accts, cats, false))
+}
+
+// TransactionsReviewAll clears every needs-review flag within the current
+// filter scope (account/category/month from HX-Current-URL) and re-renders the
+// row list the same way a create does.
+func (h *Handlers) TransactionsReviewAll(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	q := currentURLQuery(c)
+	month := store.MonthKey(time.Now())
+	if m := q.Get("month"); m != "" {
+		month = m
+	} else if q.Get("all") == "1" {
+		month = ""
+	}
+	f := store.TxFilter{
+		AccountID:  parseIDQuery(q.Get("account")),
+		CategoryID: parseIDQuery(q.Get("category")),
+		Month:      month,
+	}
+	if _, err := h.store.MarkAllReviewed(ctx, uid, f); err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	// The badge count changed and the filtered list may now be empty; a full
+	// page refresh via HX-Redirect keeps every affected fragment honest.
+	q.Del("review")
+	target := "/transactions"
+	if enc := q.Encode(); enc != "" {
+		target += "?" + enc
+	}
+	c.Header("HX-Redirect", target)
+	c.Status(http.StatusOK)
 }
 
 // upsertTransaction creates (id==0) or updates a transaction or transfer

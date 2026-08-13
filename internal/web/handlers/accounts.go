@@ -26,7 +26,9 @@ import (
 // /budget and /transactions name the month param identically, so viewing a past
 // budget month opens that same month's transactions.
 func (h *Handlers) AccountsOverviewPartial(c *gin.Context) {
-	accts, _ := h.store.ListAccounts(c.Request.Context(), currentUserID(c), true)
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	accts, _ := h.store.ListAccounts(ctx, uid, true)
 	q := currentURLQuery(c)
 	view := accountsoverview.ViewContext{
 		Month:      q.Get("month"),
@@ -34,6 +36,16 @@ func (h *Handlers) AccountsOverviewPartial(c *gin.Context) {
 		CategoryID: parseIDQuery(q.Get("category")),
 
 		OnTransactions: currentURLPath(c) == "/transactions",
+		BankSync:       h.plaid.Enabled() && views.AddOnEnabled(ctx, "bank_sync"),
+		ReviewCount:    views.ReviewCountFrom(ctx),
+	}
+	if view.BankSync {
+		items, _ := h.store.ListPlaidItemsForUser(ctx, uid)
+		for _, it := range items {
+			if it.Status == store.PlaidItemLoginRequired || it.Status == store.PlaidItemPendingExpiration {
+				view.ReconnectItems = append(view.ReconnectItems, it)
+			}
+		}
 	}
 	render(c, http.StatusOK, accountsoverview.AccountsOverview(accts, view))
 }

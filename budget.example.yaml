@@ -16,3 +16,25 @@ web:
 
 log:
   level: "info"
+
+stripe:
+  price_ids:
+    # Stripe Price of the base plan, and of the Bank Sync add-on (billed as a
+    # second item on the base subscription). Empty disables the paid gate.
+    base: ""
+    bank_sync: ""
+
+plaid:
+  # Bank sync (Plaid). All empty = feature disabled. Credentials come from the
+  # Plaid dashboard; keep them out of version control.
+  client_id: ""
+  secret_key: ""
+  # "sandbox" or "production".
+  environment: "sandbox"
+  # 64 hex characters (32 bytes) used to encrypt bank access tokens at rest.
+  # Generate with: openssl rand -hex 32
+  encryption_key: ""
+  # Fallback polling cadence when webhooks can't reach this instance.
+  poll_interval: "6h"
+  # Days of history imported when a new account is created from a bank.
+  days_requested: 90

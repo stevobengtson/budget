@@ -33,9 +33,20 @@ type Account struct {
 	MonthlyPaymentCents  *int64
 	IncludeInPaydown     bool
 	PaymentCategoryID    *int64
-	ArchivedAt           *time.Time
-	CreatedAt            time.Time
+	// PlaidItemID / PlaidAccountID link this account to a bank account through
+	// a Plaid item (bank_sync add-on); nil means not linked. PlaidSyncFrom
+	// bounds imports: synced transactions dated before it are skipped. These
+	// are managed by LinkAccountToPlaid/UnlinkAccountFromPlaid, not
+	// CreateAccount/UpdateAccount.
+	PlaidItemID    *int64
+	PlaidAccountID *string
+	PlaidSyncFrom  *time.Time
+	ArchivedAt     *time.Time
+	CreatedAt      time.Time
 }
+
+// PlaidLinked reports whether the account is linked to a bank account.
+func (a Account) PlaidLinked() bool { return a.PlaidAccountID != nil }
 
 type AccountWithBalance struct {
 	Account
@@ -123,6 +134,7 @@ func (s *Store) listAccounts(ctx context.Context, userID int64, includeArchived 
 	q := `
 SELECT a.id, a.name, a.type, a.starting_balance_cents, a.credit_limit_cents, a.apr_bps,
        a.monthly_payment_cents, a.include_in_paydown, a.payment_category_id,
+       a.plaid_item_id, a.plaid_account_id, a.plaid_sync_from,
        a.archived_at, a.created_at,
        a.starting_balance_cents
          + COALESCE((SELECT SUM(inflow_cents)  FROM transactions t WHERE t.account_id=a.id AND t.user_id=$1` + bound + `), 0)
@@ -144,11 +156,13 @@ WHERE a.user_id=$3`
 	for rows.Next() {
 		var a AccountWithBalance
 		var typ string
-		var lim, apr, pay, payCat sql.NullInt64
+		var lim, apr, pay, payCat, plaidItem sql.NullInt64
+		var plaidAcct sql.NullString
 		var include bool
-		var archived nullTime
+		var archived, syncFrom nullTime
 		if err := rows.Scan(&a.ID, &a.Name, &typ, &a.StartingBalanceCents, &lim, &apr,
-			&pay, &include, &payCat, &archived, &a.CreatedAt, &a.BalanceCents); err != nil {
+			&pay, &include, &payCat, &plaidItem, &plaidAcct, &syncFrom,
+			&archived, &a.CreatedAt, &a.BalanceCents); err != nil {
 			return nil, err
 		}
 		a.Type = AccountType(typ)
@@ -157,6 +171,9 @@ WHERE a.user_id=$3`
 		a.MonthlyPaymentCents = intPtr(pay)
 		a.IncludeInPaydown = include
 		a.PaymentCategoryID = intPtr(payCat)
+		a.PlaidItemID = intPtr(plaidItem)
+		a.PlaidAccountID = strPtr(plaidAcct)
+		a.PlaidSyncFrom = syncFrom.Ptr()
 		a.ArchivedAt = archived.Ptr()
 		out = append(out, a)
 	}
@@ -167,14 +184,17 @@ func (s *Store) GetAccount(ctx context.Context, userID, id int64) (Account, erro
 	row := s.queryOne(ctx,
 		`SELECT id, name, type, starting_balance_cents, credit_limit_cents, apr_bps,
 		        monthly_payment_cents, include_in_paydown, payment_category_id,
+		        plaid_item_id, plaid_account_id, plaid_sync_from,
 		        archived_at, created_at
 		 FROM accounts WHERE id=$1 AND user_id=$2`, id, userID)
 	var a Account
 	var typ string
-	var lim, apr, pay, payCat sql.NullInt64
-	var archived nullTime
+	var lim, apr, pay, payCat, plaidItem sql.NullInt64
+	var plaidAcct sql.NullString
+	var archived, syncFrom nullTime
 	if err := row.Scan(&a.ID, &a.Name, &typ, &a.StartingBalanceCents, &lim, &apr,
-		&pay, &a.IncludeInPaydown, &payCat, &archived, &a.CreatedAt); err != nil {
+		&pay, &a.IncludeInPaydown, &payCat, &plaidItem, &plaidAcct, &syncFrom,
+		&archived, &a.CreatedAt); err != nil {
 		return Account{}, err
 	}
 	a.Type = AccountType(typ)
@@ -182,6 +202,9 @@ func (s *Store) GetAccount(ctx context.Context, userID, id int64) (Account, erro
 	a.AprBps = intPtr(apr)
 	a.MonthlyPaymentCents = intPtr(pay)
 	a.PaymentCategoryID = intPtr(payCat)
+	a.PlaidItemID = intPtr(plaidItem)
+	a.PlaidAccountID = strPtr(plaidAcct)
+	a.PlaidSyncFrom = syncFrom.Ptr()
 	a.ArchivedAt = archived.Ptr()
 	return a, nil
 }

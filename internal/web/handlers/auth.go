@@ -10,6 +10,7 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/avatar"
+	"github.com/sbengtson/budget/internal/core/billing"
 	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/views"
@@ -151,6 +152,17 @@ func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountDa
 	u, _ := h.store.GetUserByID(c.Request.Context(), uid)
 	pending, _ := h.store.GetPendingEmail(c.Request.Context(), uid)
 	addOns, _ := h.store.ListAddOnsForUser(c.Request.Context(), uid)
+	// bank_sync needs a configured Plaid environment to do anything; hide the
+	// row entirely where there is none, rather than offering a dead toggle.
+	if !h.plaid.Enabled() {
+		filtered := addOns[:0]
+		for _, a := range addOns {
+			if a.Slug != "bank_sync" {
+				filtered = append(filtered, a)
+			}
+		}
+		addOns = filtered
+	}
 	return views.AccountData{
 		Name:          u.Name,
 		Email:         u.Email,
@@ -171,6 +183,35 @@ func (h *Handlers) ToggleAddOn(c *gin.Context) {
 	slug := c.Param("slug")
 	enabled := c.PostForm("enabled") == "on"
 
+	// bank_sync is the first PAID add-on: enabling attaches its price as a
+	// second item on the base subscription, disabling detaches it (prorated
+	// credit). Comped users skip Stripe entirely — the comp covers add-ons.
+	// Generalize to a slug→price map when a second paid add-on exists.
+	if slug == "bank_sync" && h.billing.BankSyncPriced() {
+		exempt, err := h.store.IsBillingExempt(ctx, uid)
+		if err != nil {
+			c.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+		if !exempt {
+			if enabled {
+				err = h.billing.AttachAddOnItem(ctx, uid, h.billing.BankSyncPriceID())
+			} else {
+				err = h.billing.DetachAddOnItem(ctx, uid, h.billing.BankSyncPriceID())
+			}
+			if err != nil {
+				d := h.accountData(c, "addons")
+				if errors.Is(err, billing.ErrNoBaseSubscription) {
+					d.AddOnErr = i18n.T(ctx, "settings.err_addon_needs_subscription")
+				} else {
+					d.AddOnErr = i18n.T(ctx, "settings.err_addon_billing")
+				}
+				render(c, http.StatusBadGateway, views.AccountAddOnsSection(d))
+				return
+			}
+		}
+	}
+
 	if err := h.store.SetAddOnEnabled(c.Request.Context(), uid, slug, enabled); err != nil {
 		d := h.accountData(c, "addons")
 		if errors.Is(err, store.ErrAddOnNotFound) {
@@ -187,6 +228,10 @@ func (h *Handlers) ToggleAddOn(c *gin.Context) {
 	// the toggle immediately (requireAuth set it from the pre-toggle state).
 	slugs, _ := h.store.EnabledAddOnSlugs(c.Request.Context(), uid)
 	c.Request = c.Request.WithContext(views.WithEnabledAddOns(c.Request.Context(), slugs))
+	// The sidebar's accounts panel carries add-on-dependent controls (bank_sync's
+	// "Link a bank" button and account menu items); poke it to refetch, the same
+	// event every account mutation uses.
+	c.Header("HX-Trigger", "accountsChanged")
 
 	d := h.accountData(c, "addons")
 	if enabled {
@@ -354,6 +399,11 @@ func (h *Handlers) StartFresh(c *gin.Context) {
 		render(c, http.StatusBadRequest, views.AccountPage(d))
 		return
 	}
+	// Revoke bank-sync access tokens at Plaid before the wipe removes the item
+	// rows — a token must not outlive the data it was consented for. Best-effort:
+	// RemoveItem tolerates already-removed items, and the wipe below deletes the
+	// rows regardless.
+	h.plaid.RemoveAllItemsForUser(ctx, uid)
 	if err := h.store.WipeUserData(c.Request.Context(), uid); err != nil {
 		_ = c.Error(err)
 		d := h.accountData(c, "account")
@@ -409,6 +459,9 @@ func (h *Handlers) DeleteAccount(c *gin.Context) {
 	if err := h.billing.CancelAtPeriodEnd(c.Request.Context(), uid); err != nil {
 		_ = c.Error(err)
 	}
+	// Best-effort likewise: revoke bank-sync tokens at Plaid before the delete
+	// removes the item rows that hold them.
+	h.plaid.RemoveAllItemsForUser(ctx, uid)
 
 	if err := h.store.DeleteUser(c.Request.Context(), uid); err != nil {
 		_ = c.Error(err)

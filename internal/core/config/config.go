@@ -46,11 +46,26 @@ type Config struct {
 		PublishableKey string `mapstructure:"publishable_key"`
 		WebhookSecret  string `mapstructure:"webhook_secret"`
 		// PriceIDs holds the Stripe Price IDs the app subscribes customers to.
-		// Base is the core $4.99/mo plan; add-on price IDs will join here later.
+		// Base is the core $4.99/mo plan; BankSync is the Plaid bank-sync add-on
+		// billed as a second item on the base subscription.
 		PriceIDs struct {
-			Base string `mapstructure:"base"`
+			Base     string `mapstructure:"base"`
+			BankSync string `mapstructure:"bank_sync"`
 		} `mapstructure:"price_ids"`
 	} `mapstructure:"stripe"`
+	Plaid struct {
+		ClientID  string `mapstructure:"client_id"`
+		SecretKey string `mapstructure:"secret_key"`
+		// Environment selects the Plaid API host: "sandbox" or "production".
+		Environment string `mapstructure:"environment"`
+		// EncryptionKey encrypts Plaid access tokens at rest (AES-256-GCM).
+		// 64 hex characters (32 bytes). Unset leaves the bank-sync feature inert.
+		EncryptionKey string `mapstructure:"encryption_key"`
+		// PollInterval is the fallback sync cadence when webhooks don't arrive.
+		PollInterval time.Duration `mapstructure:"poll_interval"`
+		// DaysRequested bounds the initial transaction history pull (1-730).
+		DaysRequested int `mapstructure:"days_requested"`
+	} `mapstructure:"plaid"`
 	Log struct {
 		Level string `mapstructure:"level"`
 	} `mapstructure:"log"`
@@ -85,6 +100,13 @@ func Load(v *viper.Viper) (Config, error) {
 	v.SetDefault("stripe.publishable_key", "")
 	v.SetDefault("stripe.webhook_secret", "")
 	v.SetDefault("stripe.price_ids.base", "")
+	v.SetDefault("stripe.price_ids.bank_sync", "")
+	v.SetDefault("plaid.client_id", "")
+	v.SetDefault("plaid.secret_key", "")
+	v.SetDefault("plaid.environment", "sandbox")
+	v.SetDefault("plaid.encryption_key", "")
+	v.SetDefault("plaid.poll_interval", "6h")
+	v.SetDefault("plaid.days_requested", 90)
 	v.SetDefault("log.level", "info")
 	v.SetDefault("sentry.dsn", "")
 	v.SetDefault("sentry.environment", "development")

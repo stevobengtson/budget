@@ -22,6 +22,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/config"
 	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/mail"
+	"github.com/sbengtson/budget/internal/core/plaid"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/apiv1"
 	"github.com/sbengtson/budget/internal/web/handlers"
@@ -37,6 +38,17 @@ type Server struct {
 	engine  *gin.Engine
 	auth    *auth.Service
 	billing *billing.Service
+	plaid   *plaid.Service
+}
+
+// Plaid exposes the Plaid service so cmd/web can run the polling worker,
+// whose lifetime is the process, not a request.
+func (s *Server) Plaid() *plaid.Service { return s.plaid }
+
+// BankSyncEntitled exposes the per-user bank-sync entitlement check for the
+// polling worker (the webhook handler reaches it through Handlers).
+func (s *Server) BankSyncEntitled() func(context.Context, int64) bool {
+	return s.billing.BankSyncEntitled
 }
 
 // NewServer constructs a Gin router wired to the store, building the mailer,
@@ -62,9 +74,15 @@ func NewServer(s *store.Store, cfg config.Config) *Server {
 		SessionTTL: cfg.Auth.SessionTTL,
 		TokenTTL:   cfg.Auth.TokenTTL,
 	})
-	billingSvc := billing.NewService(s, cfg.Stripe.SecretKey, cfg.Stripe.PriceIDs.Base, cfg.Web.BaseURL, cfg.Stripe.WebhookSecret)
+	billingSvc := billing.NewService(s, cfg.Stripe.SecretKey, cfg.Stripe.PriceIDs.Base, cfg.Stripe.PriceIDs.BankSync, cfg.Web.BaseURL, cfg.Stripe.WebhookSecret)
+	plaidSvc, err := plaid.NewService(s, cfg)
+	if err != nil {
+		// Misconfiguration (e.g. a malformed encryption key) leaves bank sync
+		// inert rather than taking the app down.
+		slog.Warn("plaid disabled", "err", err)
+	}
 
-	srv := &Server{store: s, engine: r, auth: authSvc, billing: billingSvc}
+	srv := &Server{store: s, engine: r, auth: authSvc, billing: billingSvc, plaid: plaidSvc}
 
 	staticSub, _ := fs.Sub(staticFS, "static")
 	views.SetAssetHashes(assetHashes(staticSub))
@@ -175,7 +193,7 @@ func newMailer(cfg config.Config) mail.Mailer {
 }
 
 func (s *Server) routes(cfg config.Config) {
-	hs := handlers.New(s.store, s.auth, s.billing, cfg.Auth.CookieSecure, int(cfg.Auth.SessionTTL.Seconds()), cfg.Web.BaseURL)
+	hs := handlers.New(s.store, s.auth, s.billing, s.plaid, cfg.Auth.CookieSecure, int(cfg.Auth.SessionTTL.Seconds()), cfg.Web.BaseURL)
 
 	// Ops readiness probe: pings the DB so an uptime monitor learns of a
 	// Postgres outage, not just a live HTTP process. (The mobile app's
@@ -248,6 +266,8 @@ func (s *Server) routes(cfg config.Config) {
 
 	// Stripe webhooks: public (no session), authenticated by the Stripe signature.
 	s.engine.POST("/webhooks/stripe", hs.StripeWebhook)
+	// Plaid webhooks: likewise public, authenticated by the Plaid-Verification JWT.
+	s.engine.POST("/webhooks/plaid", hs.PlaidWebhook)
 
 	// JSON API for the native mobile apps. Separate group with its own bearer-
 	// token auth; renders no HTML and reuses the same store/auth/billing services.
@@ -362,6 +382,10 @@ func (s *Server) routes(cfg config.Config) {
 	gated.PUT("/transactions/:id", hs.TransactionsUpdate)
 	gated.DELETE("/transactions/:id", hs.TransactionsDelete)
 	gated.POST("/transactions/:id/cleared", hs.TransactionsToggleCleared)
+	// Bank-sync review actions: clear one import's flag, or every flagged row in
+	// the current filter scope.
+	gated.POST("/transactions/:id/review", hs.TransactionsMarkReviewed)
+	gated.POST("/transactions/review-all", hs.TransactionsReviewAll)
 
 	gated.GET("/accounts/new", hs.AccountsNew)
 	gated.POST("/accounts", hs.AccountsCreate)
@@ -387,6 +411,19 @@ func (s *Server) routes(cfg config.Config) {
 	paydown.GET("/:acctID/category-form", hs.PaydownCategoryForm)
 	paydown.POST("/:acctID/payment", hs.PaydownSetPayment)
 	paydown.POST("/:acctID/category", hs.PaydownSetCategory)
+
+	// Bank Sync (Plaid) is an opt-in add-on. The whole group sits behind its
+	// enabled flag; the Plaid webhook stays public above and is authenticated by
+	// its own signature instead.
+	plaidGrp := gated.Group("/plaid")
+	plaidGrp.Use(requireAddOn("bank_sync"))
+	plaidGrp.GET("/link", hs.PlaidLinkStart)
+	plaidGrp.POST("/exchange", hs.PlaidExchange)
+	plaidGrp.GET("/items/:id/map", hs.PlaidMapForm)
+	plaidGrp.POST("/items/:id/map", hs.PlaidMapComplete)
+	plaidGrp.POST("/items/:id/reconnect", hs.PlaidReconnect)
+	plaidGrp.POST("/items/:id/reconnected", hs.PlaidReconnected)
+	plaidGrp.POST("/accounts/:id/unlink", hs.PlaidUnlinkAccount)
 
 	// Budget Estimate is likewise an opt-in add-on: the whole group sits behind
 	// its enabled flag, so a disabled user hitting any /estimates URL directly is

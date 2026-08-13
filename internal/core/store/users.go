@@ -315,10 +315,12 @@ func (s *Store) SeedNewUser(ctx context.Context, userID int64, loc i18n.Locale, 
 // other), so a user's rows must be deleted in this order for the foreign keys to
 // hold. The tricky edges: transactions → accounts + categories; budgets →
 // categories; accounts → categories (payment_category_id, from the paydown
-// add-on); categories → category_groups. So accounts must go before categories
-// (not after), and category_groups is last.
+// add-on) + plaid_items (bank_sync add-on); categories → category_groups. So
+// accounts must go before categories (not after) and before plaid_items, and
+// category_groups is last. Callers deleting plaid_items rows are responsible
+// for revoking the access token at Plaid (/item/remove) first.
 var budgetTablesDeleteOrder = []string{
-	"transactions", "budgets", "incomes", "accounts", "categories", "category_groups",
+	"transactions", "budgets", "incomes", "accounts", "plaid_items", "categories", "category_groups",
 }
 
 // wipeUserDataTx deletes all of the user's budget content within tx. Shared by

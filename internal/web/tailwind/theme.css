@@ -126,6 +126,8 @@
     --tag-neutral-fg: #645c50;
     --tag-sage-bg: #e1eecc;
     --tag-sage-fg: #56633f;
+    --tag-amber-bg: #ffe1d0;
+    --tag-amber-fg: #643312;
 
     /* The brand mark, and the primary fill's hover/active steps. These step
        DOWN the ramp on light and UP on dark — darkening a fill on a dark ground
@@ -219,6 +221,8 @@
     --tag-neutral-fg: #dcd3c4;
     --tag-sage-bg: #272e1b;
     --tag-sage-fg: #aebf92;
+    --tag-amber-bg: #402310;
+    --tag-amber-fg: #f6a06b;
 
     --brand: #f6a06b;
     --primary-hover: #f6a06b;

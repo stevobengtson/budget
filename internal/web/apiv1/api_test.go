@@ -97,7 +97,7 @@ func newTestAPIWithBilling(t *testing.T, mode billingMode) (*API, *store.Store, 
 	if mode == billingEnabled {
 		secret, price = "sk_test_dummy", "price_dummy"
 	}
-	bill := billing.NewService(st, secret, price, "http://localhost:8080", "")
+	bill := billing.NewService(st, secret, price, "", "http://localhost:8080", "")
 	a := New(st, svc, bill)
 
 	gin.SetMode(gin.TestMode)

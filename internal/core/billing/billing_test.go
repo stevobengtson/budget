@@ -7,7 +7,7 @@ import (
 	stripe "github.com/stripe/stripe-go/v86"
 )
 
-func TestSubscriptionToStore(t *testing.T) {
+func TestSubscriptionToStoreRows(t *testing.T) {
 	periodEnd := time.Now().Add(30 * 24 * time.Hour).Unix()
 	trialEnd := time.Now().Add(20 * 24 * time.Hour).Unix()
 
@@ -27,7 +27,11 @@ func TestSubscriptionToStore(t *testing.T) {
 		},
 	}
 
-	got := subscriptionToStore(7, sub)
+	rows := subscriptionToStoreRows(7, sub)
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rows))
+	}
+	got := rows[0]
 
 	if got.UserID != 7 || got.StripeSubscriptionID != "sub_abc" || got.StripeCustomerID != "cus_xyz" {
 		t.Errorf("ids wrong: %+v", got)
@@ -46,10 +50,50 @@ func TestSubscriptionToStore(t *testing.T) {
 	}
 }
 
-// TestSubscriptionToStore_NoItems guards the nil-safe paths (a subscription
-// payload without an items list or trial).
-func TestSubscriptionToStore_NoItems(t *testing.T) {
-	got := subscriptionToStore(1, &stripe.Subscription{ID: "sub_1", Status: stripe.SubscriptionStatusActive})
+// TestSubscriptionToStoreRows_MultiItem covers the base-plan-plus-add-on shape:
+// one row per item, per-item price/period, shared subscription-level state.
+func TestSubscriptionToStoreRows_MultiItem(t *testing.T) {
+	basePeriodEnd := time.Now().Add(30 * 24 * time.Hour).Unix()
+	addonPeriodEnd := time.Now().Add(15 * 24 * time.Hour).Unix()
+
+	sub := &stripe.Subscription{
+		ID:       "sub_multi",
+		Status:   stripe.SubscriptionStatusActive,
+		Currency: stripe.CurrencyCAD,
+		Customer: &stripe.Customer{ID: "cus_xyz"},
+		Items: &stripe.SubscriptionItemList{
+			Data: []*stripe.SubscriptionItem{
+				{Price: &stripe.Price{ID: "price_base"}, CurrentPeriodEnd: basePeriodEnd},
+				{Price: &stripe.Price{ID: "price_bank_sync"}, CurrentPeriodEnd: addonPeriodEnd},
+			},
+		},
+	}
+
+	rows := subscriptionToStoreRows(7, sub)
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+	for _, row := range rows {
+		if row.StripeSubscriptionID != "sub_multi" || row.Status != "active" || row.StripeCustomerID != "cus_xyz" {
+			t.Errorf("shared state wrong: %+v", row)
+		}
+	}
+	if rows[0].PriceID != "price_base" || rows[0].CurrentPeriodEnd == nil || rows[0].CurrentPeriodEnd.Unix() != basePeriodEnd {
+		t.Errorf("base row wrong: %+v", rows[0])
+	}
+	if rows[1].PriceID != "price_bank_sync" || rows[1].CurrentPeriodEnd == nil || rows[1].CurrentPeriodEnd.Unix() != addonPeriodEnd {
+		t.Errorf("add-on row wrong: %+v", rows[1])
+	}
+}
+
+// TestSubscriptionToStoreRows_NoItems guards the nil-safe paths (a subscription
+// payload without an items list or trial still yields one status-bearing row).
+func TestSubscriptionToStoreRows_NoItems(t *testing.T) {
+	rows := subscriptionToStoreRows(1, &stripe.Subscription{ID: "sub_1", Status: stripe.SubscriptionStatusActive})
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rows))
+	}
+	got := rows[0]
 	if got.PriceID != "" || got.CurrentPeriodEnd != nil || got.TrialEnd != nil {
 		t.Errorf("expected empty price/period/trial, got %+v", got)
 	}

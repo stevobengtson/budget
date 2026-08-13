@@ -1,0 +1,181 @@
+package views
+
+import (
+	"context"
+	"strconv"
+
+	"github.com/sbengtson/budget/internal/core/i18n"
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/plaid"
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/templui/templui/components/dialog"
+)
+
+// PlaidLinkData opens Plaid Link: the token starts the session and PostURL is
+// where the resulting public token is posted (exchange for a fresh link,
+// reconnected for update mode). AccountID rides along when the flow started
+// from "connect this existing account".
+type PlaidLinkData struct {
+	LinkToken string
+	PostURL   string
+	AccountID *int64
+}
+
+// PlaidLinkModal mounts the Link launcher. The actual work happens in
+// static/plaid-link.js, which loads Plaid's script from cdn.plaid.com on
+// demand and opens Link with the token; markup carries only data attributes,
+// following the repo's static-JS convention.
+templ PlaidLinkModal(d PlaidLinkData) {
+	@sheetPanel("") {
+		@dialog.Header() {
+			@dialog.Title() {
+				{ i18n.T(ctx, "plaid.link_title") }
+			}
+		}
+		<div
+			data-plaid-link
+			data-token={ d.LinkToken }
+			data-post={ d.PostURL }
+			if d.AccountID != nil {
+				data-account={ strconv.FormatInt(*d.AccountID, 10) }
+			}
+			class="flex items-center gap-3 py-6 text-sm text-muted-foreground"
+		>
+			{ i18n.T(ctx, "plaid.link_opening") }
+		</div>
+		@dialog.Footer() {
+			@button.Button(button.Props{
+				Variant:    button.VariantOutline,
+				Type:       "button",
+				Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+			}) {
+				{ i18n.T(ctx, "common.cancel") }
+			}
+		}
+	}
+}
+
+// PlaidBankRow is one bank account in the mapping form; CurrencyAllowed=false
+// rows render blocked (the app is single-currency).
+type PlaidBankRow struct {
+	plaid.BankAccount
+	CurrencyAllowed bool
+}
+
+type PlaidMapData struct {
+	ItemID          int64
+	InstitutionName string
+	Banks           []PlaidBankRow
+	Accounts        []store.AccountWithBalance // the user's unlinked accounts
+	Preselect       *int64                     // account the flow started from, if any
+}
+
+// PlaidMapForm asks, per bank account, whether to create a new app account,
+// link an existing one, or skip it.
+templ PlaidMapForm(d PlaidMapData) {
+	@sheetPanel("") {
+		<form
+			hx-post={ "/plaid/items/" + strconv.FormatInt(d.ItemID, 10) + "/map" }
+			hx-target="#modal"
+			hx-swap="innerHTML"
+			class="grid gap-4"
+		>
+			@dialog.Header() {
+				@dialog.Title() {
+					{ i18n.T(ctx, "plaid.map_title") }
+				}
+			}
+			<p class="text-sm text-muted-foreground">
+				{ i18n.Tf(ctx, "plaid.map_intro", i18n.M{"Institution": d.InstitutionName}) }
+			</p>
+			<div class="grid gap-3">
+				for i, b := range d.Banks {
+					<div class="rounded-lg border border-border p-3">
+						<div class="flex items-center justify-between gap-2">
+							<div class="min-w-0">
+								<div class="truncate text-sm font-medium">{ bankLabel(b) }</div>
+								<div class="text-xs text-muted-foreground">{ b.Subtype } · { b.Currency }</div>
+							</div>
+							if b.HasBalance {
+								<span class="tabular-nums text-sm text-muted-foreground">{ money.Format(ctx, b.BalanceCents) }</span>
+							}
+						</div>
+						if b.CurrencyAllowed {
+							<div class="mt-2">
+								@SelectField(SelectFieldProps{
+									ID:   "plaid-map-" + strconv.Itoa(i),
+									Name: "map_" + b.PlaidAccountID,
+								}, plaidMapOptions(ctx, d, b))
+							</div>
+						} else {
+							<p class="mt-2 text-xs text-destructive">{ i18n.T(ctx, "plaid.map_currency_blocked") }</p>
+						}
+					</div>
+				}
+			</div>
+			<p class="text-[13px] text-muted-foreground">
+				{ i18n.T(ctx, "plaid.map_history_note") }
+			</p>
+			@dialog.Footer() {
+				@button.Button(button.Props{
+					Variant:    button.VariantOutline,
+					Type:       "button",
+					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+				}) {
+					{ i18n.T(ctx, "common.cancel") }
+				}
+				@button.Button(button.Props{Type: "submit"}) {
+					{ i18n.T(ctx, "plaid.map_save") }
+				}
+			}
+		</form>
+	}
+}
+
+// PlaidLinkDone confirms the link and closes the loop; the accounts overview
+// refreshes itself via the accountsChanged trigger.
+templ PlaidLinkDone() {
+	@sheetPanel("") {
+		@dialog.Header() {
+			@dialog.Title() {
+				{ i18n.T(ctx, "plaid.done_title") }
+			}
+		}
+		<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "plaid.done_body") }</p>
+		@dialog.Footer() {
+			@button.Button(button.Props{
+				Type:       "button",
+				Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+			}) {
+				{ i18n.T(ctx, "plaid.done_close") }
+			}
+		}
+	}
+}
+
+func bankLabel(b PlaidBankRow) string {
+	if b.Mask != "" {
+		return b.Name + " ••" + b.Mask
+	}
+	return b.Name
+}
+
+// plaidMapOptions builds one bank row's choices: create new (the default),
+// link to any unlinked app account, or skip. When the flow was started from a
+// specific account's menu, that account is preselected on the first bank row.
+func plaidMapOptions(ctx context.Context, d PlaidMapData, b PlaidBankRow) []Opt {
+	preselectHere := d.Preselect != nil && len(d.Banks) > 0 && d.Banks[0].PlaidAccountID == b.PlaidAccountID
+	out := []Opt{
+		{Value: "new", Label: i18n.T(ctx, "plaid.map_create_new"), Selected: !preselectHere},
+		{Value: "skip", Label: i18n.T(ctx, "plaid.map_skip")},
+	}
+	for _, a := range d.Accounts {
+		out = append(out, Opt{
+			Value:    strconv.FormatInt(a.ID, 10),
+			Label:    i18n.Tf(ctx, "plaid.map_link_to", i18n.M{"Name": a.Name}),
+			Selected: preselectHere && *d.Preselect == a.ID,
+		})
+	}
+	return out
+}

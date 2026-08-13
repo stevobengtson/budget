@@ -1,11 +1,16 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -97,8 +102,43 @@ The db/migrate/seed/config admin commands are available as subcommands.`)
 		}
 
 		srv := web.NewServer(s, cfg)
+
+		// SIGINT/SIGTERM starts a graceful stop: the HTTP server drains, then the
+		// Plaid polling worker's context is cancelled and waited on. The worker is
+		// the app's first background goroutine — it must not die mid-sync (the
+		// cursor-in-transaction design tolerates it, but a clean stop is free).
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+
+		var wg sync.WaitGroup
+		if plaidSvc := srv.Plaid(); plaidSvc.Enabled() {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				plaidSvc.RunWorker(ctx, cfg.Plaid.PollInterval, srv.BankSyncEntitled())
+			}()
+		}
+
+		httpSrv := &http.Server{Addr: a, Handler: srv.Handler()}
+		errCh := make(chan error, 1)
+		go func() { errCh <- httpSrv.ListenAndServe() }()
 		fmt.Printf("budget web — listening on http://localhost%s (db=%s)\n", a, cfg.DB.DSN)
-		return http.ListenAndServe(a, srv.Handler())
+
+		select {
+		case err := <-errCh:
+			stop()
+			wg.Wait()
+			return err
+		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			err := httpSrv.Shutdown(shutdownCtx)
+			wg.Wait()
+			if errors.Is(err, context.DeadlineExceeded) {
+				return errors.New("shutdown timed out")
+			}
+			return err
+		}
 	}
 
 	webCmd := &cobra.Command{

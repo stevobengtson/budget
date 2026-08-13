@@ -3,6 +3,7 @@ package views
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -29,12 +30,16 @@ type TransactionsData struct {
 	// bar or by the budget page's "View Transactions" action.
 	FilterCategory *int64
 	FilterMonth    string // "YYYY-MM" or "" when viewing all months
-	PrevMonth      string
-	NextMonth          string
-	Today              string // current month key, for the "today" jump button
-	Page               int    // 1-based
-	PageSize           int
-	Total              int
+	// FilterReview narrows the view to unreviewed bank-sync imports;
+	// ReviewCount is the user's total for the chip label (0 hides the chip).
+	FilterReview bool
+	ReviewCount  int64
+	PrevMonth    string
+	NextMonth    string
+	Today        string // current month key, for the "today" jump button
+	Page         int    // 1-based
+	PageSize     int
+	Total        int
 }
 
 templ TransactionsPage(d TransactionsData, collapsed bool) {
@@ -324,7 +329,66 @@ templ TxFilterBar(d TransactionsData) {
 				Attributes:   templ.Attributes{"onchange": "this.form.requestSubmit()"},
 			}, categoryFilterOptions(ctx, d.Categories, d.FilterCategory))
 		</div>
+		// The needs-review chip appears only while there is something to review
+		// (or the filter is already on, so it can be turned off). A link, not a
+		// submit: it re-requests the page with review toggled and the rest of the
+		// form's state carried in the URL it builds.
+		if d.ReviewCount > 0 || d.FilterReview {
+			<a
+				href={ templ.URL(txReviewHref(d)) }
+				class={ reviewChipClass(d.FilterReview) }
+				if d.FilterReview {
+					aria-pressed="true"
+				} else {
+					aria-pressed="false"
+				}
+			>
+				{ i18n.Tnf(ctx, "tx.filter_needs_review", int(d.ReviewCount), i18n.M{"Count": d.ReviewCount}) }
+			</a>
+			if d.FilterReview {
+				<button
+					type="button"
+					class="rounded-pill border border-border px-3 py-1 text-[13px] font-semibold text-muted-foreground hover:bg-muted"
+					hx-post="/transactions/review-all"
+					hx-swap="none"
+					hx-confirm={ i18n.T(ctx, "tx.review_all_confirm") }
+				>
+					{ i18n.T(ctx, "tx.review_all") }
+				</button>
+			}
+		}
 	</form>
+}
+
+// txReviewHref toggles the needs-review filter while preserving the rest of
+// the current view (month/all, account, category).
+func txReviewHref(d TransactionsData) string {
+	q := url.Values{}
+	if d.FilterMonth != "" {
+		q.Set("month", d.FilterMonth)
+	} else {
+		q.Set("all", "1")
+	}
+	if d.FilterAccount != nil {
+		q.Set("account", strconv.FormatInt(*d.FilterAccount, 10))
+	}
+	if d.FilterCategory != nil {
+		q.Set("category", strconv.FormatInt(*d.FilterCategory, 10))
+	}
+	if !d.FilterReview {
+		q.Set("review", "1")
+	}
+	return "/transactions?" + q.Encode()
+}
+
+// reviewChipClass styles the needs-review toggle: amber when armed, quiet
+// outline otherwise.
+func reviewChipClass(active bool) string {
+	base := "rounded-pill px-3 py-1 text-[13px] font-semibold transition-colors"
+	if active {
+		return base + " bg-tag-amber-bg text-tag-amber-fg"
+	}
+	return base + " border border-border text-muted-foreground hover:bg-muted"
 }
 
 // accountFilterOptions lists the accounts for the filter, led by an
@@ -500,6 +564,20 @@ templ TxCategoryCell(t store.Transaction, accts []store.AccountWithBalance, cats
 			</span>
 		} else {
 			<span class="rounded-pill bg-tag-neutral-bg px-2 py-0.5 text-[12px] font-semibold text-tag-neutral-fg">{ i18n.T(ctx, "tx.tag_uncategorized") }</span>
+		}
+		// Unreviewed bank-sync import: the amber tag IS the "mark reviewed"
+		// action (click to clear), so review costs one click and no extra column.
+		if t.NeedsReview {
+			<button
+				type="button"
+				title={ i18n.T(ctx, "tx.mark_reviewed") }
+				class="rounded-pill bg-tag-amber-bg px-2 py-0.5 text-[12px] font-semibold text-tag-amber-fg hover:opacity-80"
+				hx-post={ fmt.Sprintf("/transactions/%d/review", t.ID) }
+				hx-target={ fmt.Sprintf("#tx-%d", t.ID) }
+				hx-swap="outerHTML"
+			>
+				{ i18n.T(ctx, "tx.tag_needs_review") }
+			</button>
 		}
 	</span>
 }

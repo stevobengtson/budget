@@ -10,6 +10,7 @@ const (
 	userAvatarVersionKey
 	enabledAddOnsKey
 	isAdminKey
+	reviewCountKey
 )
 
 // WithUserEmail returns ctx carrying the authenticated user's email so the shared
@@ -68,6 +69,19 @@ func WithIsAdmin(ctx context.Context, admin bool) context.Context {
 // IsAdmin reports whether the request's user is an admin. False when absent.
 func IsAdmin(ctx context.Context) bool {
 	v, _ := ctx.Value(isAdminKey).(bool)
+	return v
+}
+
+// WithReviewCount returns ctx carrying the user's count of unreviewed
+// bank-sync imports, for the shared layout's Activity badge. Set by
+// requireAuth only when the bank_sync add-on is enabled; absent reads as 0.
+func WithReviewCount(ctx context.Context, n int64) context.Context {
+	return context.WithValue(ctx, reviewCountKey, n)
+}
+
+// ReviewCountFrom returns the count set by WithReviewCount, or 0 if absent.
+func ReviewCountFrom(ctx context.Context) int64 {
+	v, _ := ctx.Value(reviewCountKey).(int64)
 	return v
 }
 

@@ -29,6 +29,17 @@ type ViewContext struct {
 	// row is the active one — from being on some other page entirely, where
 	// nothing in this list is active. Both cases have a nil AccountID.
 	OnTransactions bool
+	// BankSync reports the bank_sync add-on is enabled, showing the "Link a
+	// bank" button and per-account connect/disconnect menu items. Passed in
+	// rather than read from ctx so this component stays independent of the
+	// views package.
+	BankSync bool
+	// ReconnectItems are the user's Plaid items that need re-authentication,
+	// rendered as a banner prompting the update-mode Link flow.
+	ReconnectItems []store.PlaidItem
+	// ReviewCount badges the All Accounts row with the user's unreviewed
+	// bank-sync imports (0 renders nothing).
+	ReviewCount int64
 }
 
 // AccountsOverview renders a grouped account list (Cash/Credit/Loan) with an
@@ -43,6 +54,20 @@ type ViewContext struct {
 templ AccountsOverview(accts []store.AccountWithBalance, view ViewContext) {
 	{{ buckets, net := group(accts) }}
 	<div data-accounts-overview>
+		for _, it := range view.ReconnectItems {
+			<div class="mb-2 rounded-md border border-border bg-muted/60 px-2 py-1.5 text-[13px]">
+				<p>{ i18n.Tf(ctx, "plaid.reconnect_banner", i18n.M{"Institution": institutionLabel(ctx, it)}) }</p>
+				<button
+					type="button"
+					class="mt-1 font-medium text-primary underline-offset-2 hover:underline"
+					hx-post={ "/plaid/items/" + strconv.FormatInt(it.ID, 10) + "/reconnect" }
+					hx-target="#modal"
+					hx-swap="innerHTML"
+				>
+					{ i18n.T(ctx, "plaid.reconnect_button") }
+				</button>
+			</div>
+		}
 		// "All Accounts" is the unfiltered head of this same list rather than a
 		// separate nav entry: every row below links to the transactions page
 		// scoped to one account, so the zero-state of that choice belongs here.
@@ -57,6 +82,11 @@ templ AccountsOverview(accts []store.AccountWithBalance, view ViewContext) {
 				}
 			>
 				<span class={ acctNameClass(allActive) }>{ i18n.T(ctx, "nav.all_accounts") }</span>
+				if view.ReviewCount > 0 {
+					<span class="rounded-pill bg-tag-amber-bg px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-tag-amber-fg">
+						{ strconv.FormatInt(view.ReviewCount, 10) }
+					</span>
+				}
 			</a>
 		</div>
 		<div class="space-y-3">
@@ -88,7 +118,7 @@ templ AccountsOverview(accts []store.AccountWithBalance, view ViewContext) {
 									<span class={ acctNameClass(active) }>{ a.Name }</span>
 									<span class="tabular-nums text-muted-foreground">{ money.Format(ctx, displayCents(a)) }</span>
 								</a>
-								@acctMenu(a)
+								@acctMenu(a, view)
 							</div>
 						}
 					</div>
@@ -101,7 +131,20 @@ templ AccountsOverview(accts []store.AccountWithBalance, view ViewContext) {
 					@signedmoney.Money(net)
 				</div>
 			}
-			<div class="mt-3 flex justify-end">
+			<div class="mt-3 flex justify-end gap-2">
+				if view.BankSync {
+					@button.Button(button.Props{
+						Variant: button.VariantOutline,
+						Size:    button.SizeSm,
+						Attributes: templ.Attributes{
+							"hx-get":    "/plaid/link",
+							"hx-target": "#modal",
+							"hx-swap":   "innerHTML",
+						},
+					}) {
+						{ i18n.T(ctx, "plaid.link_bank") }
+					}
+				}
 				@button.Button(button.Props{
 					Variant: button.VariantOutline,
 					Size:    button.SizeSm,
@@ -117,9 +160,10 @@ templ AccountsOverview(accts []store.AccountWithBalance, view ViewContext) {
 	</div>
 }
 
-// acctMenu renders the per-account three-dot actions menu (Edit / Archive),
-// matching the transactions and budget rows' menu system.
-templ acctMenu(a store.AccountWithBalance) {
+// acctMenu renders the per-account three-dot actions menu (Edit / Archive,
+// plus bank connect/disconnect when the bank_sync add-on is on), matching the
+// transactions and budget rows' menu system.
+templ acctMenu(a store.AccountWithBalance, view ViewContext) {
 	{{ id := strconv.FormatInt(a.ID, 10) }}
 	@dropdown.Dropdown() {
 		@dropdown.Trigger(dropdown.TriggerProps{
@@ -137,6 +181,29 @@ templ acctMenu(a store.AccountWithBalance) {
 				},
 			}) {
 				{ i18n.T(ctx, "accounts.menu_edit") }
+			}
+			if view.BankSync {
+				if a.PlaidLinked() {
+					@dropdown.Item(dropdown.ItemProps{
+						Attributes: templ.Attributes{
+							"hx-post":    "/plaid/accounts/" + id + "/unlink",
+							"hx-swap":    "none",
+							"hx-confirm": i18n.Tf(ctx, "plaid.disconnect_confirm", i18n.M{"Name": a.Name}),
+						},
+					}) {
+						{ i18n.T(ctx, "plaid.disconnect_account") }
+					}
+				} else {
+					@dropdown.Item(dropdown.ItemProps{
+						Attributes: templ.Attributes{
+							"hx-get":    "/plaid/link?account=" + id,
+							"hx-target": "#modal",
+							"hx-swap":   "innerHTML",
+						},
+					}) {
+						{ i18n.T(ctx, "plaid.connect_account") }
+					}
+				}
 			}
 			@dropdown.Separator()
 			@dropdown.Item(dropdown.ItemProps{
@@ -210,6 +277,15 @@ func txHref(accountID int64, view ViewContext) string {
 		q.Set("category", strconv.FormatInt(*view.CategoryID, 10))
 	}
 	return "/transactions?" + q.Encode()
+}
+
+// institutionLabel names an item in the reconnect banner; a bank that never
+// reported a name falls back to a generic label rather than an empty string.
+func institutionLabel(ctx context.Context, it store.PlaidItem) string {
+	if it.InstitutionName != "" {
+		return it.InstitutionName
+	}
+	return i18n.T(ctx, "plaid.your_bank")
 }
 
 // archiveConfirm words the archive prompt so it states what actually happens.

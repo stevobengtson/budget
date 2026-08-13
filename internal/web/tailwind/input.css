@@ -89,6 +89,8 @@
   --color-tag-neutral-fg: var(--tag-neutral-fg);
   --color-tag-sage-bg: var(--tag-sage-bg);
   --color-tag-sage-fg: var(--tag-sage-fg);
+  --color-tag-amber-bg: var(--tag-amber-bg);
+  --color-tag-amber-fg: var(--tag-amber-fg);
   --color-brand: var(--brand);
   --color-primary-hover: var(--primary-hover);
   --color-primary-active: var(--primary-active);

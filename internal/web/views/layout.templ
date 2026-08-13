@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/sbengtson/budget/internal/core/i18n"
@@ -61,6 +62,7 @@ templ headTag(title string) {
 		<script src={ Asset("/static/group-sort.js") }></script>
 		<script src={ Asset("/static/category-sort.js") }></script>
 		<script src={ Asset("/static/quick-add.js") } defer></script>
+		<script src={ Asset("/static/plaid-link.js") } defer></script>
 		@input.Script()
 		@checkbox.Script()
 		@dialog.Script()
@@ -223,7 +225,19 @@ templ collapsedOnlyNavItem(slug string, label string, ic templ.Component, active
 		}) {
 			@ic
 			<span>{ label }</span>
+			@reviewBadge(slug)
 		}
+	}
+}
+
+// reviewBadge is the unreviewed-imports count on the transactions/Activity nav
+// entries. Self-gating: renders nothing for other slugs or a zero count, so
+// the nav components stay generic.
+templ reviewBadge(slug string) {
+	if slug == "transactions" && ReviewCountFrom(ctx) > 0 {
+		<span class="ml-auto rounded-pill bg-tag-amber-bg px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-tag-amber-fg">
+			{ strconv.FormatInt(ReviewCountFrom(ctx), 10) }
+		</span>
 	}
 }
 

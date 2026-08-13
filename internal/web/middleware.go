@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,6 +46,11 @@ func requestLogger() gin.HandlerFunc {
 			"status", status,
 			"dur_ms", time.Since(start).Milliseconds(),
 			"ip", c.ClientIP(),
+		}
+		// Handlers attach the underlying failure via c.Error; without this the
+		// journal shows a bare 5xx with no cause (as the Plaid 503s did).
+		if len(c.Errors) > 0 {
+			attrs = append(attrs, "err", c.Errors.String())
 		}
 		switch {
 		case status >= 500:
@@ -124,6 +130,13 @@ func requireAuth(svc *auth.Service, st *store.Store) gin.HandlerFunc {
 		// and the requireAddOn route guard.
 		slugs, _ := st.EnabledAddOnSlugs(c.Request.Context(), user.ID)
 		ctx = views.WithEnabledAddOns(ctx, slugs)
+		// The Activity nav badge: unreviewed bank-sync imports. Only counted when
+		// the add-on is on (the partial index makes it one cheap lookup).
+		if slices.Contains(slugs, "bank_sync") {
+			if n, err := st.CountNeedsReview(c.Request.Context(), user.ID); err == nil {
+				ctx = views.WithReviewCount(ctx, n)
+			}
+		}
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}

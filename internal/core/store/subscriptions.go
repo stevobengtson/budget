@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -94,18 +95,19 @@ func (s *Store) GetUserByStripeCustomer(ctx context.Context, customerID string) 
 		`SELECT `+userColumns+` FROM users WHERE stripe_customer_id = $1`, customerID))
 }
 
-// UpsertSubscription inserts or updates a subscription keyed by its Stripe id,
-// so replaying a webhook (or receiving events out of order) converges on the
-// latest state rather than duplicating rows.
+// UpsertSubscription inserts or updates a subscription row keyed by
+// (stripe_subscription_id, price_id) — one row per subscription *item* — so
+// replaying a webhook (or receiving events out of order) converges on the
+// latest state rather than duplicating rows. A subscription carrying the base
+// plan plus add-on items therefore projects to one row per item.
 func (s *Store) UpsertSubscription(ctx context.Context, sub Subscription) error {
 	_, err := s.run(ctx,
 		`INSERT INTO subscriptions
 		   (user_id, stripe_subscription_id, stripe_customer_id, price_id, status,
 		    currency, trial_end, current_period_end, cancel_at_period_end)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 ON CONFLICT (stripe_subscription_id) DO UPDATE SET
+		 ON CONFLICT (stripe_subscription_id, price_id) DO UPDATE SET
 		    status               = EXCLUDED.status,
-		    price_id             = EXCLUDED.price_id,
 		    currency             = EXCLUDED.currency,
 		    trial_end            = EXCLUDED.trial_end,
 		    current_period_end   = EXCLUDED.current_period_end,
@@ -115,6 +117,27 @@ func (s *Store) UpsertSubscription(ctx context.Context, sub Subscription) error 
 		sub.Currency, sub.TrialEnd, sub.CurrentPeriodEnd, sub.CancelAtPeriodEnd)
 	if err != nil {
 		return fmt.Errorf("upsert subscription %s: %w", sub.StripeSubscriptionID, err)
+	}
+	return nil
+}
+
+// DeleteSubscriptionRowsExcept removes rows for the given Stripe subscription
+// whose price is no longer among keepPriceIDs — i.e. items detached from the
+// subscription since the last sync. Called after upserting the current item
+// set so any subscription webhook converges the projection.
+func (s *Store) DeleteSubscriptionRowsExcept(ctx context.Context, stripeSubID string, keepPriceIDs []string) error {
+	args := []any{stripeSubID}
+	q := `DELETE FROM subscriptions WHERE stripe_subscription_id = $1`
+	if len(keepPriceIDs) > 0 {
+		placeholders := make([]string, len(keepPriceIDs))
+		for i, p := range keepPriceIDs {
+			placeholders[i] = fmt.Sprintf("$%d", i+2)
+			args = append(args, p)
+		}
+		q += ` AND price_id NOT IN (` + strings.Join(placeholders, ",") + `)`
+	}
+	if _, err := s.run(ctx, q, args...); err != nil {
+		return fmt.Errorf("prune subscription rows %s: %w", stripeSubID, err)
 	}
 	return nil
 }

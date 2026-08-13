@@ -18,8 +18,10 @@ import (
 
 	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/billing"
+	"github.com/sbengtson/budget/internal/core/config"
 	"github.com/sbengtson/budget/internal/core/db"
 	"github.com/sbengtson/budget/internal/core/mail"
+	"github.com/sbengtson/budget/internal/core/plaid"
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
@@ -81,8 +83,9 @@ func newTestHandlers(t *testing.T) *Handlers {
 	t.Helper()
 	st := store.New(openTestDB(t))
 	svc := auth.NewService(st, mail.NewConsole(), "http://localhost:8080", auth.Config{})
-	bill := billing.NewService(st, "", "", "http://localhost:8080", "")
-	return New(st, svc, bill, false, 3600, "http://localhost:8080")
+	bill := billing.NewService(st, "", "", "", "http://localhost:8080", "")
+	pl, _ := plaid.NewService(st, config.Config{})
+	return New(st, svc, bill, pl, false, 3600, "http://localhost:8080")
 }
 
 func postForm(t *testing.T, r http.Handler, path string, form url.Values) *httptest.ResponseRecorder {
@@ -278,8 +281,9 @@ func TestEmailChangeFlow(t *testing.T) {
 	st := store.New(openTestDB(t))
 	mailer := &captureMailer{}
 	svc := auth.NewService(st, mailer, "http://localhost:8080", auth.Config{})
-	bill := billing.NewService(st, "", "", "http://localhost:8080", "")
-	h := New(st, svc, bill, false, 3600, "http://localhost:8080")
+	bill := billing.NewService(st, "", "", "", "http://localhost:8080", "")
+	pl, _ := plaid.NewService(st, config.Config{})
+	h := New(st, svc, bill, pl, false, 3600, "http://localhost:8080")
 
 	ctx := context.Background()
 	hash, _ := auth.HashPassword("password1")

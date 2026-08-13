@@ -69,3 +69,49 @@ func TestSubscriptionsCustomerAndUpsert(t *testing.T) {
 		}
 	}
 }
+
+// TestSubscriptionMultiItemRows exercises the one-row-per-item model: two
+// prices on the same Stripe subscription coexist, and DeleteSubscriptionRowsExcept
+// prunes a detached item's row while keeping the rest.
+func TestSubscriptionMultiItemRows(t *testing.T) {
+	s, uid := newTestStoreUser(t)
+	ctx := context.Background()
+
+	base := Subscription{
+		UserID: uid, StripeSubscriptionID: "sub_multi", StripeCustomerID: "cus_m",
+		PriceID: "price_base", Status: "active",
+	}
+	addon := base
+	addon.PriceID = "price_bank_sync"
+	if err := s.UpsertSubscription(ctx, base); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertSubscription(ctx, addon); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetSubscriptionForUser(ctx, uid, "price_base"); err != nil {
+		t.Fatalf("base row missing: %v", err)
+	}
+	if _, err := s.GetSubscriptionForUser(ctx, uid, "price_bank_sync"); err != nil {
+		t.Fatalf("add-on row missing: %v", err)
+	}
+
+	// Detach the add-on item: keep only the base price.
+	if err := s.DeleteSubscriptionRowsExcept(ctx, "sub_multi", []string{"price_base"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetSubscriptionForUser(ctx, uid, "price_bank_sync"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("add-on row err = %v, want sql.ErrNoRows after prune", err)
+	}
+	if _, err := s.GetSubscriptionForUser(ctx, uid, "price_base"); err != nil {
+		t.Fatalf("base row lost by prune: %v", err)
+	}
+
+	// Empty keep list removes every row of the subscription.
+	if err := s.DeleteSubscriptionRowsExcept(ctx, "sub_multi", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetSubscriptionForUser(ctx, uid, "price_base"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("base row err = %v, want sql.ErrNoRows after full prune", err)
+	}
+}
