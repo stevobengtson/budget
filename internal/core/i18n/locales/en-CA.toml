@@ -18,6 +18,7 @@ accounts_group = "Accounts"
 budget = "Budget"
 all_accounts = "All Accounts"
 paydown = "Paydown"
+estimates = "Budget Estimate"
 activity = "Activity"
 primary_label = "Primary"
 
@@ -255,6 +256,24 @@ category_modal_note = "For each projected month the engine picks spent in this c
 one = "Interest over {{.Months}} month"
 other = "Interest over {{.Months}} months"
 
+[estimates]
+heading = "Budget Estimate"
+intro = "Take a snapshot of your current budget and income, then adjust the copy to see what you could cut, change, or add — without touching your real budget."
+new_button = "New estimate"
+name_field = "Estimate name"
+empty = "No estimates yet. Create one to start planning."
+created_label = "Created {{.Date}}"
+delete_confirm = "Delete this estimate? Everything in it will be permanently removed. Your real budget is not affected."
+back_to_list = "All estimates"
+income_heading = "Income"
+add_income = "Add income"
+income_delete_confirm = "Remove this income entry from the estimate?"
+group_delete_confirm = "Delete this group and all of its categories from the estimate?"
+category_delete_confirm = "Delete this category from the estimate?"
+summary_income = "Income"
+summary_expenses = "Expenses"
+summary_difference = "Difference"
+
 [billing]
 trial_ended_title = "Your trial has ended"
 start_trial_title = "Start your free trial"
@@ -391,9 +410,11 @@ name_required = "Enter a name."
 # unreserved key is rejected as a malformed message.
 [addons.name]
 paydown = "Debt Paydown"
+estimates = "Budget Estimate"
 
 [addons.description]
 paydown = "Project payoff timelines and total interest across your debt accounts."
+estimates = "Snapshot your budget and income, then adjust the copy to plan changes without touching the real thing."
 
 # The starter budget the first-run wizard seeds. These become the user's own
 # editable category rows at signup, so they are translated once at seeding —

@@ -114,23 +114,35 @@ func (h *Handlers) upsertAccount(c *gin.Context, id int64) {
 			a.CreditLimitCents = &cents
 		}
 	}
-	if v := c.PostForm("apr"); v != "" {
-		// Locale-aware: a French user types 19,99. Parsing with strconv alone
-		// silently dropped the rate for them, since the error is ignored here.
-		if f, err := format.ParseDecimal(ctx, v); err == nil {
-			bps := int64(f * 100)
-			a.AprBps = &bps
+	if views.AddOnEnabled(ctx, "paydown") {
+		if v := c.PostForm("apr"); v != "" {
+			// Locale-aware: a French user types 19,99. Parsing with strconv alone
+			// silently dropped the rate for them, since the error is ignored here.
+			if f, err := format.ParseDecimal(ctx, v); err == nil {
+				bps := int64(f * 100)
+				a.AprBps = &bps
+			}
 		}
-	}
-	if v := c.PostForm("monthly_payment"); v != "" {
-		if cents, err := money.Parse(ctx, v); err == nil {
-			a.MonthlyPaymentCents = &cents
+		if v := c.PostForm("monthly_payment"); v != "" {
+			if cents, err := money.Parse(ctx, v); err == nil {
+				a.MonthlyPaymentCents = &cents
+			}
 		}
-	}
-	a.IncludeInPaydown = c.PostForm("include_in_paydown") == "1"
-	if v := c.PostForm("payment_category_id"); v != "" {
-		if cid, err := strconv.ParseInt(v, 10, 64); err == nil {
-			a.PaymentCategoryID = &cid
+		a.IncludeInPaydown = c.PostForm("include_in_paydown") == "1"
+		if v := c.PostForm("payment_category_id"); v != "" {
+			if cid, err := strconv.ParseInt(v, 10, 64); err == nil {
+				a.PaymentCategoryID = &cid
+			}
+		}
+	} else if id != 0 {
+		// The paydown add-on is off, so the form carried none of its fields.
+		// Preserve what the account already has rather than zeroing it, so
+		// re-enabling the add-on finds everything intact.
+		if cur, err := h.store.GetAccount(ctx, uid, id); err == nil {
+			a.AprBps = cur.AprBps
+			a.MonthlyPaymentCents = cur.MonthlyPaymentCents
+			a.IncludeInPaydown = cur.IncludeInPaydown
+			a.PaymentCategoryID = cur.PaymentCategoryID
 		}
 	}
 

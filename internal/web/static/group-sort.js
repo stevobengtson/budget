@@ -4,7 +4,9 @@
 // items. Groups are the only children of that container now that income, credit
 // and the totals have moved out of the list, so no onMove guard is needed.
 // On drop we persist the new order via htmx (no swap — reordering changes no
-// money, so there's nothing to re-render).
+// money, so there's nothing to re-render). The endpoint comes from the
+// container's data-group-reorder-url when set (the Budget Estimate editor),
+// defaulting to the budget page's.
 (function () {
   function persistOrder(table) {
     var ids = Array.prototype.map.call(
@@ -13,7 +15,8 @@
         return tb.getAttribute("data-group-id");
       }
     );
-    htmx.ajax("POST", "/budget/groups/reorder", {
+    var url = table.dataset.groupReorderUrl || "/budget/groups/reorder";
+    htmx.ajax("POST", url, {
       swap: "none",
       values: { ids: ids.join(",") },
     });

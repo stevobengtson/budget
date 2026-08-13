@@ -176,6 +176,11 @@ templ PrimaryNav(active string, oob bool) {
 			if AddOnEnabled(ctx, "paydown") {
 				@navItem("paydown", i18n.T(ctx, "nav.paydown"), icon.TrendingDown(icon.Props{Class: "size-[18px]"}), active)
 			}
+			// Sidebar only, no tab-bar entry: the mobile bar is designed around
+			// three tabs and paydown already claims the fourth when enabled.
+			if AddOnEnabled(ctx, "estimates") {
+				@navItem("estimates", i18n.T(ctx, "nav.estimates"), icon.Calculator(icon.Props{Class: "size-[18px]"}), active)
+			}
 		}
 	</div>
 }

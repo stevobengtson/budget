@@ -1,0 +1,516 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/sbengtson/budget/internal/core/format"
+	"github.com/sbengtson/budget/internal/core/i18n"
+	"github.com/sbengtson/budget/internal/core/money"
+	"github.com/sbengtson/budget/internal/core/store"
+	"github.com/sbengtson/budget/internal/web/components/ui/button"
+	"github.com/templui/templui/components/icon"
+)
+
+// EstimatesListData drives the estimates list page (Budget Estimate add-on).
+type EstimatesListData struct {
+	Estimates   []store.Estimate
+	DefaultName string
+}
+
+// EstimateData drives the estimate editor page: the snapshot's income rows,
+// its groups with their categories, and the running totals.
+type EstimateData struct {
+	Estimate store.Estimate
+	Groups   []EstimateViewGroup
+	Incomes  []store.EstimateIncome
+}
+
+type EstimateViewGroup struct {
+	Group store.EstimateGroup
+	Rows  []store.EstimateCategory
+}
+
+// estGridCols is the editor's shared two-column track (name, assigned),
+// declared once so heads and rows cannot drift apart.
+const estGridCols = "grid grid-cols-[1fr_140px_36px] items-center gap-x-s3"
+
+templ EstimatesListPage(d EstimatesListData, collapsed bool) {
+	@Layout(i18n.T(ctx, "nav.estimates"), "estimates", collapsed) {
+		<div class="mx-auto flex w-full max-w-3xl flex-col gap-s4">
+			<h1 class="font-heading text-[28px] font-semibold">{ i18n.T(ctx, "estimates.heading") }</h1>
+			<p class="text-[15px] text-muted-foreground">{ i18n.T(ctx, "estimates.intro") }</p>
+			<form hx-post="/estimates" class="flex flex-wrap items-center gap-s2" data-inline-errors>
+				<input
+					type="text"
+					name="name"
+					value={ d.DefaultName }
+					autocomplete="off"
+					aria-label={ i18n.T(ctx, "estimates.name_field") }
+					class="h-10 w-[240px] rounded-pill border border-input bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:border-primary"
+				/>
+				@button.Button(button.Props{Type: "submit", Class: "rounded-pill"}) {
+					{ i18n.T(ctx, "estimates.new_button") }
+				}
+			</form>
+			if len(d.Estimates) == 0 {
+				<p class="text-[15px] text-muted-foreground">{ i18n.T(ctx, "estimates.empty") }</p>
+			} else {
+				<div class="flex flex-col rounded-xl border border-border bg-background">
+					for _, e := range d.Estimates {
+						@estimateListRow(e)
+					}
+				</div>
+			}
+		</div>
+	}
+}
+
+templ estimateListRow(e store.Estimate) {
+	<div id={ fmt.Sprintf("estimate-%d", e.ID) } class="flex items-center gap-s3 border-b border-border px-s3 py-s3 last:border-b-0">
+		<a href={ templ.URL(fmt.Sprintf("/estimates/%d", e.ID)) } class="flex min-w-0 flex-1 flex-col">
+			<span class="truncate text-[16px] font-semibold">{ e.Name }</span>
+			<span class="text-[13px] text-muted-foreground">
+				{ i18n.Tf(ctx, "estimates.created_label", i18n.M{"Date": format.DateMedium(ctx, e.CreatedAt)}) }
+			</span>
+		</a>
+		@button.Button(button.Props{
+			Type:    "button",
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Class:   "shrink-0 rounded-pill text-muted-foreground hover:text-money-negative",
+			Attributes: templ.Attributes{
+				"hx-post":    fmt.Sprintf("/estimates/%d/delete", e.ID),
+				"hx-target":  fmt.Sprintf("#estimate-%d", e.ID),
+				"hx-swap":    "outerHTML",
+				"hx-confirm": i18n.T(ctx, "estimates.delete_confirm"),
+				"title":      i18n.T(ctx, "common.delete"),
+			},
+		}) {
+			@icon.X(icon.Props{Class: "size-4"})
+		}
+	</div>
+}
+
+templ EstimatePage(d EstimateData, collapsed bool) {
+	@Layout(d.Estimate.Name+" · "+i18n.T(ctx, "nav.estimates"), "estimates", collapsed) {
+		<div class="mx-auto flex w-full max-w-3xl flex-col gap-s4">
+			<div class="flex flex-wrap items-center gap-s3">
+				<a href="/estimates" class="inline-flex items-center gap-1 text-[14px] text-muted-foreground hover:text-foreground">
+					@icon.ChevronLeft(icon.Props{Class: "size-4"})
+					{ i18n.T(ctx, "estimates.back_to_list") }
+				</a>
+			</div>
+			<h1 class="font-heading text-[28px] font-semibold">{ d.Estimate.Name }</h1>
+			@estimateIncomeSection(d)
+			@estimateTable(d)
+			@EstimateSummary(d, false)
+		</div>
+	}
+}
+
+// --- Income table ---
+
+templ estimateIncomeSection(d EstimateData) {
+	<section class="flex flex-col gap-s2 rounded-xl border border-border bg-background p-s3">
+		<div class="flex items-center justify-between gap-s2">
+			<h2 class="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">{ i18n.T(ctx, "estimates.income_heading") }</h2>
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantOutline,
+				Size:    button.SizeSm,
+				Class:   "rounded-pill",
+				Attributes: templ.Attributes{
+					"hx-get":    fmt.Sprintf("/estimates/%d/income/new", d.Estimate.ID),
+					"hx-target": "#est-income-rows",
+					"hx-swap":   "beforeend",
+				},
+			}) {
+				{ i18n.T(ctx, "estimates.add_income") }
+			}
+		</div>
+		<div id="est-income-rows" class="flex flex-col">
+			for _, r := range d.Incomes {
+				@EstimateIncomeRow(d.Estimate.ID, r)
+			}
+		</div>
+	</section>
+}
+
+templ EstimateIncomeRow(estimateID int64, r store.EstimateIncome) {
+	<div id={ fmt.Sprintf("est-income-%d", r.ID) } class="group flex items-center gap-s3 border-b border-border py-s2 last:border-b-0">
+		<form hx-put={ fmt.Sprintf("/estimates/%d/income/%d", estimateID, r.ID) } hx-target={ fmt.Sprintf("#est-income-%d", r.ID) } hx-swap="outerHTML" class="flex min-w-0 flex-1 items-center">
+			<button type="button" class="js-name-display cursor-text truncate rounded-sm px-1 py-0.5 text-[15px] font-semibold ring-1 ring-transparent hover:ring-border" title={ i18n.T(ctx, "common.click_to_rename") }>
+				{ r.Name }
+			</button>
+			<input type="text" name="name" value={ r.Name } autocomplete="off" class="js-name-input hidden h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+		</form>
+		<form hx-put={ fmt.Sprintf("/estimates/%d/income/%d", estimateID, r.ID) } hx-target={ fmt.Sprintf("#est-income-%d", r.ID) } hx-swap="outerHTML" class="js-assign flex w-[140px] shrink-0 items-center justify-end">
+			<button type="button" class="js-assign-display h-9 w-full cursor-text rounded-pill bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums text-money-positive ring-1 ring-transparent hover:ring-border" title={ i18n.T(ctx, "common.click_to_edit") }>
+				{ money.Format(ctx, r.AmountCents) }
+			</button>
+			<input type="text" name="amount" value={ money.Format(ctx, r.AmountCents) } inputmode="decimal" autocomplete="off" class="js-assign-input hidden h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+		</form>
+		@button.Button(button.Props{
+			Type:    "button",
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Class:   "shrink-0 rounded-pill text-muted-foreground hover:text-money-negative",
+			Attributes: templ.Attributes{
+				"hx-delete":  fmt.Sprintf("/estimates/%d/income/%d", estimateID, r.ID),
+				"hx-target":  fmt.Sprintf("#est-income-%d", r.ID),
+				"hx-swap":    "outerHTML",
+				"hx-confirm": i18n.T(ctx, "estimates.income_delete_confirm"),
+				"title":      i18n.T(ctx, "common.delete"),
+			},
+		}) {
+			@icon.X(icon.Props{Class: "size-4"})
+		}
+	</div>
+}
+
+// EstimateIncomeNewRow is the transient add-income row: one form spanning both
+// fields, saved explicitly (two fields have no single commit point).
+templ EstimateIncomeNewRow(estimateID int64) {
+	<div data-newrow class="flex items-center gap-s3 border-b border-border py-s2 last:border-b-0">
+		<form id="est-income-new-form" hx-post={ fmt.Sprintf("/estimates/%d/income", estimateID) } hx-target="closest [data-newrow]" hx-swap="outerHTML" class="flex min-w-0 flex-1 items-center">
+			<input type="text" name="name" autofocus placeholder={ i18n.T(ctx, "income.source_placeholder") } autocomplete="off" class="h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+		</form>
+		<input type="text" form="est-income-new-form" name="amount" placeholder="0.00" inputmode="decimal" autocomplete="off" class="h-9 w-[140px] shrink-0 rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/>
+		<div class="flex shrink-0 items-center gap-s2">
+			@button.Button(button.Props{Type: "submit", Size: button.SizeSm, Class: "rounded-pill", Attributes: templ.Attributes{"form": "est-income-new-form"}}) {
+				{ i18n.T(ctx, "common.save") }
+			}
+			@button.Button(button.Props{
+				Type:       "button",
+				Variant:    button.VariantGhost,
+				Size:       button.SizeSm,
+				Class:      "rounded-pill",
+				Attributes: templ.Attributes{"hx-on:click": "this.closest('[data-newrow]').remove()"},
+			}) {
+				{ i18n.T(ctx, "common.cancel") }
+			}
+		</div>
+	</div>
+}
+
+// --- Groups + categories table ---
+
+// estimateTable hosts the draggable groups. The container carries the reorder
+// endpoints as data attributes; group-sort.js and category-sort.js read them
+// and fall back to the budget endpoints when absent.
+templ estimateTable(d EstimateData) {
+	<div
+		id="estimate-table"
+		class="js-group-sort flex flex-col rounded-xl border border-border bg-background p-s3"
+		data-group-reorder-url={ fmt.Sprintf("/estimates/%d/groups/reorder", d.Estimate.ID) }
+		data-cat-reorder-url={ fmt.Sprintf("/estimates/%d/categories/reorder", d.Estimate.ID) }
+	>
+		<div class="flex items-center justify-between gap-s2 pb-s2">
+			<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">{ i18n.T(ctx, "budget.categories_heading") }</span>
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantOutline,
+				Size:    button.SizeSm,
+				Class:   "rounded-pill",
+				Attributes: templ.Attributes{
+					"hx-get":    fmt.Sprintf("/estimates/%d/group/new", d.Estimate.ID),
+					"hx-target": "#estimate-groups",
+					"hx-swap":   "afterbegin",
+				},
+			}) {
+				{ i18n.T(ctx, "budget.add_group") }
+			}
+		</div>
+		<div class={ estGridCols, "px-s3 pb-s2 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground" }>
+			<span>{ i18n.T(ctx, "budget.col_category") }</span>
+			<span class="text-right">{ i18n.T(ctx, "budget.col_assigned") }</span>
+			<span></span>
+		</div>
+		<div id="estimate-groups" class="flex flex-col">
+			for _, g := range d.Groups {
+				@EstimateGroupTbody(g)
+			}
+		</div>
+	</div>
+}
+
+templ EstimateGroupTbody(g EstimateViewGroup) {
+	<div id={ fmt.Sprintf("est-group-%d", g.Group.ID) } class="flex flex-col" data-group data-group-id={ fmt.Sprintf("%d", g.Group.ID) }>
+		@EstimateGroupHeader(g, false)
+		for _, r := range g.Rows {
+			@EstimateCategoryRow(g.Group.EstimateID, r)
+		}
+	</div>
+}
+
+// EstimateGroupHeader renders a group's header row: drag grip, inline-renameable
+// name, the group's assigned total, add-category and delete controls. With
+// oob=true a mutation response refreshes it out of band (the total moves when a
+// category's assigned value changes or a category joins/leaves the group).
+templ EstimateGroupHeader(g EstimateViewGroup, oob bool) {
+	{{ attrs := templ.Attributes{"id": fmt.Sprintf("est-group-head-%d", g.Group.ID), "data-group-head": ""} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	<div class="flex items-center gap-s2 px-s3 pb-s1 pt-s3" { attrs... }>
+		<span
+			class="js-group-handle inline-flex cursor-grab touch-none items-center text-warm-400 hover:text-foreground"
+			title={ i18n.T(ctx, "budget.drag_group") }
+			aria-hidden="true"
+		>
+			@icon.GripVertical(icon.Props{Class: "size-4"})
+		</span>
+		<form
+			hx-put={ fmt.Sprintf("/estimates/%d/group/%d", g.Group.EstimateID, g.Group.ID) }
+			hx-target={ fmt.Sprintf("#est-group-head-%d", g.Group.ID) }
+			hx-swap="outerHTML"
+			class="flex min-w-0 items-center"
+		>
+			<button
+				type="button"
+				class="js-name-display cursor-text truncate rounded-sm px-1 py-0.5 font-heading text-[17px] font-semibold ring-1 ring-transparent hover:ring-border"
+				title={ i18n.T(ctx, "common.click_to_rename") }
+			>
+				{ g.Group.Name }
+			</button>
+			<input
+				type="text"
+				name="name"
+				value={ g.Group.Name }
+				autocomplete="off"
+				class="js-name-input hidden h-9 w-[220px] rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			/>
+		</form>
+		<div class="ml-auto flex shrink-0 items-center gap-s2">
+			<span class={ "text-[13px] font-bold tabular-nums", availColorClass(estimateGroupTotal(g.Rows)) }>
+				{ money.Format(ctx, estimateGroupTotal(g.Rows)) }
+			</span>
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantGhost,
+				Size:    button.SizeSm,
+				Class:   "rounded-pill text-muted-foreground hover:text-foreground",
+				Attributes: templ.Attributes{
+					"hx-get":    fmt.Sprintf("/estimates/%d/group/%d/category/new", g.Group.EstimateID, g.Group.ID),
+					"hx-target": fmt.Sprintf("#est-group-%d", g.Group.ID),
+					"hx-swap":   "beforeend",
+					"title":     i18n.T(ctx, "budget.add_category"),
+				},
+			}) {
+				{ i18n.T(ctx, "budget.add_category") }
+			}
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantGhost,
+				Size:    button.SizeSm,
+				Class:   "rounded-pill text-muted-foreground hover:text-money-negative",
+				Attributes: templ.Attributes{
+					"hx-post":    fmt.Sprintf("/estimates/%d/group/%d/delete", g.Group.EstimateID, g.Group.ID),
+					"hx-target":  fmt.Sprintf("#est-group-%d", g.Group.ID),
+					"hx-swap":    "outerHTML",
+					"hx-confirm": i18n.T(ctx, "estimates.group_delete_confirm"),
+					"title":      i18n.T(ctx, "common.delete"),
+				},
+			}) {
+				@icon.X(icon.Props{Class: "size-4"})
+			}
+		</div>
+	</div>
+}
+
+// EstimateGroupNewRow is the transient editable group inserted by "Add group".
+// name-edit.js submits it on Enter/blur or removes it if left empty.
+templ EstimateGroupNewRow(estimateID int64) {
+	<div data-newrow class="px-s3 py-s2">
+		<form hx-post={ fmt.Sprintf("/estimates/%d/group", estimateID) } hx-target="closest [data-newrow]" hx-swap="outerHTML" class="flex items-center">
+			<input
+				type="text"
+				name="name"
+				autocomplete="off"
+				autofocus
+				placeholder={ i18n.T(ctx, "budget.new_group_placeholder") }
+				class="js-name-new h-9 w-[220px] rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			/>
+		</form>
+	</div>
+}
+
+templ EstimateCategoryRow(estimateID int64, r store.EstimateCategory) {
+	<div
+		id={ fmt.Sprintf("est-cat-%d", r.ID) }
+		class={ estGridCols, "group rounded-md px-s3 py-[9px]" }
+		data-category
+		data-category-id={ fmt.Sprintf("%d", r.ID) }
+	>
+		<div class="flex min-w-0 items-center gap-1">
+			<span
+				class="js-category-handle hidden cursor-grab touch-none items-center text-warm-400 opacity-0 transition-opacity group-hover:opacity-100 md:inline-flex"
+				title={ i18n.T(ctx, "budget.drag_category") }
+				aria-hidden="true"
+			>
+				@icon.GripVertical(icon.Props{Class: "size-4"})
+			</span>
+			<form
+				hx-put={ fmt.Sprintf("/estimates/%d/category/%d", estimateID, r.ID) }
+				hx-target={ fmt.Sprintf("#est-cat-%d", r.ID) }
+				hx-swap="outerHTML"
+				class="flex min-w-0 items-center"
+			>
+				<button type="button" class="js-name-display cursor-text truncate rounded-sm px-1 py-0.5 text-[16px] font-semibold ring-1 ring-transparent hover:ring-border" title={ i18n.T(ctx, "common.click_to_rename") }>
+					{ r.Name }
+				</button>
+				<input
+					type="text"
+					name="name"
+					value={ r.Name }
+					autocomplete="off"
+					class="js-name-input hidden h-9 w-[220px] rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				/>
+			</form>
+		</div>
+		<form
+			hx-post={ fmt.Sprintf("/estimates/%d/category/%d/assign", estimateID, r.ID) }
+			hx-target={ fmt.Sprintf("#est-cat-%d", r.ID) }
+			hx-swap="outerHTML"
+			class="js-assign flex items-center justify-end"
+		>
+			<button
+				type="button"
+				class="js-assign-display h-9 w-full cursor-text rounded-pill bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums ring-1 ring-transparent transition-shadow hover:ring-border"
+				title={ i18n.T(ctx, "common.click_to_edit") }
+			>
+				{ money.Format(ctx, r.AssignedCents) }
+			</button>
+			<input
+				type="text"
+				name="amount"
+				value={ money.Format(ctx, r.AssignedCents) }
+				inputmode="decimal"
+				autocomplete="off"
+				class="js-assign-input hidden h-9 w-full rounded-pill border border-primary bg-surface-sunk px-s3 text-right text-[15px] font-semibold tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			/>
+		</form>
+		<div class="flex items-center justify-end">
+			@button.Button(button.Props{
+				Type:    "button",
+				Variant: button.VariantGhost,
+				Size:    button.SizeSm,
+				Class:   "rounded-pill text-muted-foreground opacity-0 transition-opacity hover:text-money-negative group-hover:opacity-100",
+				Attributes: templ.Attributes{
+					"hx-delete":  fmt.Sprintf("/estimates/%d/category/%d", estimateID, r.ID),
+					"hx-target":  fmt.Sprintf("#est-cat-%d", r.ID),
+					"hx-swap":    "outerHTML",
+					"hx-confirm": i18n.T(ctx, "estimates.category_delete_confirm"),
+					"title":      i18n.T(ctx, "common.delete"),
+				},
+			}) {
+				@icon.X(icon.Props{Class: "size-4"})
+			}
+		</div>
+	</div>
+}
+
+// EstimateCategoryNewRow is the transient editable category row for a group.
+templ EstimateCategoryNewRow(estimateID, groupID int64) {
+	<div data-newrow class="px-s3 py-s2">
+		<form hx-post={ fmt.Sprintf("/estimates/%d/group/%d/category", estimateID, groupID) } hx-target="closest [data-newrow]" hx-swap="outerHTML" class="flex items-center gap-s3">
+			<input
+				type="text"
+				name="name"
+				autocomplete="off"
+				autofocus
+				placeholder={ i18n.T(ctx, "budget.new_category_placeholder") }
+				class="js-name-new h-9 w-[220px] rounded-pill border border-primary bg-surface-sunk px-s3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			/>
+			<span class="text-[13px] text-muted-foreground">{ i18n.T(ctx, "budget.enter_adds_esc_cancels") }</span>
+		</form>
+	</div>
+}
+
+// --- Summary ---
+
+// EstimateSummary is the totals bar: income, planned expenses, and what's left.
+// Every mutation refreshes it out of band via its stable id.
+templ EstimateSummary(d EstimateData, oob bool) {
+	{{ attrs := templ.Attributes{"id": "estimate-summary"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	{{ income := estimateIncomeTotal(d.Incomes) }}
+	{{ expenses := estimateExpenseTotal(d.Groups) }}
+	<div class="grid grid-cols-1 gap-s3 sm:grid-cols-3" { attrs... }>
+		@estStat(i18n.T(ctx, "estimates.summary_income"), money.Format(ctx, income), "text-money-positive")
+		@estStat(i18n.T(ctx, "estimates.summary_expenses"), money.Format(ctx, expenses), "text-foreground")
+		@estStat(i18n.T(ctx, "estimates.summary_difference"), money.Format(ctx, income-expenses), availColorClass(income-expenses))
+	</div>
+}
+
+templ estStat(label, value, valueClass string) {
+	<div class="flex flex-col gap-s2 rounded-xl border border-border bg-card p-s3 shadow-organic-sm">
+		<span class="text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground">{ label }</span>
+		<span class={ "font-heading text-[28px] font-semibold leading-[1.1] tabular-nums", valueClass }>{ value }</span>
+	</div>
+}
+
+func estimateGroupTotal(rows []store.EstimateCategory) (total int64) {
+	for _, r := range rows {
+		total += r.AssignedCents
+	}
+	return
+}
+
+func estimateIncomeTotal(rows []store.EstimateIncome) (total int64) {
+	for _, r := range rows {
+		total += r.AmountCents
+	}
+	return
+}
+
+func estimateExpenseTotal(groups []EstimateViewGroup) (total int64) {
+	for _, g := range groups {
+		total += estimateGroupTotal(g.Rows)
+	}
+	return
+}
+
+// --- Mutation result composites (primary target + OOB refreshes) ---
+
+// EstimateIncomeRowResult swaps one income row and refreshes the summary.
+templ EstimateIncomeRowResult(estimateID int64, r store.EstimateIncome, d EstimateData) {
+	@EstimateIncomeRow(estimateID, r)
+	@EstimateSummary(d, true)
+}
+
+// EstimateSummaryResult is for deletes: the primary target swaps to nothing
+// (removing the row) and the summary refreshes out of band.
+templ EstimateSummaryResult(d EstimateData) {
+	@EstimateSummary(d, true)
+}
+
+// EstimateCategoryRowResult swaps one category row and refreshes its group
+// header (total) and the summary.
+templ EstimateCategoryRowResult(estimateID int64, r store.EstimateCategory, g EstimateViewGroup, d EstimateData) {
+	@EstimateCategoryRow(estimateID, r)
+	@EstimateGroupHeader(g, true)
+	@EstimateSummary(d, true)
+}
+
+// EstimateCategoryDeleteResult removes the row and refreshes header + summary.
+templ EstimateCategoryDeleteResult(g EstimateViewGroup, d EstimateData) {
+	@EstimateGroupHeader(g, true)
+	@EstimateSummary(d, true)
+}
+
+// EstimateGroupDeleteResult removes the group (empty primary) and refreshes the
+// summary — its categories' assigned amounts left the total.
+templ EstimateGroupDeleteResult(d EstimateData) {
+	@EstimateSummary(d, true)
+}
+
+// EstimateReorderResult refreshes the affected group headers after a category
+// drag (a cross-group move shifts both groups' totals).
+templ EstimateReorderResult(groups []EstimateViewGroup) {
+	for _, g := range groups {
+		@EstimateGroupHeader(g, true)
+	}
+}

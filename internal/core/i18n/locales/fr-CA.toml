@@ -9,6 +9,7 @@ accounts_group = "Comptes"
 budget = "Budget"
 all_accounts = "Tous les comptes"
 paydown = "Remboursement"
+estimates = "Budget prévisionnel"
 activity = "Activité"
 primary_label = "Principale"
 
@@ -245,6 +246,24 @@ category_modal_note = "Pour chaque mois projeté, le moteur choisit le montant d
 one = "Intérêts sur {{.Months}} mois"
 other = "Intérêts sur {{.Months}} mois"
 
+[estimates]
+heading = "Budget prévisionnel"
+intro = "Prenez un instantané de votre budget et de vos revenus actuels, puis ajustez la copie pour voir ce que vous pourriez retrancher, modifier ou ajouter — sans toucher à votre vrai budget."
+new_button = "Nouvelle prévision"
+name_field = "Nom de la prévision"
+empty = "Aucune prévision pour l'instant. Créez-en une pour commencer à planifier."
+created_label = "Créée le {{.Date}}"
+delete_confirm = "Supprimer cette prévision? Tout son contenu sera définitivement retiré. Votre vrai budget n'est pas touché."
+back_to_list = "Toutes les prévisions"
+income_heading = "Revenus"
+add_income = "Ajouter un revenu"
+income_delete_confirm = "Retirer cette entrée de revenu de la prévision?"
+group_delete_confirm = "Supprimer ce groupe et toutes ses catégories de la prévision?"
+category_delete_confirm = "Supprimer cette catégorie de la prévision?"
+summary_income = "Revenus"
+summary_expenses = "Dépenses"
+summary_difference = "Différence"
+
 [billing]
 trial_ended_title = "Votre essai est terminé"
 start_trial_title = "Commencez votre essai gratuit"
@@ -375,9 +394,11 @@ name_required = "Entrez un nom."
 
 [addons.name]
 paydown = "Remboursement des dettes"
+estimates = "Budget prévisionnel"
 
 [addons.description]
 paydown = "Projetez les échéanciers de remboursement et les intérêts totaux de vos comptes de dette."
+estimates = "Prenez un instantané de votre budget et de vos revenus, puis ajustez la copie pour planifier des changements sans toucher au vrai budget."
 
 [starter.group]
 income = "Revenus"

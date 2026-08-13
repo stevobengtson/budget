@@ -387,6 +387,31 @@ func (s *Server) routes(cfg config.Config) {
 	paydown.GET("/:acctID/category-form", hs.PaydownCategoryForm)
 	paydown.POST("/:acctID/payment", hs.PaydownSetPayment)
 	paydown.POST("/:acctID/category", hs.PaydownSetCategory)
+
+	// Budget Estimate is likewise an opt-in add-on: the whole group sits behind
+	// its enabled flag, so a disabled user hitting any /estimates URL directly is
+	// redirected to /budget.
+	estimates := gated.Group("/estimates")
+	estimates.Use(requireAddOn("estimates"))
+	estimates.GET("", hs.EstimatesIndex)
+	estimates.POST("", hs.EstimatesCreate)
+	estimates.GET("/:id", hs.EstimateShow)
+	estimates.POST("/:id/delete", hs.EstimateDelete)
+	estimates.GET("/:id/income/new", hs.EstimateIncomeNew)
+	estimates.POST("/:id/income", hs.EstimateIncomeCreate)
+	estimates.PUT("/:id/income/:iid", hs.EstimateIncomeUpdate)
+	estimates.DELETE("/:id/income/:iid", hs.EstimateIncomeDelete)
+	estimates.GET("/:id/group/new", hs.EstimateGroupNew)
+	estimates.POST("/:id/group", hs.EstimateGroupCreate)
+	estimates.PUT("/:id/group/:gid", hs.EstimateGroupRename)
+	estimates.POST("/:id/group/:gid/delete", hs.EstimateGroupDelete)
+	estimates.POST("/:id/groups/reorder", hs.EstimateGroupsReorder)
+	estimates.GET("/:id/group/:gid/category/new", hs.EstimateCategoryNew)
+	estimates.POST("/:id/group/:gid/category", hs.EstimateCategoryCreate)
+	estimates.PUT("/:id/category/:catID", hs.EstimateCategoryRename)
+	estimates.POST("/:id/category/:catID/assign", hs.EstimateAssign)
+	estimates.DELETE("/:id/category/:catID", hs.EstimateCategoryDelete)
+	estimates.POST("/:id/categories/reorder", hs.EstimateCategoriesReorder)
 }
 
 // publicPrefix is the URL prefix a locale's public pages live under: none for

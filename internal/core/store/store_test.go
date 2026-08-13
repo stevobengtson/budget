@@ -26,6 +26,7 @@ func testDSN() string {
 var testTables = []string{
 	"transactions", "budgets", "categories", "category_groups",
 	"incomes", "accounts", "verification_tokens", "sessions", "users",
+	"estimate_incomes", "estimate_categories", "estimate_groups", "estimates",
 }
 
 // testDBLockKey is a global Postgres advisory-lock key. `go test ./...` runs

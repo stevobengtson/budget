@@ -25,15 +25,20 @@
   }
 
   function persist(to, from) {
-    var table = to.closest("[data-month]");
+    // The container is the .js-group-sort table. The budget page's carries
+    // data-month; the Budget Estimate editor's instead names its own endpoint
+    // via data-cat-reorder-url (estimates are month-less snapshots).
+    var table = to.closest(".js-group-sort");
     var month = table ? table.getAttribute("data-month") || "" : "";
+    var url =
+      (table && table.dataset.catReorderUrl) || "/budget/categories/reorder";
     var groups = [to.getAttribute("data-group-id")];
     var cats = [catIds(to).join(",")];
     if (from !== to) {
       groups.push(from.getAttribute("data-group-id"));
       cats.push(catIds(from).join(","));
     }
-    htmx.ajax("POST", "/budget/categories/reorder", {
+    htmx.ajax("POST", url, {
       swap: "none",
       values: { month: month, groups: groups.join("|"), cats: cats.join("|") },
     });
