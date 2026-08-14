@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -56,6 +57,16 @@ func (s *Server) BankSyncEntitled() func(context.Context, int64) bool {
 func NewServer(s *store.Store, cfg config.Config) *Server {
 	gin.SetMode(cfg.Web.Level)
 	r := gin.New()
+	// Gin trusts every proxy by default, which makes c.ClientIP() reflect a
+	// client-supplied X-Forwarded-For — enough to defeat per-IP rate limiting by
+	// varying a header, and enough to write fiction into sessions.ip. In
+	// production only the local nginx is in front of us.
+	//
+	// An error here means the configured list is malformed; failing to apply it
+	// silently would leave the permissive default in place, so it is fatal.
+	if err := r.SetTrustedProxies(cfg.Web.TrustedProxies); err != nil {
+		panic(fmt.Sprintf("web: invalid trusted_proxies %v: %v", cfg.Web.TrustedProxies, err))
+	}
 	// requestLogger is outermost so it observes the final status (even a
 	// Recovery-produced 500). sentrygin sits just inside Recovery with
 	// Repanic:true: it captures the panic to Sentry, then re-panics so
@@ -71,8 +82,15 @@ func NewServer(s *store.Store, cfg config.Config) *Server {
 	r.Use(resolveLocale())
 
 	authSvc := auth.NewService(s, newMailer(cfg), cfg.Web.BaseURL, auth.Config{
-		SessionTTL: cfg.Auth.SessionTTL,
-		TokenTTL:   cfg.Auth.TokenTTL,
+		SessionTTL:   cfg.Auth.SessionTTL,
+		TokenTTL:     cfg.Auth.TokenTTL,
+		ReauthWindow: cfg.Auth.ReauthWindow,
+		Lockout: auth.LockoutPolicy{
+			Threshold: cfg.Auth.Lockout.Threshold,
+			Base:      cfg.Auth.Lockout.Base,
+			Max:       cfg.Auth.Lockout.Max,
+			Window:    cfg.Auth.Lockout.Window,
+		},
 	})
 	billingSvc := billing.NewService(s, cfg.Stripe.SecretKey, cfg.Stripe.PriceIDs.Base, cfg.Stripe.PriceIDs.BankSync, cfg.Web.BaseURL, cfg.Stripe.WebhookSecret)
 	plaidSvc, err := plaid.NewService(s, cfg)
@@ -246,16 +264,23 @@ func (s *Server) routes(cfg config.Config) {
 	s.engine.GET("/robots.txt", hs.Robots)
 
 	// Public auth routes (no session required).
+	//
+	// The POSTs are rate limited per client IP. This is the app's only defence
+	// against automated credential stuffing before a request reaches argon2id,
+	// and it is only sound because SetTrustedProxies above stops the client
+	// choosing its own key. Per-account lockout is separate and lives in the
+	// auth service, because it has to survive a restart.
+	lim := newLimiters()
 	s.engine.GET("/login", hs.LoginForm)
-	s.engine.POST("/login", hs.Login)
+	s.engine.POST("/login", rateLimitIP(lim.loginIP), hs.Login)
 	s.engine.GET("/signup", hs.SignupForm)
-	s.engine.POST("/signup", hs.Signup)
+	s.engine.POST("/signup", rateLimitIP(lim.signupIP), hs.Signup)
 	s.engine.GET("/verify", hs.Verify)
 	// Public: the email-change confirmation link is clicked from the new address's
 	// inbox, possibly while logged out, so the token (not a session) authorizes it.
 	s.engine.GET("/account/email/verify", hs.ConfirmEmailChange)
 	s.engine.GET("/forgot", hs.ForgotForm)
-	s.engine.POST("/forgot", hs.Forgot)
+	s.engine.POST("/forgot", rateLimitIP(lim.forgotIP), hs.Forgot)
 	s.engine.GET("/reset", hs.ResetForm)
 	s.engine.POST("/reset", hs.Reset)
 	s.engine.POST("/logout", hs.Logout)
@@ -275,7 +300,7 @@ func (s *Server) routes(cfg config.Config) {
 
 	// Authenticated app. Everything below requires a valid session.
 	app := s.engine.Group("/")
-	app.Use(requireAuth(s.auth, s.store))
+	app.Use(requireAuth(s.auth, s.store, cfg.Auth.CookieSecure))
 
 	// Account + billing stay reachable even when a subscription has lapsed, so a
 	// locked-out user can still manage their account and subscribe.
@@ -286,7 +311,21 @@ func (s *Server) routes(cfg config.Config) {
 	app.POST("/account/avatar", hs.UpdateAvatar)
 	app.POST("/account/avatar/remove", hs.RemoveAvatar)
 	app.GET("/account/avatar", hs.ServeAvatar)
-	app.POST("/account/password", hs.ChangePassword)
+	// Security screen. Every mutation here is both rate limited per user and
+	// gated on a recently proved factor, so a borrowed unlocked laptop cannot
+	// silently rotate credentials or sign the real owner's devices out.
+	sec := app.Group("/account")
+	sec.Use(rateLimitUser(lim.accountU), requireRecentAuth(s.auth))
+	sec.POST("/password", hs.ChangePassword)
+	sec.POST("/sessions/:id/revoke", hs.RevokeSession)
+	sec.POST("/sessions/revoke-others", hs.RevokeOtherSessions)
+	// Step-up itself must NOT be behind requireRecentAuth, or proving yourself
+	// would require having already proved yourself.
+	app.POST("/account/reauth", rateLimitUser(lim.accountU), hs.StepUp)
+	// Reading the list is not a sensitive action — being told which devices are
+	// signed in is exactly what someone who suspects a compromise needs to see,
+	// and demanding a password first would gate the diagnosis behind the cure.
+	app.GET("/account/sessions", hs.AccountSessions)
 	app.POST("/account/addons/:slug", hs.ToggleAddOn)
 	// Danger zone: wipe all budget data (keep account) / delete the account.
 	app.POST("/account/start-fresh", hs.StartFresh)

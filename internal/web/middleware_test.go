@@ -18,7 +18,7 @@ func TestRequireAuthRedirectsAnonymous(t *testing.T) {
 	svc := auth.NewService(st, mail.NewConsole(), "http://x", auth.Config{})
 
 	r := gin.New()
-	r.GET("/p", requireAuth(svc, st), func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+	r.GET("/p", requireAuth(svc, st, false), func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/p", nil)

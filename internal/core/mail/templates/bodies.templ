@@ -1,0 +1,36 @@
+package emailtpl
+
+// linkEmail is the shape shared by every "click this to prove something" mail:
+// verify an address, reset a password, confirm a new address.
+templ linkEmail(d linkData) {
+	@emailShell(d.Heading) {
+		@paragraph(d.Intro)
+		@buttonLink(d.Link, d.CTA)
+		@linkFallback(d.FallbackIntro, d.Link)
+		@footnote(d.Expiry + " " + d.Ignore)
+	}
+}
+
+// codeEmail carries a one-time code. It has no button at all: the whole point
+// is that the recipient reads the code and types it into the device that is
+// already waiting for it, which may not be the device reading the mail.
+templ codeEmail(d codeData) {
+	@emailShell(d.Heading) {
+		@paragraph(d.Intro)
+		@codeBlock(d.Code)
+		@footnote(d.Expiry + " " + d.Ignore)
+	}
+}
+
+// alertEmail reports something that already happened to the account. It is
+// never a login link — an alert that can itself be used to sign in would turn
+// every security notice into a phishing target.
+templ alertEmail(d alertData) {
+	@emailShell(d.Heading) {
+		@paragraph(d.Intro)
+		if d.Detail != "" {
+			@paragraph(d.Detail)
+		}
+		@footnote(d.Advice)
+	}
+}

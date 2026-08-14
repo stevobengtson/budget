@@ -37,7 +37,7 @@ func testDSN() string {
 
 var testTables = []string{
 	"transactions", "budgets", "categories", "category_groups",
-	"incomes", "accounts", "verification_tokens", "sessions", "users",
+	"incomes", "accounts", "verification_tokens", "auth_lockouts", "sessions", "users",
 }
 
 // openTestDB opens the shared Postgres test database under a global advisory
@@ -132,7 +132,7 @@ func serveAuthedCfg(t *testing.T, s *store.Store, cfg config.Config) (*httptest.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CreateSession(ctx, uid, auth.HashToken(raw), time.Now().Add(time.Hour), "test", "127.0.0.1"); err != nil {
+	if err := s.CreateSession(ctx, uid, auth.HashToken(raw), time.Now().Add(time.Hour), store.SessionInfo{UserAgent: "test", IP: "127.0.0.1"}); err != nil {
 		t.Fatal(err)
 	}
 	jar, _ := cookiejar.New(nil)

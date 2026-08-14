@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/sbengtson/budget/internal/core/auth"
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
@@ -15,6 +17,10 @@ import (
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	// Client identifies the app for the account's active-sessions list
+	// ("ios", "android"). Optional: builds already in the stores do not send
+	// it, and those sessions simply show as a generic mobile client.
+	Client string `json:"client"`
 }
 
 // userPayload is the public shape of a user in API responses (never the hash).
@@ -45,8 +51,25 @@ func (a *API) Login(c *gin.Context) {
 		writeError(c, http.StatusBadRequest, "invalid_request", "Expected a JSON body with email and password.")
 		return
 	}
-	raw, err := a.auth.Login(c.Request.Context(), req.Email, req.Password, c.Request.UserAgent(), c.ClientIP())
+	client := req.Client
+	if client != "ios" && client != "android" {
+		client = "mobile"
+	}
+	raw, err := a.auth.Login(c.Request.Context(), req.Email, req.Password, store.SessionInfo{
+		UserAgent: c.Request.UserAgent(),
+		IP:        c.ClientIP(),
+		Client:    client,
+	})
 	if err != nil {
+		// Surfaced as 429 with Retry-After so the app can say how long, rather
+		// than looking like a rejected password the user could retype.
+		if wait, locked := auth.LockedOut(err); locked {
+			c.Header("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+			writeError(c, http.StatusTooManyRequests, "locked_out",
+				i18n.Tnf(c.Request.Context(), "auth.err_locked_out", int(wait.Minutes())+1,
+					i18n.M{"Minutes": int(wait.Minutes()) + 1}))
+			return
+		}
 		if errors.Is(err, auth.ErrEmailNotVerified) {
 			writeError(c, http.StatusUnauthorized, "email_not_verified", "Please verify your email before logging in.")
 			return

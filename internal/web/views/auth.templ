@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sbengtson/budget/internal/core/auth"
+	"github.com/sbengtson/budget/internal/core/format"
 	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
@@ -192,6 +194,35 @@ templ LoginPage(email, errKey string) {
 	}
 }
 
+// LoginPageLocked is the login page after too many failed attempts.
+//
+// It names the wait rather than repeating "invalid email or password", which
+// would leave someone typing the correct password convinced they had forgotten
+// it. This tells an attacker only that the address is being hammered — which
+// they already know — and never whether it exists, because addresses that were
+// never registered lock on exactly the same schedule.
+templ LoginPageLocked(email string, minutes int) {
+	@authLayout(bi(ctx, "auth.sign_in")) {
+		<div class="mb-4 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+			for i, line := range i18n.EveryLocaleF(ctx, "auth.err_locked_out", i18n.M{"Minutes": minutes}) {
+				if i == 0 {
+					<p>{ line }</p>
+				} else {
+					<p class="mt-1 opacity-80">{ line }</p>
+				}
+			}
+		</div>
+		<form method="post" action="/login" class="space-y-4">
+			@emailField(email)
+			@passwordField(bi(ctx, "auth.password"), "password", "", "current-password", "")
+			@authButton(bi(ctx, "auth.sign_in"))
+		</form>
+		<p class="mt-4 text-center text-sm">
+			<a href="/forgot" class="text-muted-foreground underline underline-offset-4 hover:text-foreground">{ bi(ctx, "auth.forgot_password") }</a>
+		</p>
+	}
+}
+
 templ SignupPage(email, errKey string) {
 	@authLayout(bi(ctx, "auth.sign_up")) {
 		@formError(errKey)
@@ -280,6 +311,27 @@ type AccountData struct {
 	AddOnOK       string
 	StartFreshErr string // Danger zone: "start fresh" (wipe data) error
 	DeleteErr     string // Danger zone: delete-account error
+	// SessionsData backs the Security tab's active-sessions card, which renders
+	// and re-renders independently of the rest of the tab.
+	SessionsData SessionsData
+}
+
+// sessionTitle names a device for the sessions list. The stored label is
+// derived from the user agent at sign-in; when there was none to parse (a
+// scripted client, a stripped header) the client kind is still meaningful, and
+// falling back to a generic word beats showing an empty row.
+func sessionTitle(ctx context.Context, s auth.SessionView) string {
+	if s.Label != "" {
+		return s.Label
+	}
+	switch s.Client {
+	case "ios":
+		return i18n.T(ctx, "settings.session_ios")
+	case "android":
+		return i18n.T(ctx, "settings.session_android")
+	default:
+		return i18n.T(ctx, "settings.session_unknown")
+	}
 }
 
 templ AccountPage(d AccountData) {
@@ -488,19 +540,129 @@ templ dangerButton(label string) {
 	<button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 focus-visible:ring-offset-background">{ label }</button>
 }
 
-// AccountSecuritySection is the Security tab's "Change password" card.
+// AccountSecuritySection is the Security tab: a container of independent cards.
+//
+// Each card is its own [data-inline-errors] section with its own hx-target, so
+// a failed password change re-renders only the password card and leaves the
+// sessions list — and the reader's scroll position — where they were. The tab
+// gains more cards in later phases (two-factor, recovery codes, passkeys), and
+// a single-section tab would have every one of them re-render the whole screen.
 templ AccountSecuritySection(d AccountData) {
-	<section id="account-security" data-inline-errors class="space-y-2">
+	<div class="space-y-6">
+		@AccountPasswordCard(d)
+		@AccountSessionsCard(d.SessionsData)
+	</div>
+}
+
+// AccountPasswordCard is the "Change password" card.
+templ AccountPasswordCard(d AccountData) {
+	<section id="account-password" data-inline-errors class="space-y-2">
 		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "settings.password_heading") }</h2>
-		<form hx-post="/account/password" hx-target="#account-security" hx-swap="outerHTML" class="overflow-hidden rounded-xl border bg-card">
+		<form hx-post="/account/password" hx-target="#account-password" hx-swap="outerHTML" class="overflow-hidden rounded-xl border bg-card">
 			<div class="space-y-4 p-4 sm:p-6">
 				@passwordField(i18n.T(ctx, "auth.current_password"), "current", i18n.T(ctx, "auth.enter_current_password"), "current-password", "")
 				@passwordField(i18n.T(ctx, "auth.new_password"), "next", i18n.T(ctx, "auth.new_password"), "new-password", "8")
+				<p class="text-xs text-muted-foreground">{ i18n.T(ctx, "settings.password_signs_out_others") }</p>
 				@settingsMessages(d.PasswordErr, d.PasswordOK)
 			</div>
 			<div class="flex items-center border-t bg-muted/30 px-4 py-3 sm:px-6">
 				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm}) {
 					{ i18n.T(ctx, "settings.update_password") }
+				}
+			</div>
+		</form>
+	</section>
+}
+
+// SessionsData is the active-sessions card's view model.
+type SessionsData struct {
+	Sessions    []auth.SessionView
+	SessionsErr string
+	SessionsOK  string
+}
+
+// AccountSessionsCard lists the devices signed in to this account.
+//
+// The copy has to be explicit that this covers phones: the mobile apps
+// authenticate with a bearer token that is a row in the very same sessions
+// table, so "sign out everywhere" genuinely signs the user's phone out. That is
+// correct, but it surprises people who think of it as a browser-only action.
+templ AccountSessionsCard(d SessionsData) {
+	<section id="account-sessions" data-inline-errors class="space-y-2">
+		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "settings.sessions_heading") }</h2>
+		<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "settings.sessions_intro") }</p>
+		<div class="overflow-hidden rounded-xl border bg-card">
+			<div class="divide-y">
+				for _, s := range d.Sessions {
+					@sessionRow(s)
+				}
+			</div>
+			<div class="space-y-3 border-t bg-muted/30 px-4 py-3 sm:px-6">
+				@settingsMessages(d.SessionsErr, d.SessionsOK)
+				if len(d.Sessions) > 1 {
+					<form hx-post="/account/sessions/revoke-others" hx-target="#account-sessions" hx-swap="outerHTML">
+						@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm, Variant: button.VariantOutline}) {
+							{ i18n.T(ctx, "settings.revoke_others") }
+						}
+					</form>
+				}
+			</div>
+		</div>
+	</section>
+}
+
+// sessionRow is one signed-in device.
+templ sessionRow(s auth.SessionView) {
+	<div class="flex items-start justify-between gap-4 p-4 sm:px-6">
+		<div class="min-w-0 space-y-1">
+			<p class="text-sm font-medium">
+				{ sessionTitle(ctx, s) }
+				if s.Current {
+					<span class="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{ i18n.T(ctx, "settings.session_current") }</span>
+				}
+			</p>
+			<p class="text-xs text-muted-foreground">
+				{ i18n.Tf(ctx, "settings.session_last_seen", i18n.M{"When": format.DateMedium(ctx, s.LastSeen)}) }
+				if s.IP != "" {
+					{ " · " + s.IP }
+				}
+			</p>
+		</div>
+		if !s.Current {
+			<form hx-post={ fmt.Sprintf("/account/sessions/%d/revoke", s.ID) } hx-target="#account-sessions" hx-swap="outerHTML">
+				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm, Variant: button.VariantGhost}) {
+					{ i18n.T(ctx, "settings.revoke_session") }
+				}
+			</form>
+		}
+	</div>
+}
+
+// ReauthCard asks the user to prove a factor again before a sensitive action.
+//
+// It is returned with a 4xx from requireRecentAuth, which the settings forms
+// swap in place through the existing [data-inline-errors] contract — so the
+// prompt appears exactly where the blocked action was, with no new client-side
+// machinery.
+templ ReauthCard(next string) {
+	@ReauthCardWithError(next, "")
+}
+
+templ ReauthCardWithError(next, errKey string) {
+	<section id="account-reauth" data-inline-errors class="space-y-2">
+		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "auth.reauth_heading") }</h2>
+		<form hx-post="/account/reauth" hx-target="#account-reauth" hx-swap="outerHTML" class="overflow-hidden rounded-xl border bg-card">
+			<div class="space-y-4 p-4 sm:p-6">
+				<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "auth.reauth_prompt") }</p>
+				<input type="hidden" name="next" value={ next }/>
+				@passwordField(i18n.T(ctx, "auth.password"), "password", i18n.T(ctx, "auth.enter_current_password"), "current-password", "")
+				if errKey != "" {
+					<p class="text-sm text-destructive">{ i18n.T(ctx, errKey) }</p>
+				}
+			</div>
+			<div class="flex items-center border-t bg-muted/30 px-4 py-3 sm:px-6">
+				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm}) {
+					{ i18n.T(ctx, "auth.reauth_confirm") }
 				}
 			</div>
 		</form>

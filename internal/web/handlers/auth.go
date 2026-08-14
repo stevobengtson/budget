@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -24,8 +25,22 @@ func (h *Handlers) LoginForm(c *gin.Context) { render(c, http.StatusOK, views.Lo
 func (h *Handlers) Login(c *gin.Context) {
 	email := c.PostForm("email")
 	pw := c.PostForm("password")
-	raw, err := h.auth.Login(c.Request.Context(), email, pw, c.Request.UserAgent(), c.ClientIP())
+	raw, err := h.auth.Login(c.Request.Context(), email, pw, store.SessionInfo{
+		UserAgent: c.Request.UserAgent(),
+		IP:        c.ClientIP(),
+		Client:    "web",
+	})
 	if err != nil {
+		// A locked account is told so, with the wait. This leaks only that the
+		// address is being hammered — which the attacker already knows — and
+		// never whether it is registered, because unknown addresses lock on the
+		// same schedule.
+		if wait, locked := auth.LockedOut(err); locked {
+			c.Header("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+			render(c, http.StatusTooManyRequests,
+				views.LoginPageLocked(email, int(wait.Minutes())+1))
+			return
+		}
 		errKey := "auth.err_invalid_credentials"
 		switch {
 		case errors.Is(err, auth.ErrEmailNotVerified):
@@ -45,11 +60,11 @@ func (h *Handlers) SignupForm(c *gin.Context) { render(c, http.StatusOK, views.S
 func (h *Handlers) Signup(c *gin.Context) {
 	email := c.PostForm("email")
 	pw := c.PostForm("password")
-	if len(pw) < 8 {
-		render(c, http.StatusBadRequest, views.SignupPage(email, "auth.err_password_short"))
-		return
-	}
 	if err := h.auth.Register(c.Request.Context(), email, pw); err != nil {
+		if errors.Is(err, auth.ErrPasswordTooShort) || errors.Is(err, auth.ErrPasswordTooLong) {
+			render(c, http.StatusBadRequest, views.SignupPage(email, "auth.err_password_short"))
+			return
+		}
 		if errors.Is(err, auth.ErrEmailTaken) {
 			render(c, http.StatusConflict, views.SignupPage(email, "auth.err_email_taken"))
 			return
@@ -86,12 +101,16 @@ func (h *Handlers) ResetForm(c *gin.Context) {
 func (h *Handlers) Reset(c *gin.Context) {
 	token := c.PostForm("token")
 	pw := c.PostForm("password")
-	if len(pw) < 8 {
-		render(c, http.StatusBadRequest, views.ResetPage(token, "auth.err_password_short"))
-		return
-	}
+
 	if err := h.auth.ResetPassword(c.Request.Context(), token, pw); err != nil {
-		render(c, http.StatusBadRequest, views.ResetPage(token, "auth.err_reset_invalid"))
+		// A rejected password must not be reported as a bad link: the link is
+		// fine, and telling the user otherwise sends them to request another
+		// one that will fail in exactly the same way.
+		errKey := "auth.err_reset_invalid"
+		if errors.Is(err, auth.ErrPasswordTooShort) || errors.Is(err, auth.ErrPasswordTooLong) {
+			errKey = "auth.err_password_short"
+		}
+		render(c, http.StatusBadRequest, views.ResetPage(token, errKey))
 		return
 	}
 	render(c, http.StatusOK, views.MessagePage("auth.msg_reset_title", "auth.msg_reset_body", nil, ""))
@@ -101,7 +120,7 @@ func (h *Handlers) Logout(c *gin.Context) {
 	if raw, err := c.Cookie(SessionCookieName); err == nil {
 		_ = h.auth.Logout(c.Request.Context(), raw)
 	}
-	ClearSessionCookie(c)
+	ClearSessionCookie(c, h.secure)
 	// htmx (the sidebar user menu posts via hx-post) needs an HX-Redirect header
 	// to navigate; a plain form POST (the account page) follows the 303.
 	if c.GetHeader("HX-Request") == "true" {
@@ -163,7 +182,7 @@ func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountDa
 		}
 		addOns = filtered
 	}
-	return views.AccountData{
+	d := views.AccountData{
 		Name:          u.Name,
 		Email:         u.Email,
 		PendingEmail:  pending,
@@ -172,6 +191,12 @@ func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountDa
 		ActiveTab:     activeTab,
 		Collapsed:     sidebarCollapsed(c),
 	}
+	// Only the Security tab renders the sessions card, and listing sessions is a
+	// query per render — so it is loaded for that tab and skipped for the rest.
+	if activeTab == "security" {
+		d.SessionsData = h.sessionsData(c)
+	}
+	return d
 }
 
 // ToggleAddOn enables or disables an add-on for the current user from the
@@ -450,7 +475,7 @@ func (h *Handlers) DeleteAccount(c *gin.Context) {
 		return
 	}
 	if !strings.EqualFold(strings.TrimSpace(c.PostForm("confirm_email")), u.Email) {
-		fail("The email you typed doesn't match your account email.")
+		fail(i18n.T(ctx, "settings.err_confirm_email_mismatch"))
 		return
 	}
 
@@ -466,12 +491,12 @@ func (h *Handlers) DeleteAccount(c *gin.Context) {
 	if err := h.store.DeleteUser(c.Request.Context(), uid); err != nil {
 		_ = c.Error(err)
 		d := h.accountData(c, "account")
-		d.DeleteErr = "Could not delete your account. Please try again."
+		d.DeleteErr = i18n.T(ctx, "settings.err_delete_failed")
 		render(c, http.StatusInternalServerError, views.AccountPage(d))
 		return
 	}
 
-	ClearSessionCookie(c)
+	ClearSessionCookie(c, h.secure)
 	render(c, http.StatusOK, views.MessagePage("auth.msg_account_deleted_title", "auth.msg_account_deleted_body", nil, ""))
 }
 
@@ -479,17 +504,26 @@ func (h *Handlers) ChangePassword(c *gin.Context) {
 	uid := currentUserID(c)
 	cur := c.PostForm("current")
 	next := c.PostForm("next")
+	ctx := c.Request.Context()
 	d := h.accountData(c, "security")
-	if len(next) < 8 {
-		d.PasswordErr = "New password must be at least 8 characters."
-		render(c, http.StatusBadRequest, views.AccountSecuritySection(d))
+	// The current session is kept alive; every other device is signed out by
+	// the service, which is the point of rotating a password.
+	err := h.auth.ChangePassword(ctx, uid, cur, next, currentSessionToken(c))
+	switch {
+	case err == nil:
+	case errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrPasswordTooLong):
+		d.PasswordErr = i18n.T(ctx, "auth.err_password_short")
+		render(c, http.StatusBadRequest, views.AccountPasswordCard(d))
+		return
+	case errors.Is(err, auth.ErrSamePassword):
+		d.PasswordErr = i18n.T(ctx, "settings.err_password_same")
+		render(c, http.StatusBadRequest, views.AccountPasswordCard(d))
+		return
+	default:
+		d.PasswordErr = i18n.T(ctx, "auth.err_wrong_password")
+		render(c, http.StatusBadRequest, views.AccountPasswordCard(d))
 		return
 	}
-	if err := h.auth.ChangePassword(c.Request.Context(), uid, cur, next); err != nil {
-		d.PasswordErr = "Current password is incorrect."
-		render(c, http.StatusBadRequest, views.AccountSecuritySection(d))
-		return
-	}
-	d.PasswordOK = "Password changed."
-	render(c, http.StatusOK, views.AccountSecuritySection(d))
+	d.PasswordOK = i18n.T(ctx, "settings.ok_password_changed")
+	render(c, http.StatusOK, views.AccountPasswordCard(d))
 }

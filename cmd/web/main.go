@@ -19,6 +19,7 @@ import (
 	"github.com/sbengtson/budget/internal/cli"
 	"github.com/sbengtson/budget/internal/core/config"
 	"github.com/sbengtson/budget/internal/core/db"
+	"github.com/sbengtson/budget/internal/core/janitor"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web"
 )
@@ -60,6 +61,11 @@ func setupSentry(cfg config.Config) func() {
 	}
 	return func() { sentry.Flush(2 * time.Second) }
 }
+
+// janitorInterval is how often expired auth rows are swept. Nothing depends on
+// promptness here — every expired row is already rejected on read — so this is
+// set for negligible load rather than for freshness.
+const janitorInterval = 6 * time.Hour
 
 func main() {
 	app := cli.NewApp()
@@ -118,6 +124,15 @@ The db/migrate/seed/config admin commands are available as subcommands.`)
 				plaidSvc.RunWorker(ctx, cfg.Plaid.PollInterval, srv.BankSyncEntitled())
 			}()
 		}
+		// Deletes expired sessions, spent verification tokens, and stale lockout
+		// rows. Same ctx/wg as the Plaid worker, so a shutdown waits for it too.
+		// Unconditional: unlike bank sync there is nothing to configure, and a
+		// database that never prunes only ever grows.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			janitor.New(s).Run(ctx, janitorInterval)
+		}()
 
 		httpSrv := &http.Server{Addr: a, Handler: srv.Handler()}
 		errCh := make(chan error, 1)

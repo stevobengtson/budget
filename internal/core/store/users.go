@@ -108,10 +108,15 @@ func (s *Store) scanUser(row *sql.Row) (User, error) {
 	var u User
 	var verified, avatarUpdated, disabled, onboarded nullTime
 	var locale string
-	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &verified, &avatarUpdated,
+	// password_hash is nullable since 00021: passkey-only and OAuth-only users
+	// have no password at all. An absent hash reads as "", which VerifyPassword
+	// rejects cleanly rather than erroring.
+	var passwordHash sql.NullString
+	if err := row.Scan(&u.ID, &u.Email, &u.Name, &passwordHash, &verified, &avatarUpdated,
 		&u.IsAdmin, &disabled, &locale, &onboarded, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		return User{}, err
 	}
+	u.PasswordHash = passwordHash.String
 	u.EmailVerifiedAt = verified.Ptr()
 	u.AvatarUpdatedAt = avatarUpdated.Ptr()
 	u.DisabledAt = disabled.Ptr()

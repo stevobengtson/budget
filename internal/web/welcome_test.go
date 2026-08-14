@@ -50,7 +50,7 @@ func serveOnboarding(t *testing.T) (*httptest.Server, *http.Client, *store.Store
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CreateSession(ctx, uid, auth.HashToken(raw), time.Now().Add(time.Hour), "test", "127.0.0.1"); err != nil {
+	if err := s.CreateSession(ctx, uid, auth.HashToken(raw), time.Now().Add(time.Hour), store.SessionInfo{UserAgent: "test", IP: "127.0.0.1"}); err != nil {
 		t.Fatal(err)
 	}
 	jar, _ := cookiejar.New(nil)

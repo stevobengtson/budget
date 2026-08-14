@@ -30,6 +30,14 @@ type Config struct {
 		Addr    string `mapstructure:"addr"`
 		BaseURL string `mapstructure:"base_url"`
 		Level   string `mapstructure:"level"`
+		// TrustedProxies are the hops allowed to set X-Forwarded-For. In
+		// production nginx terminates TLS on the same box and proxies to
+		// loopback, so the default is loopback only.
+		//
+		// This is security-relevant, not cosmetic: Gin trusts every proxy by
+		// default, which makes the client IP attacker-controlled and would let
+		// anyone bypass per-IP rate limiting by varying a header.
+		TrustedProxies []string `mapstructure:"trusted_proxies"`
 	} `mapstructure:"web"`
 	Mail struct {
 		Driver       string `mapstructure:"driver"`
@@ -40,6 +48,18 @@ type Config struct {
 		SessionTTL   time.Duration `mapstructure:"session_ttl"`
 		TokenTTL     time.Duration `mapstructure:"token_ttl"`
 		CookieSecure bool          `mapstructure:"cookie_secure"`
+		// ReauthWindow is how long proving a factor keeps the security screen's
+		// sensitive actions unlocked.
+		ReauthWindow time.Duration `mapstructure:"reauth_window"`
+		// Lockout tunes the password-failure escalation. Threshold failures are
+		// free; each one after that doubles the lock, starting at Base and
+		// capped at Max. Window is how long a failure stays "recent".
+		Lockout struct {
+			Threshold int           `mapstructure:"threshold"`
+			Base      time.Duration `mapstructure:"base"`
+			Max       time.Duration `mapstructure:"max"`
+			Window    time.Duration `mapstructure:"window"`
+		} `mapstructure:"lockout"`
 	} `mapstructure:"auth"`
 	Stripe struct {
 		SecretKey      string `mapstructure:"secret_key"`
@@ -96,6 +116,15 @@ func Load(v *viper.Viper) (Config, error) {
 	v.SetDefault("auth.session_ttl", "720h")
 	v.SetDefault("auth.token_ttl", "1h")
 	v.SetDefault("auth.cookie_secure", false)
+	v.SetDefault("auth.reauth_window", "15m")
+	v.SetDefault("auth.lockout.threshold", 8)
+	v.SetDefault("auth.lockout.base", "15m")
+	v.SetDefault("auth.lockout.max", "24h")
+	v.SetDefault("auth.lockout.window", "1h")
+	// Loopback only: nginx terminates TLS on the same host and proxies to
+	// 127.0.0.1:8080. Widen this only for a proxy you actually control —
+	// anything listed here is trusted to report the client's IP honestly.
+	v.SetDefault("web.trusted_proxies", []string{"127.0.0.1", "::1"})
 	v.SetDefault("stripe.secret_key", "")
 	v.SetDefault("stripe.publishable_key", "")
 	v.SetDefault("stripe.webhook_secret", "")

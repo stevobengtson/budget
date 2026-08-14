@@ -32,7 +32,7 @@ func testDSN() string {
 
 var testTables = []string{
 	"transactions", "budgets", "categories", "category_groups",
-	"incomes", "accounts", "verification_tokens", "sessions", "users",
+	"incomes", "accounts", "verification_tokens", "auth_lockouts", "sessions", "users",
 }
 
 // openTestDB opens the shared Postgres test database under a global advisory
@@ -91,7 +91,7 @@ func TestRegisterVerifyLogin(t *testing.T) {
 		t.Fatalf("register: %v", err)
 	}
 	// Login before verification is rejected.
-	if _, err := svc.Login(ctx, "a@example.com", "pw-secret", "ua", "ip"); err != auth.ErrEmailNotVerified {
+	if _, err := svc.Login(ctx, "a@example.com", "pw-secret", store.SessionInfo{UserAgent: "ua", IP: "ip"}); err != auth.ErrEmailNotVerified {
 		t.Fatalf("want ErrEmailNotVerified, got %v", err)
 	}
 	// Extract token from the verify email link.
@@ -99,7 +99,7 @@ func TestRegisterVerifyLogin(t *testing.T) {
 	if err := svc.VerifyEmail(ctx, token); err != nil {
 		t.Fatalf("verify: %v", err)
 	}
-	tok, err := svc.Login(ctx, "a@example.com", "pw-secret", "ua", "ip")
+	tok, err := svc.Login(ctx, "a@example.com", "pw-secret", store.SessionInfo{UserAgent: "ua", IP: "ip"})
 	if err != nil || tok == "" {
 		t.Fatalf("login after verify: tok=%q err=%v", tok, err)
 	}
@@ -161,8 +161,8 @@ func TestSecondUserGetsOwnIncomeCategory(t *testing.T) {
 func TestDuplicateEmail(t *testing.T) {
 	svc, _, _ := newService(t)
 	ctx := context.Background()
-	_ = svc.Register(ctx, "dup@example.com", "pw")
-	if err := svc.Register(ctx, "dup@example.com", "pw"); err != auth.ErrEmailTaken {
+	_ = svc.Register(ctx, "dup@example.com", "pw-secret")
+	if err := svc.Register(ctx, "dup@example.com", "pw-secret"); err != auth.ErrEmailTaken {
 		t.Fatalf("want ErrEmailTaken, got %v", err)
 	}
 }
@@ -170,20 +170,20 @@ func TestDuplicateEmail(t *testing.T) {
 func TestForgotReset(t *testing.T) {
 	svc, m, _ := newService(t)
 	ctx := context.Background()
-	_ = svc.Register(ctx, "r@example.com", "old-pw")
+	_ = svc.Register(ctx, "r@example.com", "old-pw-secret")
 	_ = svc.VerifyEmail(ctx, linkToken(t, m.last.Text, "token="))
 
 	if err := svc.RequestPasswordReset(ctx, "r@example.com"); err != nil {
 		t.Fatal(err)
 	}
 	resetTok := linkToken(t, m.last.Text, "token=")
-	if err := svc.ResetPassword(ctx, resetTok, "new-pw"); err != nil {
+	if err := svc.ResetPassword(ctx, resetTok, "new-pw-secret"); err != nil {
 		t.Fatalf("reset: %v", err)
 	}
-	if _, err := svc.Login(ctx, "r@example.com", "new-pw", "ua", "ip"); err != nil {
+	if _, err := svc.Login(ctx, "r@example.com", "new-pw-secret", store.SessionInfo{UserAgent: "ua", IP: "ip"}); err != nil {
 		t.Fatalf("login with new pw: %v", err)
 	}
-	if _, err := svc.Login(ctx, "r@example.com", "old-pw", "ua", "ip"); err != auth.ErrInvalidCredentials {
+	if _, err := svc.Login(ctx, "r@example.com", "old-pw-secret", store.SessionInfo{UserAgent: "ua", IP: "ip"}); err != auth.ErrInvalidCredentials {
 		t.Fatalf("old pw should fail: %v", err)
 	}
 }
@@ -201,3 +201,7 @@ func linkToken(t *testing.T, body, marker string) string {
 	}
 	return rest
 }
+
+// mailMessageZero returns an empty message, so a test can reset the capturing
+// mailer between phases and assert that nothing further was sent.
+func mailMessageZero() mail.Message { return mail.Message{} }

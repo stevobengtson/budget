@@ -165,7 +165,7 @@ func TestSessionCRUD(t *testing.T) {
 	uid, _ := s.CreateUser(ctx, "s@example.com", "h")
 
 	exp := time.Now().Add(time.Hour)
-	if err := s.CreateSession(ctx, uid, "hash-a", exp, "agent", "127.0.0.1"); err != nil {
+	if err := s.CreateSession(ctx, uid, "hash-a", exp, SessionInfo{UserAgent: "agent", IP: "127.0.0.1"}); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	sess, err := s.GetSessionByTokenHash(ctx, "hash-a")

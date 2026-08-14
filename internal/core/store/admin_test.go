@@ -72,7 +72,7 @@ func TestSetUserDisabledRevokesSessions(t *testing.T) {
 	ctx := context.Background()
 
 	exp := time.Now().Add(time.Hour)
-	if err := s.CreateSession(ctx, uid, "hash-abc", exp, "test-agent", "127.0.0.1"); err != nil {
+	if err := s.CreateSession(ctx, uid, "hash-abc", exp, SessionInfo{UserAgent: "test-agent", IP: "127.0.0.1"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.GetSessionByTokenHash(ctx, "hash-abc"); err != nil {

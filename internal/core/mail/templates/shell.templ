@@ -1,0 +1,64 @@
+// Package emailtpl composes the transactional emails the app sends, in the
+// recipient's language.
+//
+// It lives under internal/core rather than internal/web because the auth
+// service sends mail and core must never import a UI package. The styling is
+// deliberately nothing like the web UI: email clients ignore stylesheets and
+// most of modern CSS, so these are inline-styled tables, which is a separate
+// discipline from the Tailwind used everywhere else.
+package emailtpl
+
+// emailShell is the outer chrome shared by every message. Inline styles and a
+// centred table are not old-fashioned here — they are what actually renders in
+// Outlook and Gmail.
+templ emailShell(heading string) {
+	<div style="margin:0;padding:0;background-color:#f6f4ef;">
+		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f6f4ef;padding:24px 0;">
+			<tr>
+				<td align="center">
+					<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#ffffff;border-radius:12px;padding:32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2c2523;">
+						<tr>
+							<td>
+								<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;color:#2c2523;">{ heading }</h1>
+								{ children... }
+							</td>
+						</tr>
+					</table>
+				</td>
+			</tr>
+		</table>
+	</div>
+}
+
+// paragraph is plain body copy.
+templ paragraph(text string) {
+	<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#4a4340;">{ text }</p>
+}
+
+// buttonLink is the primary call to action. The raw URL is repeated below it by
+// linkFallback, because a fair number of clients strip or mangle the button.
+templ buttonLink(href, label string) {
+	<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+		<tr>
+			<td style="background-color:#c4643c;border-radius:8px;">
+				<a href={ templ.SafeURL(href) } style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">{ label }</a>
+			</td>
+		</tr>
+	</table>
+}
+
+templ linkFallback(text, href string) {
+	<p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:#6b6360;">
+		{ text }<br/>
+		<a href={ templ.SafeURL(href) } style="color:#c4643c;word-break:break-all;">{ href }</a>
+	</p>
+}
+
+// codeBlock shows a one-time code big enough to read off a phone screen.
+templ codeBlock(code string) {
+	<p style="margin:0 0 16px;padding:16px;background-color:#f6f4ef;border-radius:8px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:28px;letter-spacing:6px;font-weight:600;color:#2c2523;">{ code }</p>
+}
+
+templ footnote(text string) {
+	<p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #e8e3da;font-size:13px;line-height:1.6;color:#6b6360;">{ text }</p>
+}

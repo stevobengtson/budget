@@ -1286,7 +1286,9 @@ func TestSettingsMutationsReturnFragments(t *testing.T) {
 
 	// The page load is the whole page, with billing rendered inline.
 	page := readAll(t, mustGetOK(t, client, ts.URL+"/account?tab=billing"))
-	for _, want := range []string{`id="account-profile"`, `id="account-security"`, `id="account-addons"`} {
+	// The Security tab is a container of independent cards, each swappable on
+	// its own, so both of them have to be on the page load.
+	for _, want := range []string{`id="account-profile"`, `id="account-password"`, `id="account-sessions"`, `id="account-addons"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("settings page missing %s", want)
 		}
@@ -1304,7 +1306,7 @@ func TestSettingsMutationsReturnFragments(t *testing.T) {
 	if !strings.Contains(frag, `id="account-profile"`) || !strings.Contains(frag, "Profile updated") {
 		t.Error("profile save should return the profile section with its message")
 	}
-	for _, unwanted := range []string{`id="account-security"`, `id="account-addons"`, `id="app-rail"`} {
+	for _, unwanted := range []string{`id="account-password"`, `id="account-sessions"`, `id="account-addons"`, `id="app-rail"`} {
 		if strings.Contains(frag, unwanted) {
 			t.Errorf("profile save returned %s — it should be a fragment, not the page", unwanted)
 		}

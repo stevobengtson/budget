@@ -16,7 +16,7 @@ func migrateTestDSN() string {
 
 var migrateTestTables = []string{
 	"transactions", "budgets", "categories", "category_groups",
-	"incomes", "accounts", "verification_tokens", "sessions", "users",
+	"incomes", "accounts", "verification_tokens", "auth_lockouts", "sessions", "users",
 }
 
 // migrateTestLockKey MUST match the store/web packages' advisory-lock key so
@@ -120,9 +120,12 @@ func TestMigrateAuthRoundTrip(t *testing.T) {
 	// 00008 (user name), 00009 (user avatar), 00010 (email change), 00011
 	// (add-ons), 00012 (subscriptions), 00013 (billing exempt), 00014 (admin),
 	// 00015 (user locale), 00016 (onboarded), 00017 (estimates), 00018
-	// (subscription items), 00019 (plaid) and 00020 (estimate column repair)
-	// sit on top of the auth migration; peel them off first (20 -> ... -> 7) so
-	// 00007 is the current head for the roundtrip below.
+	// (subscription items), 00019 (plaid), 00020 (estimate column repair) and
+	// 00021 (auth hardening) sit on top of the auth migration; peel them off
+	// first (21 -> ... -> 7) so 00007 is the current head for the roundtrip below.
+	if err := MigrateDown(conn, dialect); err != nil {
+		t.Fatalf("migrate down 00021: %v", err)
+	}
 	if err := MigrateDown(conn, dialect); err != nil {
 		t.Fatalf("migrate down 00020: %v", err)
 	}

@@ -73,6 +73,11 @@ tasks:
     deps: [tools]
     cmds:
       - "{{.TEMPL}} generate -path ./internal/web"
+      # Transactional emails are templ too, but live under core (the auth
+      # service sends mail, and core must not import a web package). Generated
+      # per-path rather than for the whole module so neither run rewrites the
+      # other's files.
+      - "{{.TEMPL}} generate -path ./internal/core/mail/templates"
 
   # templUI's components ship in the Go module cache, and Tailwind only emits
   # utilities it can see in a scanned file, so that directory has to be an

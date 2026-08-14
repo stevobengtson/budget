@@ -345,6 +345,13 @@ one = "Your free trial is active — {{.Days}} day left, ending {{.Date}}. Add a
 other = "Your free trial is active — {{.Days}} days left, ending {{.Date}}. Add a payment method to keep access when the trial ends."
 
 [auth]
+err_rate_limited = "Too many requests. Please wait a moment and try again."
+err_reauth_required = "Please confirm your password to continue."
+reauth_heading = "Confirm it's you"
+reauth_prompt = "For your security, confirm your password before changing security settings."
+reauth_confirm = "Confirm"
+msg_rate_limited_title = "Too many requests"
+msg_rate_limited_body = "You've made too many requests in a short time. Please wait a moment and try again."
 sign_in = "Sign In"
 sign_up = "Sign Up"
 password = "Password"
@@ -385,6 +392,22 @@ email = "Email"
 msg_account_deleted_title = "Account deleted"
 msg_account_deleted_body = "Your account and all your data have been permanently deleted. We're sorry to see you go."
 [settings]
+sessions_heading = "Where you're signed in"
+sessions_intro = "These are the devices currently signed in to your account, including the Pigglet mobile apps. Signing a device out immediately ends its access."
+session_current = "This device"
+session_last_seen = "Last used {{.When}}"
+session_ios = "Pigglet for iPhone"
+session_android = "Pigglet for Android"
+session_unknown = "Unrecognized device"
+revoke_session = "Sign out"
+revoke_others = "Sign out all other devices"
+ok_session_revoked = "That device has been signed out."
+err_session_revoke = "Could not sign that device out. Please try again."
+ok_password_changed = "Password changed. All your other devices have been signed out."
+err_password_same = "Your new password must be different from your current one."
+password_signs_out_others = "Changing your password signs out every other device, including your phone."
+err_confirm_email_mismatch = "The email you typed doesn't match your account email."
+err_delete_failed = "Could not delete your account. Please try again."
 tab_account = "Account"
 tab_security = "Security"
 tab_addons = "Add-ons"
@@ -615,3 +638,52 @@ terms_law_heading = "Governing law"
 terms_law_body = "These Terms are governed by the laws of Canada and the province in which Plainly Software operates, without regard to conflict-of-law principles."
 terms_changes_heading = "Changes to these Terms"
 terms_changes_body = "We may update these Terms from time to time. When we make material changes, we'll update the date at the top of this page. Continued use of Pigglet after a change means you accept the updated Terms. Questions? Email contact@plainlysoftware.com."
+
+# Transactional email. Kept in the catalog like every other user-facing string —
+# the product name included, which is how "Verify your Pigglet email" and
+# "Reset your Budget password" drifted apart when these lived in Go literals.
+[email]
+verify_subject = "Verify your Pigglet email"
+verify_heading = "Confirm your email"
+verify_intro = "Confirm your email address to finish setting up your Pigglet account."
+verify_cta = "Confirm email"
+
+reset_subject = "Reset your Pigglet password"
+reset_heading = "Reset your password"
+reset_intro = "Use the button below to set a new password for your Pigglet account."
+reset_cta = "Set a new password"
+
+email_change_subject = "Confirm your new Pigglet email"
+email_change_heading = "Confirm your new email"
+email_change_intro = "Confirm this address to make it the email you sign in to Pigglet with."
+email_change_cta = "Confirm this address"
+
+link_fallback = "If the button doesn't work, copy and paste this link into your browser:"
+ignore_notice = "If you didn't request this, you can safely ignore this email."
+
+lockout_subject = "Unusual sign-in activity on your Pigglet account"
+lockout_heading = "Someone has been trying to sign in"
+lockout_intro = "There have been several failed sign-in attempts on your Pigglet account, so we've paused password sign-in for a short time."
+lockout_detail = "If this was you, wait a few minutes and try again, or reset your password. Your budget data has not been accessed."
+lockout_advice = "If it wasn't you, reset your password now: {{.Link}}"
+
+password_changed_subject = "Your Pigglet password was changed"
+password_changed_heading = "Your password was changed"
+password_changed_intro = "The password on your Pigglet account was just changed, and every other device has been signed out."
+password_changed_advice = "If you didn't do this, reset your password immediately and contact contact@plainlysoftware.com."
+
+[email.expires_in_hours]
+one = "This link expires in {{.Count}} hour."
+other = "This link expires in {{.Count}} hours."
+
+[email.expires_in_minutes]
+one = "This link expires in {{.Count}} minute."
+other = "This link expires in {{.Count}} minutes."
+
+[auth.err_locked_out]
+one = "Too many sign-in attempts. Please try again in {{.Minutes}} minute."
+other = "Too many sign-in attempts. Please try again in {{.Minutes}} minutes."
+
+[settings.ok_sessions_revoked]
+one = "{{.Count}} other device has been signed out."
+other = "{{.Count}} other devices have been signed out."

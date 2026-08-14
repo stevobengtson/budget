@@ -10,6 +10,10 @@ import (
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
+// Render is render for the router package, whose middleware also has to emit
+// HTML (a throttled request, a step-up prompt).
+func Render(c *gin.Context, status int, comp templ.Component) { render(c, status, comp) }
+
 // render writes a Templ component to the Gin response writer with the
 // supplied status code.
 func render(c *gin.Context, status int, comp templ.Component) {

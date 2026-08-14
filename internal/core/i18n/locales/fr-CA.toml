@@ -335,6 +335,13 @@ one = "Votre essai gratuit est actif — il reste {{.Days}} jour, se terminant l
 other = "Votre essai gratuit est actif — il reste {{.Days}} jours, se terminant le {{.Date}}. Ajoutez un moyen de paiement pour conserver l'accès à la fin de l'essai."
 
 [auth]
+err_rate_limited = "Trop de requêtes. Veuillez patienter un moment et réessayer."
+err_reauth_required = "Veuillez confirmer votre mot de passe pour continuer."
+reauth_heading = "Confirmez votre identité"
+reauth_prompt = "Par mesure de sécurité, confirmez votre mot de passe avant de modifier vos paramètres de sécurité."
+reauth_confirm = "Confirmer"
+msg_rate_limited_title = "Trop de requêtes"
+msg_rate_limited_body = "Vous avez fait trop de requêtes en peu de temps. Veuillez patienter un moment et réessayer."
 sign_in = "Se connecter"
 sign_up = "S'inscrire"
 password = "Mot de passe"
@@ -375,6 +382,22 @@ email = "Courriel"
 msg_account_deleted_title = "Compte supprimé"
 msg_account_deleted_body = "Votre compte et toutes vos données ont été supprimés définitivement. Nous sommes désolés de vous voir partir."
 [settings]
+sessions_heading = "Vos appareils connectés"
+sessions_intro = "Voici les appareils actuellement connectés à votre compte, y compris les applications mobiles Pigglet. Déconnecter un appareil met fin à son accès immédiatement."
+session_current = "Cet appareil"
+session_last_seen = "Dernière utilisation : {{.When}}"
+session_ios = "Pigglet pour iPhone"
+session_android = "Pigglet pour Android"
+session_unknown = "Appareil non reconnu"
+revoke_session = "Déconnecter"
+revoke_others = "Déconnecter tous les autres appareils"
+ok_session_revoked = "Cet appareil a été déconnecté."
+err_session_revoke = "Impossible de déconnecter cet appareil. Veuillez réessayer."
+ok_password_changed = "Mot de passe modifié. Tous vos autres appareils ont été déconnectés."
+err_password_same = "Votre nouveau mot de passe doit être différent de l'actuel."
+password_signs_out_others = "Modifier votre mot de passe déconnecte tous vos autres appareils, y compris votre téléphone."
+err_confirm_email_mismatch = "Le courriel saisi ne correspond pas à celui de votre compte."
+err_delete_failed = "Impossible de supprimer votre compte. Veuillez réessayer."
 tab_account = "Compte"
 tab_security = "Sécurité"
 tab_addons = "Modules"
@@ -596,3 +619,51 @@ terms_law_heading = "Droit applicable"
 terms_law_body = "Les présentes Conditions sont régies par les lois du Canada et de la province où Plainly Software exerce ses activités, sans égard aux principes de conflit de lois."
 terms_changes_heading = "Modifications aux présentes Conditions"
 terms_changes_body = "Nous pouvons mettre à jour les présentes Conditions de temps à autre. Lorsque nous apportons des changements importants, nous mettons à jour la date en haut de cette page. L'utilisation continue de Pigglet après un changement signifie que vous acceptez les Conditions mises à jour. Des questions ? Écrivez à contact@plainlysoftware.com."
+
+# Courriels transactionnels. Les espaces avant « : » et « ! » sont des espaces
+# insécables U+00A0, conformément au reste du catalogue fr-CA.
+[email]
+verify_subject = "Confirmez votre courriel Pigglet"
+verify_heading = "Confirmez votre courriel"
+verify_intro = "Confirmez votre adresse courriel pour terminer la configuration de votre compte Pigglet."
+verify_cta = "Confirmer le courriel"
+
+reset_subject = "Réinitialisez votre mot de passe Pigglet"
+reset_heading = "Réinitialisez votre mot de passe"
+reset_intro = "Utilisez le bouton ci-dessous pour définir un nouveau mot de passe pour votre compte Pigglet."
+reset_cta = "Définir un nouveau mot de passe"
+
+email_change_subject = "Confirmez votre nouveau courriel Pigglet"
+email_change_heading = "Confirmez votre nouveau courriel"
+email_change_intro = "Confirmez cette adresse pour en faire le courriel avec lequel vous vous connectez à Pigglet."
+email_change_cta = "Confirmer cette adresse"
+
+link_fallback = "Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :"
+ignore_notice = "Si vous n'avez pas fait cette demande, vous pouvez ignorer ce courriel."
+
+lockout_subject = "Activité de connexion inhabituelle sur votre compte Pigglet"
+lockout_heading = "Quelqu'un tente de se connecter"
+lockout_intro = "Plusieurs tentatives de connexion ont échoué sur votre compte Pigglet, alors nous avons suspendu la connexion par mot de passe pour un court moment."
+lockout_detail = "Si c'était vous, attendez quelques minutes et réessayez, ou réinitialisez votre mot de passe. Vos données budgétaires n'ont pas été consultées."
+lockout_advice = "Si ce n'était pas vous, réinitialisez votre mot de passe maintenant : {{.Link}}"
+
+password_changed_subject = "Votre mot de passe Pigglet a été modifié"
+password_changed_heading = "Votre mot de passe a été modifié"
+password_changed_intro = "Le mot de passe de votre compte Pigglet vient d'être modifié, et tous les autres appareils ont été déconnectés."
+password_changed_advice = "Si vous n'avez pas fait ce changement, réinitialisez votre mot de passe immédiatement et écrivez à contact@plainlysoftware.com."
+
+[email.expires_in_hours]
+one = "Ce lien expire dans {{.Count}} heure."
+other = "Ce lien expire dans {{.Count}} heures."
+
+[email.expires_in_minutes]
+one = "Ce lien expire dans {{.Count}} minute."
+other = "Ce lien expire dans {{.Count}} minutes."
+
+[auth.err_locked_out]
+one = "Trop de tentatives de connexion. Veuillez réessayer dans {{.Minutes}} minute."
+other = "Trop de tentatives de connexion. Veuillez réessayer dans {{.Minutes}} minutes."
+
+[settings.ok_sessions_revoked]
+one = "{{.Count}} autre appareil a été déconnecté."
+other = "{{.Count}} autres appareils ont été déconnectés."

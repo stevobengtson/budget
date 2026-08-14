@@ -96,7 +96,7 @@ func pinLocale(l i18n.Locale) gin.HandlerFunc {
 }
 
 // requireAuth loads the session user into the context or redirects to /login.
-func requireAuth(svc *auth.Service, st *store.Store) gin.HandlerFunc {
+func requireAuth(svc *auth.Service, st *store.Store, cookieSecure bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		raw, err := c.Cookie(handlers.SessionCookieName)
 		if err != nil || raw == "" {
@@ -106,7 +106,7 @@ func requireAuth(svc *auth.Service, st *store.Store) gin.HandlerFunc {
 		}
 		user, err := svc.AuthenticateSession(c.Request.Context(), raw)
 		if err != nil {
-			handlers.ClearSessionCookie(c)
+			handlers.ClearSessionCookie(c, cookieSecure)
 			c.Redirect(http.StatusSeeOther, "/login")
 			c.Abort()
 			return
@@ -115,6 +115,13 @@ func requireAuth(svc *auth.Service, st *store.Store) gin.HandlerFunc {
 		c.Set("userEmail", user.Email)
 		c.Set("userIsAdmin", user.IsAdmin)
 		c.Set("userOnboarded", user.Onboarded())
+		// Stash the raw token so handlers that act on the session itself
+		// (step-up, revoke-others, password change) can tell which row is the
+		// caller's own without re-reading the cookie.
+		c.Set(handlers.ContextSessionToken, raw)
+		// Keeps the active-sessions list honest. Rate-limited internally to one
+		// write per session per quarter hour, so this is not a write per request.
+		svc.TouchSession(c.Request.Context(), raw)
 		// The stored preference wins over anything resolveLocale worked out from
 		// the cookie or the browser: a signed-in user has said what they want.
 		c.Request = c.Request.WithContext(i18n.WithLocale(c.Request.Context(), user.Locale))

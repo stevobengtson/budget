@@ -113,7 +113,7 @@ func TestDeleteUser(t *testing.T) {
 	seedBudgetData(t, s, other)
 
 	seedBudgetData(t, s, uid)
-	if err := s.CreateSession(ctx, uid, "tokenhash", time.Now().Add(time.Hour), "ua", "ip"); err != nil {
+	if err := s.CreateSession(ctx, uid, "tokenhash", time.Now().Add(time.Hour), SessionInfo{UserAgent: "ua", IP: "ip"}); err != nil {
 		t.Fatalf("session: %v", err)
 	}
 	if err := s.SetAddOnEnabled(ctx, uid, "paydown", true); err != nil {
