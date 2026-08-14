@@ -187,6 +187,14 @@ templ LoginPage(email, errKey string) {
 			@emailField(email)
 			@passwordField(bi(ctx, "auth.password"), "password", "", "current-password", "")
 			@authButton(bi(ctx, "auth.sign_in"))
+			// Inside the sign-in form and retargeted with formaction, so it
+			// submits the address already typed above — no script, no second
+			// field to fill in. formnovalidate is required because the password
+			// input is `required` and would otherwise block a submission that
+			// deliberately has no password.
+			<button type="submit" formaction="/login/magic" formnovalidate class="inline-flex h-10 w-full items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent">
+				{ bi(ctx, "auth.email_me_a_link") }
+			</button>
 		</form>
 		// Hidden by default and revealed by passkey.js only where WebAuthn
 		// exists. The page must stay a working password form with JS off, so
@@ -1143,4 +1151,32 @@ templ passkeyRow(p PasskeyView) {
 			}
 		</form>
 	</div>
+}
+
+// MagicConfirmPage is the interstitial an emailed sign-in link lands on.
+//
+// The link's GET renders this and signs nobody in. Mail scanners fetch every
+// URL in an incoming message, so a link that authenticated on GET would be
+// spent by a robot before its recipient saw it. The button below is what
+// completes the sign-in.
+//
+// Bilingual like every signed-out page: the visitor has no stored preference,
+// so it takes message keys rather than rendered strings.
+templ MagicConfirmPage(challenge, code, errKey string) {
+	@authLayout(bi(ctx, "auth.magic_confirm_title")) {
+		@formError(errKey)
+		@biLines("auth.magic_confirm_body")
+		<form method="post" action="/login/magic/confirm" class="mt-4 space-y-4">
+			<input type="hidden" name="challenge" value={ challenge }/>
+			if code != "" {
+				<input type="hidden" name="code" value={ code }/>
+			} else {
+				// The code is absent when the link was opened without it, or a
+				// previous attempt was wrong. Ask for it rather than dead-ending.
+				@codeField(auth.FactorEmailOTP)
+			}
+			@authButton(bi(ctx, "auth.magic_confirm_button"))
+		</form>
+		@authFooter("", "/login", bi(ctx, "auth.magic_use_password"))
+	}
 }

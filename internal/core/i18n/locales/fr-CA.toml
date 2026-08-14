@@ -335,6 +335,14 @@ one = "Votre essai gratuit est actif — il reste {{.Days}} jour, se terminant l
 other = "Votre essai gratuit est actif — il reste {{.Days}} jours, se terminant le {{.Date}}. Ajoutez un moyen de paiement pour conserver l'accès à la fin de l'essai."
 
 [auth]
+email_me_a_link = "M'envoyer un lien de connexion"
+magic_confirm_title = "Confirmer la connexion"
+magic_confirm_body = "Appuyez sur le bouton ci-dessous pour terminer votre connexion sur cet appareil."
+magic_confirm_button = "Me connecter"
+magic_use_password = "Utiliser plutôt mon mot de passe"
+err_magic_expired = "Ce lien de connexion a expiré ou a déjà été utilisé. Veuillez en demander un nouveau."
+msg_magic_sent_title = "Consultez votre courriel"
+msg_magic_sent_body = "Si cette adresse est associée à un compte Pigglet, un lien de connexion est en route. Il expire dans 15 minutes."
 sign_in_passkey = "Se connecter avec une clé d'accès"
 err_passkey_failed = "Cette clé d'accès n'a pas pu être utilisée. Réessayez ou connectez-vous avec votre mot de passe."
 challenge_title = "Vérification en deux étapes"
@@ -688,6 +696,12 @@ terms_changes_body = "Nous pouvons mettre à jour les présentes Conditions de t
 # Courriels transactionnels. Les espaces avant « : » et « ! » sont des espaces
 # insécables U+00A0, conformément au reste du catalogue fr-CA.
 [email]
+magic_subject = "Votre lien de connexion Pigglet"
+magic_heading = "Connectez-vous à Pigglet"
+magic_intro = "Utilisez le bouton ci-dessous pour vous connecter. Une confirmation vous sera demandée sur l'appareil où vous l'ouvrez."
+magic_cta = "Se connecter"
+magic_code_fallback = "Vous l'ouvrez sur un autre appareil? Saisissez plutôt ce code : {{.Code}}"
+magic_ignore = "Si vous n'avez pas demandé à vous connecter, ignorez ce courriel — personne ne peut l'utiliser sans l'ouvrir."
 change_passkey_added = "Une clé d'accès a été ajoutée à votre compte Pigglet."
 change_passkey_removed = "Une clé d'accès a été retirée de votre compte Pigglet."
 change_totp_enabled = "La vérification en deux étapes par application d'authentification a été ACTIVÉE sur votre compte Pigglet."

@@ -176,6 +176,78 @@ func (a *API) ChallengeSendCode(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// MagicLinkRequest emails a sign-in link.
+//
+// Always 204, whether or not the address has an account: distinguishing the two
+// would make this a way to test which addresses are registered.
+func (a *API) MagicLinkRequest(c *gin.Context) {
+	var req struct {
+		Email  string `json:"email"`
+		Client string `json:"client"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "Expected a JSON body with email.")
+		return
+	}
+	client := req.Client
+	if client != "ios" && client != "android" {
+		client = "mobile"
+	}
+	if err := a.auth.RequestMagicLink(c.Request.Context(), req.Email, store.SessionInfo{
+		UserAgent: c.Request.UserAgent(), IP: c.ClientIP(), Client: client,
+	}); err != nil {
+		writeError(c, http.StatusInternalServerError, "internal", "Could not send the sign-in link.")
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// MagicLinkConfirm completes a link sign-in.
+//
+// The app receives the link as a universal/app link — the applinks half of the
+// association documents — and hands the two query parameters back here.
+func (a *API) MagicLinkConfirm(c *gin.Context) {
+	var req struct {
+		Challenge string `json:"challenge"`
+		Code      string `json:"code"`
+		Client    string `json:"client"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "Expected a JSON body with challenge and code.")
+		return
+	}
+	client := req.Client
+	if client != "ios" && client != "android" {
+		client = "mobile"
+	}
+	r, err := a.auth.ConfirmMagicLink(c.Request.Context(), req.Challenge, req.Code,
+		store.SessionInfo{UserAgent: c.Request.UserAgent(), IP: c.ClientIP(), Client: client})
+	if err != nil {
+		ctx := c.Request.Context()
+		switch {
+		case errors.Is(err, auth.ErrTooManyAttempts):
+			writeError(c, http.StatusUnauthorized, "too_many_attempts", i18n.T(ctx, "auth.err_too_many_attempts"))
+		case errors.Is(err, auth.ErrInvalidCredentials):
+			writeError(c, http.StatusUnauthorized, "invalid_code", i18n.T(ctx, "auth.err_code_invalid"))
+		default:
+			writeError(c, http.StatusUnauthorized, "link_expired", i18n.T(ctx, "auth.err_magic_expired"))
+		}
+		return
+	}
+	// A magic link is a first factor, so an account with 2FA still gets a
+	// challenge — the same shape every other sign-in path returns.
+	if r.NeedsChallenge() {
+		c.JSON(http.StatusOK, challengeResponse{
+			Status:      "mfa_required",
+			Challenge:   r.ChallengeToken,
+			Methods:     factorStrings(r.Methods),
+			MaskedEmail: r.MaskedEmail,
+		})
+		return
+	}
+	a.writeSession(c, r.SessionToken)
+}
+
 // Security reports the account's two-factor state for the app's settings screen.
 func (a *API) Security(c *gin.Context) {
 	st, err := a.auth.SecurityOverview(c.Request.Context(), c.GetInt64(contextUserID))

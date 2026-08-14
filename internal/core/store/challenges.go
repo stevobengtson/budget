@@ -15,6 +15,9 @@ const (
 	KindMFA              ChallengeKind = "mfa"
 	KindWebAuthnLogin    ChallengeKind = "webauthn_login"
 	KindWebAuthnRegister ChallengeKind = "webauthn_register"
+	// KindLogin is a magic-link sign-in: a first factor, opened before
+	// anything has been proved.
+	KindLogin ChallengeKind = "login"
 )
 
 // ErrChallengeInvalid means the challenge is unknown, expired, or already used.

@@ -202,3 +202,45 @@ func TestChallengePageIsBilingual(t *testing.T) {
 		}
 	}
 }
+
+// The magic-link interstitial is a signed-out page: the visitor has proved
+// nothing yet and has no stored language preference, so it renders both.
+func TestMagicConfirmPageIsBilingual(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, _, _ := serveAuthed(t, s)
+
+	sealer, err := crypto.NewSealer("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &capMail{}
+	svc := auth.NewService(s, m, ts.URL, auth.Config{Sealer: sealer})
+
+	hash, err := auth.HashPassword("password1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uid, err := s.CreateUser(t.Context(), "bilingual-magic@example.com", hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetEmailVerified(t.Context(), uid); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RequestMagicLink(t.Context(), "bilingual-magic@example.com", store.SessionInfo{}); err != nil {
+		t.Fatal(err)
+	}
+	challenge, code := magicParts(t, m.last.Text)
+
+	for _, accept := range []string{"en-CA", "fr-CA"} {
+		page := getLang(t, ts, "/login/magic?c="+challenge+"&k="+code, accept)
+		for _, want := range []string{
+			"Confirm sign-in", "Confirmer la connexion",
+			"Sign me in", "Me connecter",
+		} {
+			if !strings.Contains(page, want) {
+				t.Errorf("interstitial (Accept-Language: %s) missing %q", accept, want)
+			}
+		}
+	}
+}

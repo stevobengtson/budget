@@ -345,6 +345,14 @@ one = "Your free trial is active — {{.Days}} day left, ending {{.Date}}. Add a
 other = "Your free trial is active — {{.Days}} days left, ending {{.Date}}. Add a payment method to keep access when the trial ends."
 
 [auth]
+email_me_a_link = "Email me a sign-in link"
+magic_confirm_title = "Confirm sign-in"
+magic_confirm_body = "Press the button below to finish signing in on this device."
+magic_confirm_button = "Sign me in"
+magic_use_password = "Use my password instead"
+err_magic_expired = "That sign-in link has expired or has already been used. Please request a new one."
+msg_magic_sent_title = "Check your email"
+msg_magic_sent_body = "If that address has a Pigglet account, a sign-in link is on its way. It expires in 15 minutes."
 sign_in_passkey = "Sign in with a passkey"
 err_passkey_failed = "That passkey could not be used. Please try again or sign in with your password."
 challenge_title = "Two-step verification"
@@ -708,6 +716,12 @@ terms_changes_body = "We may update these Terms from time to time. When we make 
 # the product name included, which is how "Verify your Pigglet email" and
 # "Reset your Budget password" drifted apart when these lived in Go literals.
 [email]
+magic_subject = "Your Pigglet sign-in link"
+magic_heading = "Sign in to Pigglet"
+magic_intro = "Use the button below to sign in. You will be asked to confirm on the device you open it with."
+magic_cta = "Sign in"
+magic_code_fallback = "Opening this on another device? Enter this code instead: {{.Code}}"
+magic_ignore = "If you didn't ask to sign in, you can ignore this email — nobody can use it without opening it."
 change_passkey_added = "A passkey was added to your Pigglet account."
 change_passkey_removed = "A passkey was removed from your Pigglet account."
 change_totp_enabled = "Two-step verification with an authenticator app was turned ON for your Pigglet account."

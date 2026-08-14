@@ -73,6 +73,28 @@ func LoginCode(l i18n.Locale, code string, ttl time.Duration) (mail.Message, err
 	return render(ctx, codeEmail(d), i18n.T(ctx, "email.login_code_subject"), text)
 }
 
+// MagicLink carries a sign-in link AND the same one-time code.
+//
+// Both, because the device reading the mail is not always the device signing
+// in: clicking works on a phone, and the code covers the case where the link
+// opens somewhere useless. They are two presentations of one challenge, not two
+// credentials.
+func MagicLink(l i18n.Locale, link, code string, ttl time.Duration) (mail.Message, error) {
+	ctx := ctxFor(l)
+	d := linkData{
+		Heading:       i18n.T(ctx, "email.magic_heading"),
+		Intro:         i18n.T(ctx, "email.magic_intro"),
+		CTA:           i18n.T(ctx, "email.magic_cta"),
+		Link:          link,
+		FallbackIntro: i18n.Tf(ctx, "email.magic_code_fallback", i18n.M{"Code": code}),
+		Expiry:        expiryLine(ctx, ttl),
+		Ignore:        i18n.T(ctx, "email.magic_ignore"),
+	}
+	text := joinText(d.Intro, link, i18n.Tf(ctx, "email.magic_code_fallback", i18n.M{"Code": code}),
+		d.Expiry+" "+d.Ignore)
+	return render(ctx, linkEmail(d), i18n.T(ctx, "email.magic_subject"), text)
+}
+
 // LockoutAlert tells someone their account is being hammered. It is sent once
 // per lock, when the lock is applied — never on the blocked attempts that
 // follow, or the lockout would become a way to flood the victim's inbox.

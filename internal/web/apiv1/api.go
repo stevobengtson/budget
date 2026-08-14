@@ -37,6 +37,8 @@ func (a *API) Register(r *gin.RouterGroup) {
 	r.POST("/login/challenge/send", a.ChallengeSendCode)
 	// Passkey sign-in is public for the same reason as /login: the caller has
 	// no session yet. The ceremony token is what authorizes the finish call.
+	r.POST("/login/magic", a.MagicLinkRequest)
+	r.POST("/login/magic/confirm", a.MagicLinkConfirm)
 	r.POST("/webauthn/login/begin", a.PasskeyLoginBegin)
 	r.POST("/webauthn/login/finish", a.PasskeyLoginFinish)
 

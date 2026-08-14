@@ -331,6 +331,16 @@ func (s *Server) routes(cfg config.Config) {
 	// Passkey sign-in. Public, because the whole point is to sign in without a
 	// session, and rate limited on the same bucket as /login — a passkey
 	// ceremony is a sign-in attempt.
+	// Magic link. Requesting one sends mail to an address the requester does
+	// not have to own, so it shares the forgot-password bucket rather than the
+	// sign-in one.
+	s.engine.POST("/login/magic", rateLimitIP(lim.forgotIP), hs.RequestMagicLink)
+	// GET renders an interstitial and signs NOBODY in: mail scanners fetch
+	// every URL in an incoming message, and a link that authenticated on GET
+	// would be spent before its recipient saw it.
+	s.engine.GET("/login/magic", hs.MagicLinkForm)
+	s.engine.POST("/login/magic/confirm", rateLimitIP(lim.loginIP), hs.ConfirmMagicLink)
+
 	s.engine.POST("/webauthn/login/begin", rateLimitIP(lim.loginIP), hs.PasskeyLoginBegin)
 	s.engine.POST("/webauthn/login/finish", rateLimitIP(lim.loginIP), hs.PasskeyLoginFinish)
 
