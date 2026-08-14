@@ -20,7 +20,9 @@ import (
 // maxAvatarBytes caps an uploaded avatar before it's decoded, to bound memory.
 const maxAvatarBytes = 10 << 20 // 10 MiB
 
-func (h *Handlers) LoginForm(c *gin.Context) { render(c, http.StatusOK, views.LoginPage("", "")) }
+func (h *Handlers) LoginForm(c *gin.Context) {
+	render(c, http.StatusOK, views.LoginPageWithProviders("", "", h.auth.OAuthProviders()))
+}
 
 func (h *Handlers) Login(c *gin.Context) {
 	email := c.PostForm("email")
@@ -214,6 +216,7 @@ func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountDa
 	// Enrolment is genuinely unavailable when the server has no encryption key,
 	// in which case the card says so rather than offering a dead button.
 	d.PasskeysData = h.passkeyData(c)
+	d.IdentitiesData = h.identitiesData(c)
 	d.Security.Available = h.auth.TwoFactorAvailable()
 	if st, err := h.auth.SecurityOverview(c.Request.Context(), uid); err == nil {
 		d.Security.TOTPEnabled = st.TOTPEnabled

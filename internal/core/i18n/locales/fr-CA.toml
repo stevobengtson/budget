@@ -335,6 +335,12 @@ one = "Votre essai gratuit est actif — il reste {{.Days}} jour, se terminant l
 other = "Votre essai gratuit est actif — il reste {{.Days}} jours, se terminant le {{.Date}}. Ajoutez un moyen de paiement pour conserver l'accès à la fin de l'essai."
 
 [auth]
+sign_in_with = "Se connecter avec"
+err_oauth_unavailable = "Ce fournisseur de connexion n'est pas disponible."
+err_oauth_failed = "Cette connexion n'a pas pu être complétée. Veuillez réessayer."
+err_oauth_unverified = "Ce fournisseur n'a pas confirmé votre adresse courriel, nous ne pouvons donc pas la relier à un compte. Connectez-vous plutôt avec votre mot de passe."
+err_oauth_no_account = "Aucun compte Pigglet n'utilise cette adresse courriel. Inscrivez-vous d'abord, puis liez le fournisseur depuis vos paramètres."
+err_oauth_taken = "Ce compte est déjà lié à un autre utilisateur Pigglet."
 email_me_a_link = "M'envoyer un lien de connexion"
 magic_confirm_title = "Confirmer la connexion"
 magic_confirm_body = "Appuyez sur le bouton ci-dessous pour terminer votre connexion sur cet appareil."
@@ -410,6 +416,15 @@ email = "Courriel"
 msg_account_deleted_title = "Compte supprimé"
 msg_account_deleted_body = "Votre compte et toutes vos données ont été supprimés définitivement. Nous sommes désolés de vous voir partir."
 [settings]
+identities_heading = "Comptes de connexion liés"
+identities_intro = "Connectez-vous avec Google ou Apple au lieu d'un mot de passe. La liaison ne leur donne pas accès à votre budget."
+identities_unavailable = "Aucun fournisseur de connexion n'est configuré sur ce serveur."
+identity_link = "Lier"
+identity_unlink = "Dissocier"
+identity_linked_on = "lié le {{.When}}"
+ok_identity_unlinked = "Ce compte a été dissocié."
+err_identity_last = "C'est votre seul moyen de connexion. Ajoutez d'abord un mot de passe ou une clé d'accès."
+err_identity_generic = "Impossible de mettre à jour ce compte lié. Veuillez réessayer."
 passkeys_heading = "Clés d'accès"
 passkeys_intro = "Connectez-vous avec votre empreinte, votre visage ou le NIP de votre appareil au lieu d'un mot de passe. Les clés d'accès ne peuvent être ni hameçonnées ni réutilisées sur un autre site."
 passkeys_none = "Vous n'avez pas encore de clé d'accès."
@@ -696,6 +711,8 @@ terms_changes_body = "Nous pouvons mettre à jour les présentes Conditions de t
 # Courriels transactionnels. Les espaces avant « : » et « ! » sont des espaces
 # insécables U+00A0, conformément au reste du catalogue fr-CA.
 [email]
+change_identity_linked = "Un fournisseur de connexion a été lié à votre compte Pigglet."
+change_identity_unlinked = "Un fournisseur de connexion a été dissocié de votre compte Pigglet."
 magic_subject = "Votre lien de connexion Pigglet"
 magic_heading = "Connectez-vous à Pigglet"
 magic_intro = "Utilisez le bouton ci-dessous pour vous connecter. Une confirmation vous sera demandée sur l'appareil où vous l'ouvrez."

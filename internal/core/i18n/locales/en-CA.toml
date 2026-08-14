@@ -345,6 +345,12 @@ one = "Your free trial is active — {{.Days}} day left, ending {{.Date}}. Add a
 other = "Your free trial is active — {{.Days}} days left, ending {{.Date}}. Add a payment method to keep access when the trial ends."
 
 [auth]
+sign_in_with = "Sign in with"
+err_oauth_unavailable = "That sign-in provider is not available."
+err_oauth_failed = "That sign-in could not be completed. Please try again."
+err_oauth_unverified = "That provider did not confirm your email address, so we can't match it to an account. Sign in with your password instead."
+err_oauth_no_account = "No Pigglet account uses that email address. Sign up first, then link the provider from your settings."
+err_oauth_taken = "That account is already linked to a different Pigglet user."
 email_me_a_link = "Email me a sign-in link"
 magic_confirm_title = "Confirm sign-in"
 magic_confirm_body = "Press the button below to finish signing in on this device."
@@ -420,6 +426,15 @@ email = "Email"
 msg_account_deleted_title = "Account deleted"
 msg_account_deleted_body = "Your account and all your data have been permanently deleted. We're sorry to see you go."
 [settings]
+identities_heading = "Linked sign-in accounts"
+identities_intro = "Sign in with Google or Apple instead of a password. Linking does not give them access to your budget."
+identities_unavailable = "No sign-in providers are configured on this server."
+identity_link = "Link"
+identity_unlink = "Unlink"
+identity_linked_on = "linked {{.When}}"
+ok_identity_unlinked = "That account has been unlinked."
+err_identity_last = "That is the only way you can sign in. Add a password or a passkey first."
+err_identity_generic = "Could not update that linked account. Please try again."
 passkeys_heading = "Passkeys"
 passkeys_intro = "Sign in with your fingerprint, face, or device PIN instead of a password. Passkeys cannot be phished or reused on another site."
 passkeys_none = "You have no passkeys yet."
@@ -716,6 +731,8 @@ terms_changes_body = "We may update these Terms from time to time. When we make 
 # the product name included, which is how "Verify your Pigglet email" and
 # "Reset your Budget password" drifted apart when these lived in Go literals.
 [email]
+change_identity_linked = "A sign-in provider was linked to your Pigglet account."
+change_identity_unlinked = "A sign-in provider was unlinked from your Pigglet account."
 magic_subject = "Your Pigglet sign-in link"
 magic_heading = "Sign in to Pigglet"
 magic_intro = "Use the button below to sign in. You will be asked to confirm on the device you open it with."

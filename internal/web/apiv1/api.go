@@ -39,6 +39,7 @@ func (a *API) Register(r *gin.RouterGroup) {
 	// no session yet. The ceremony token is what authorizes the finish call.
 	r.POST("/login/magic", a.MagicLinkRequest)
 	r.POST("/login/magic/confirm", a.MagicLinkConfirm)
+	r.POST("/login/oauth", a.OAuthLogin)
 	r.POST("/webauthn/login/begin", a.PasskeyLoginBegin)
 	r.POST("/webauthn/login/finish", a.PasskeyLoginFinish)
 
@@ -48,6 +49,7 @@ func (a *API) Register(r *gin.RouterGroup) {
 	authed.GET("/me", a.Me)
 	authed.GET("/security", a.Security)
 	authed.GET("/passkeys", a.Passkeys)
+	authed.GET("/identities", a.Identities)
 	authed.POST("/webauthn/register/begin", a.PasskeyRegisterBegin)
 	authed.POST("/webauthn/register/finish", a.PasskeyRegisterFinish)
 	authed.GET("/budget", a.Budget)

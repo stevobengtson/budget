@@ -125,6 +125,30 @@ type Config struct {
 		AndroidPackage      string   `mapstructure:"android_package"`
 		AndroidFingerprints []string `mapstructure:"android_fingerprints"`
 	} `mapstructure:"passkeys"`
+	// OAuth configures federated sign-in. A provider with no client id is
+	// simply off.
+	OAuth struct {
+		Google struct {
+			ClientID     string `mapstructure:"client_id"`
+			ClientSecret string `mapstructure:"client_secret"`
+			// AllowedAudiences are the OTHER client ids that may appear in an
+			// ID token: the iOS and Android ones. The web client id is always
+			// accepted without being repeated here.
+			//
+			// Security-critical. An ID token is only evidence about a person if
+			// it was minted for THIS application, and `aud` is what says so.
+			AllowedAudiences []string `mapstructure:"allowed_audiences"`
+		} `mapstructure:"google"`
+		Apple struct {
+			// ClientID is the Services ID, not the bundle id.
+			ClientID string `mapstructure:"client_id"`
+			TeamID   string `mapstructure:"team_id"`
+			KeyID    string `mapstructure:"key_id"`
+			// PrivateKey is the contents of the .p8 file.
+			PrivateKey       string   `mapstructure:"private_key"`
+			AllowedAudiences []string `mapstructure:"allowed_audiences"`
+		} `mapstructure:"apple"`
+	} `mapstructure:"oauth"`
 	// Secrets holds cryptographic material shared by every feature that stores
 	// a reversible secret.
 	Secrets struct {
@@ -178,6 +202,14 @@ func Load(v *viper.Viper) (Config, error) {
 	v.SetDefault("passkeys.apple_app_ids", []string{})
 	v.SetDefault("passkeys.android_package", "")
 	v.SetDefault("passkeys.android_fingerprints", []string{})
+	v.SetDefault("oauth.google.client_id", "")
+	v.SetDefault("oauth.google.client_secret", "")
+	v.SetDefault("oauth.google.allowed_audiences", []string{})
+	v.SetDefault("oauth.apple.client_id", "")
+	v.SetDefault("oauth.apple.team_id", "")
+	v.SetDefault("oauth.apple.key_id", "")
+	v.SetDefault("oauth.apple.private_key", "")
+	v.SetDefault("oauth.apple.allowed_audiences", []string{})
 	v.SetDefault("plaid.poll_interval", "6h")
 	v.SetDefault("plaid.days_requested", 90)
 	v.SetDefault("log.level", "info")

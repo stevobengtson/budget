@@ -248,6 +248,83 @@ func (a *API) MagicLinkConfirm(c *gin.Context) {
 	a.writeSession(c, r.SessionToken)
 }
 
+// OAuthLogin signs in with an ID token the app obtained from the platform.
+//
+// The native apps talk to Google or Apple directly — Android through
+// CredentialManager's GetGoogleIdOption (the legacy Google Sign-In SDK is
+// deprecated), iOS through ASAuthorizationAppleIDProvider — and send only the
+// resulting ID token here. There is no redirect and no code to exchange.
+//
+// The token is verified server-side regardless: signature, issuer, expiry,
+// nonce, and above all that its audience is one of OUR client ids. Trusting a
+// token because it arrived over TLS from our own app would accept any token
+// from that issuer, minted for anyone.
+func (a *API) OAuthLogin(c *gin.Context) {
+	var req struct {
+		Provider string `json:"provider"`
+		IDToken  string `json:"idToken"`
+		Nonce    string `json:"nonce"`
+		Client   string `json:"client"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Provider == "" || req.IDToken == "" {
+		writeError(c, http.StatusBadRequest, "invalid_request",
+			"Expected a JSON body with provider and idToken.")
+		return
+	}
+	client := req.Client
+	if client != "ios" && client != "android" {
+		client = "mobile"
+	}
+	r, err := a.auth.LoginWithIDToken(c.Request.Context(), req.Provider, req.IDToken, req.Nonce,
+		store.SessionInfo{UserAgent: c.Request.UserAgent(), IP: c.ClientIP(), Client: client})
+	if err != nil {
+		ctx := c.Request.Context()
+		switch {
+		case errors.Is(err, auth.ErrIdentityUnverified):
+			writeError(c, http.StatusUnauthorized, "email_unverified", i18n.T(ctx, "auth.err_oauth_unverified"))
+		case errors.Is(err, auth.ErrNoAccountForIdentity):
+			writeError(c, http.StatusUnauthorized, "no_account", i18n.T(ctx, "auth.err_oauth_no_account"))
+		case errors.Is(err, auth.ErrAccountDisabled):
+			writeError(c, http.StatusForbidden, "account_disabled", "This account has been disabled.")
+		default:
+			writeError(c, http.StatusUnauthorized, "oauth_rejected", i18n.T(ctx, "auth.err_oauth_failed"))
+		}
+		return
+	}
+	// Federated sign-in is a first factor, so an account with 2FA still gets a
+	// challenge — the same shape every other sign-in path returns.
+	if r.NeedsChallenge() {
+		c.JSON(http.StatusOK, challengeResponse{
+			Status:      "mfa_required",
+			Challenge:   r.ChallengeToken,
+			Methods:     factorStrings(r.Methods),
+			MaskedEmail: r.MaskedEmail,
+		})
+		return
+	}
+	a.writeSession(c, r.SessionToken)
+}
+
+// Identities lists the account's linked providers.
+func (a *API) Identities(c *gin.Context) {
+	ids, err := a.auth.ListIdentities(c.Request.Context(), c.GetInt64(contextUserID))
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "internal", "Could not load your linked accounts.")
+		return
+	}
+	out := make([]gin.H, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, gin.H{
+			"id":         id.ID,
+			"provider":   id.Provider,
+			"email":      id.Email,
+			"createdAt":  id.CreatedAt,
+			"lastUsedAt": id.LastUsedAt,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"identities": out})
+}
+
 // Security reports the account's two-factor state for the app's settings screen.
 func (a *API) Security(c *gin.Context) {
 	st, err := a.auth.SecurityOverview(c.Request.Context(), c.GetInt64(contextUserID))

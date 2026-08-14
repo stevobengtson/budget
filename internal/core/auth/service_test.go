@@ -32,7 +32,7 @@ func testDSN() string {
 
 var testTables = []string{
 	"transactions", "budgets", "categories", "category_groups",
-	"incomes", "accounts", "verification_tokens", "auth_lockouts", "auth_challenges", "recovery_codes", "user_totp", "webauthn_credentials", "sessions", "users",
+	"incomes", "accounts", "verification_tokens", "auth_lockouts", "auth_challenges", "recovery_codes", "user_totp", "webauthn_credentials", "oauth_identities", "sessions", "users",
 }
 
 // openTestDB opens the shared Postgres test database under a global advisory

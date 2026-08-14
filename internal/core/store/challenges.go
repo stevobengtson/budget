@@ -18,6 +18,10 @@ const (
 	// KindLogin is a magic-link sign-in: a first factor, opened before
 	// anything has been proved.
 	KindLogin ChallengeKind = "login"
+	// KindOAuth holds the state, nonce and PKCE verifier of a federated
+	// handshake. Not a cookie: Apple returns via a cross-site form_post, on
+	// which a SameSite=Lax cookie is never sent.
+	KindOAuth ChallengeKind = "oauth"
 )
 
 // ErrChallengeInvalid means the challenge is unknown, expired, or already used.

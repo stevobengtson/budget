@@ -24,6 +24,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/crypto"
 	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/mail"
+	"github.com/sbengtson/budget/internal/core/oidcauth"
 	"github.com/sbengtson/budget/internal/core/passkey"
 	"github.com/sbengtson/budget/internal/core/plaid"
 	"github.com/sbengtson/budget/internal/core/store"
@@ -112,9 +113,38 @@ func NewServer(s *store.Store, cfg config.Config) *Server {
 			passkeySvc = nil
 		}
 	}
+	// Federated sign-in. A provider with no client id is simply off; discovery
+	// failing (no network at boot) disables them rather than taking the app
+	// down, since every other way in still works.
+	var oauthRegistry *oidcauth.Registry
+	if cfg.OAuth.Google.ClientID != "" || cfg.OAuth.Apple.ClientID != "" {
+		var err error
+		oauthRegistry, err = oidcauth.New(context.Background(),
+			oidcauth.Config{
+				ClientID:         cfg.OAuth.Google.ClientID,
+				ClientSecret:     cfg.OAuth.Google.ClientSecret,
+				RedirectURL:      cfg.Web.BaseURL + "/auth/google/callback",
+				AllowedAudiences: cfg.OAuth.Google.AllowedAudiences,
+			},
+			oidcauth.AppleConfig{
+				Config: oidcauth.Config{
+					ClientID:         cfg.OAuth.Apple.ClientID,
+					RedirectURL:      cfg.Web.BaseURL + "/auth/apple/callback",
+					AllowedAudiences: cfg.OAuth.Apple.AllowedAudiences,
+				},
+				TeamID:        cfg.OAuth.Apple.TeamID,
+				KeyID:         cfg.OAuth.Apple.KeyID,
+				PrivateKeyPEM: cfg.OAuth.Apple.PrivateKey,
+			})
+		if err != nil {
+			slog.Warn("federated sign-in disabled", "err", err)
+			oauthRegistry = nil
+		}
+	}
 	authSvc := auth.NewService(s, newMailer(cfg), cfg.Web.BaseURL, auth.Config{
 		Sealer:       sealer,
 		Passkeys:     passkeySvc,
+		OAuth:        oauthRegistry,
 		SessionTTL:   cfg.Auth.SessionTTL,
 		TokenTTL:     cfg.Auth.TokenTTL,
 		ReauthWindow: cfg.Auth.ReauthWindow,
@@ -341,6 +371,13 @@ func (s *Server) routes(cfg config.Config) {
 	s.engine.GET("/login/magic", hs.MagicLinkForm)
 	s.engine.POST("/login/magic/confirm", rateLimitIP(lim.loginIP), hs.ConfirmMagicLink)
 
+	// Federated sign-in. The callback accepts BOTH methods: Apple returns a
+	// cross-site form_post whenever a scope is requested, and will not release
+	// the email otherwise.
+	s.engine.GET("/auth/:provider/start", rateLimitIP(lim.loginIP), hs.OAuthStart)
+	s.engine.GET("/auth/:provider/callback", hs.OAuthCallback)
+	s.engine.POST("/auth/:provider/callback", hs.OAuthCallback)
+
 	s.engine.POST("/webauthn/login/begin", rateLimitIP(lim.loginIP), hs.PasskeyLoginBegin)
 	s.engine.POST("/webauthn/login/finish", rateLimitIP(lim.loginIP), hs.PasskeyLoginFinish)
 
@@ -394,6 +431,10 @@ func (s *Server) routes(cfg config.Config) {
 	sec.POST("/passkeys/register/finish", hs.PasskeyRegisterFinish)
 	sec.POST("/passkeys/:id/rename", hs.RenamePasskey)
 	sec.POST("/passkeys/:id/delete", hs.DeletePasskey)
+	// The verb comes before the parameter so the two routes do not put
+	// differently-named wildcards at the same position, which the router
+	// refuses outright.
+	sec.POST("/identities/link/:provider", hs.OAuthLinkStart)
 	// Step-up itself must NOT be behind requireRecentAuth, or proving yourself
 	// would require having already proved yourself.
 	app.POST("/account/reauth", rateLimitUser(lim.accountU), hs.StepUp)
@@ -408,6 +449,8 @@ func (s *Server) routes(cfg config.Config) {
 	// is already looking at, so neither adds a step-up prompt mid-flow.
 	app.GET("/account/2fa/qr", hs.TOTPQR)
 	app.GET("/account/passkeys", hs.AccountPasskeys)
+	app.GET("/account/identities", hs.AccountIdentities)
+	app.POST("/account/identities/unlink/:id", rateLimitUser(lim.accountU), requireRecentAuth(s.auth), hs.UnlinkIdentity)
 	app.GET("/account/recovery-codes.txt", hs.DownloadRecoveryCodes)
 	app.POST("/account/addons/:slug", hs.ToggleAddOn)
 	// Danger zone: wipe all budget data (keep account) / delete the account.

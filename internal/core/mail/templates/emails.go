@@ -135,6 +135,8 @@ const (
 	SecurityEventRecoveryRegenerated = "recovery_regenerated"
 	SecurityEventPasskeyAdded        = "passkey_added"
 	SecurityEventPasskeyRemoved      = "passkey_removed"
+	SecurityEventIdentityLinked      = "identity_linked"
+	SecurityEventIdentityUnlinked    = "identity_unlinked"
 )
 
 // SecurityChanged reports a change to sign-in settings, so a change the account

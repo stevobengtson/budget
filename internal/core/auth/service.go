@@ -13,6 +13,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/mail"
 	emailtpl "github.com/sbengtson/budget/internal/core/mail/templates"
+	"github.com/sbengtson/budget/internal/core/oidcauth"
 	"github.com/sbengtson/budget/internal/core/passkey"
 	"github.com/sbengtson/budget/internal/core/store"
 )
@@ -34,6 +35,8 @@ type Config struct {
 	// Passkeys performs WebAuthn ceremonies. Nil disables passkeys rather than
 	// half-configuring them.
 	Passkeys *passkey.Service
+	// OAuth holds the configured federated providers. Nil disables them.
+	OAuth *oidcauth.Registry
 }
 
 func (c Config) brand() string {
@@ -73,6 +76,7 @@ type Service struct {
 	sealer   *crypto.Sealer
 	brand    string
 	passkeys *passkey.Service
+	oauth    *oidcauth.Registry
 }
 
 func NewService(s *store.Store, m mail.Mailer, baseURL string, cfg Config) *Service {
@@ -84,6 +88,7 @@ func NewService(s *store.Store, m mail.Mailer, baseURL string, cfg Config) *Serv
 		sealer:   cfg.Sealer,
 		brand:    cfg.brand(),
 		passkeys: cfg.Passkeys,
+		oauth:    cfg.OAuth,
 	}
 }
 

@@ -181,6 +181,15 @@ templ biLinesOf(lines []string) {
 // LoginPage and the other auth pages take message KEYS, not rendered strings: a
 // rendered string can only be one language, and these pages show every one.
 templ LoginPage(email, errKey string) {
+	@loginPageWith(email, errKey, nil)
+}
+
+// LoginPageWithProviders is LoginPage plus federated sign-in buttons.
+templ LoginPageWithProviders(email, errKey string, providers []string) {
+	@loginPageWith(email, errKey, providers)
+}
+
+templ loginPageWith(email, errKey string, providers []string) {
 	@authLayout(bi(ctx, "auth.sign_in")) {
 		@formError(errKey)
 		<form method="post" action="/login" class="space-y-4" data-passkey-autofill>
@@ -205,6 +214,7 @@ templ LoginPage(email, errKey string) {
 		<p class="mt-4 text-center text-sm">
 			<a href="/forgot" class="text-muted-foreground underline underline-offset-4 hover:text-foreground">{ bi(ctx, "auth.forgot_password") }</a>
 		</p>
+		@oauthButtons(providers)
 		@authFooter(bi(ctx, "auth.need_account"), "/signup", bi(ctx, "auth.sign_up"))
 		<script src={ Asset("/static/passkey.js") } defer></script>
 	}
@@ -334,6 +344,8 @@ type AccountData struct {
 	Security SecurityView
 	// PasskeysData backs the Security tab's passkey card.
 	PasskeysData PasskeysData
+	// IdentitiesData backs the Security tab's linked-accounts card.
+	IdentitiesData IdentitiesData
 	// NewRecoveryCodes are shown exactly once, on the response that generated
 	// them. Only their hashes are stored, so there is nothing to show later.
 	NewRecoveryCodes []string
@@ -613,6 +625,7 @@ templ AccountSecuritySection(d AccountData) {
 	<div class="space-y-6">
 		@AccountPasswordCard(d)
 		@AccountPasskeysCard(d.PasskeysData)
+		@AccountIdentitiesCard(d.IdentitiesData)
 		@AccountTwoFactorCard(d)
 		@AccountRecoveryCard(d)
 		@AccountSessionsCard(d.SessionsData)
@@ -1178,5 +1191,111 @@ templ MagicConfirmPage(challenge, code, errKey string) {
 			@authButton(bi(ctx, "auth.magic_confirm_button"))
 		</form>
 		@authFooter("", "/login", bi(ctx, "auth.magic_use_password"))
+	}
+}
+
+// IdentityView is one linked provider as the settings card shows it.
+type IdentityView struct {
+	ID       int64
+	Provider string
+	Email    string
+	Added    time.Time
+}
+
+// IdentitiesData backs the linked-accounts card.
+type IdentitiesData struct {
+	// Providers are every provider configured on this server.
+	Providers []string
+	Linked    []IdentityView
+	// Unlinked are the configured providers this account has not attached.
+	Unlinked    []string
+	IdentityErr string
+	IdentityOK  string
+}
+
+// AccountIdentitiesCard lists linked sign-in providers and offers the rest.
+templ AccountIdentitiesCard(d IdentitiesData) {
+	<section id="account-identities" data-inline-errors class="space-y-2">
+		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "settings.identities_heading") }</h2>
+		<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "settings.identities_intro") }</p>
+		<div class="overflow-hidden rounded-xl border bg-card">
+			if len(d.Providers) == 0 {
+				<p class="p-4 text-sm text-muted-foreground sm:p-6">{ i18n.T(ctx, "settings.identities_unavailable") }</p>
+			} else {
+				<div class="divide-y">
+					for _, id := range d.Linked {
+						@identityRow(id)
+					}
+					for _, p := range d.Unlinked {
+						@unlinkedProviderRow(p)
+					}
+				</div>
+				<div class="border-t bg-muted/30 px-4 py-3 sm:px-6">
+					@settingsMessages(d.IdentityErr, d.IdentityOK)
+				</div>
+			}
+		</div>
+	</section>
+}
+
+templ identityRow(id IdentityView) {
+	<div class="flex items-start justify-between gap-4 p-4 sm:px-6">
+		<div class="min-w-0 space-y-1">
+			<p class="text-sm font-medium">{ providerLabel(ctx, id.Provider) }</p>
+			<p class="text-xs text-muted-foreground">
+				if id.Email != "" {
+					{ id.Email + " · " }
+				}
+				{ i18n.Tf(ctx, "settings.identity_linked_on", i18n.M{"When": format.DateMedium(ctx, id.Added)}) }
+			</p>
+		</div>
+		<form hx-post={ fmt.Sprintf("/account/identities/unlink/%d", id.ID) } hx-target="#account-identities" hx-swap="outerHTML" class="shrink-0">
+			@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm, Variant: button.VariantGhost}) {
+				{ i18n.T(ctx, "settings.identity_unlink") }
+			}
+		</form>
+	</div>
+}
+
+templ unlinkedProviderRow(provider string) {
+	<div class="flex items-center justify-between gap-4 p-4 sm:px-6">
+		<p class="text-sm font-medium">{ providerLabel(ctx, provider) }</p>
+		// A full navigation, not an HTMX swap: the browser is leaving for the
+		// provider's own consent screen.
+		<form method="post" action={ templ.SafeURL("/account/identities/link/" + provider) } class="shrink-0">
+			@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm, Variant: button.VariantOutline}) {
+				{ i18n.T(ctx, "settings.identity_link") }
+			}
+		</form>
+	</div>
+}
+
+// providerLabel names a provider for display. Brand names are not translated.
+func providerLabel(ctx context.Context, provider string) string {
+	switch provider {
+	case "google":
+		return "Google"
+	case "apple":
+		return "Apple"
+	default:
+		return provider
+	}
+}
+
+// oauthButtons renders the sign-in buttons for every configured provider.
+//
+// Plain links, so they work with JavaScript disabled like the rest of this page.
+templ oauthButtons(providers []string) {
+	if len(providers) > 0 {
+		<div class="mt-4 space-y-2">
+			for _, p := range providers {
+				<a
+					href={ templ.SafeURL("/auth/" + p + "/start") }
+					class="inline-flex h-10 w-full items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent"
+				>
+					{ bi(ctx, "auth.sign_in_with") + " " + providerLabel(ctx, p) }
+				</a>
+			}
+		</div>
 	}
 }
