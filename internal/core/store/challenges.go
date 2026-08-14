@@ -11,7 +11,11 @@ import (
 // ChallengeKind names a sign-in state machine. Later phases add their own.
 type ChallengeKind string
 
-const KindMFA ChallengeKind = "mfa"
+const (
+	KindMFA              ChallengeKind = "mfa"
+	KindWebAuthnLogin    ChallengeKind = "webauthn_login"
+	KindWebAuthnRegister ChallengeKind = "webauthn_register"
+)
 
 // ErrChallengeInvalid means the challenge is unknown, expired, or already used.
 // The three are deliberately indistinguishable to callers: telling them apart
@@ -32,19 +36,36 @@ type AuthChallenge struct {
 	Attempts      int
 	ExpiresAt     time.Time
 	CreatedAt     time.Time
+	// UserAgent of the request that started the ceremony, used to name a newly
+	// registered passkey when the user supplies no label.
+	UserAgent string
 }
 
 const challengeColumns = `id, user_id, token_hash, kind, methods, code_hash,
-	code_expires_at, data, attempts, expires_at, created_at`
+	code_expires_at, data, attempts, expires_at, created_at, user_agent`
 
 // CreateChallenge stores a new challenge. Only the token's hash is persisted,
 // matching how sessions and verification tokens are handled: a database read
 // never yields a usable credential.
 func (s *Store) CreateChallenge(ctx context.Context, userID int64, tokenHash string, kind ChallengeKind, methods string, expiresAt time.Time, info SessionInfo) error {
+	return s.CreateChallengeWithData(ctx, userID, tokenHash, kind, methods, nil, expiresAt, info)
+}
+
+// CreateChallengeWithData is CreateChallenge carrying an opaque payload — the
+// WebAuthn ceremony state, which must survive between the two round trips of a
+// registration or sign-in.
+//
+// userID may be 0 for a discoverable passkey sign-in, where nobody knows which
+// account is signing in until the authenticator answers; it is stored as NULL.
+func (s *Store) CreateChallengeWithData(ctx context.Context, userID int64, tokenHash string, kind ChallengeKind, methods string, data []byte, expiresAt time.Time, info SessionInfo) error {
+	var user any
+	if userID != 0 {
+		user = userID
+	}
 	_, err := s.run(ctx,
-		`INSERT INTO auth_challenges(user_id, token_hash, kind, methods, expires_at, user_agent, ip)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		userID, tokenHash, string(kind), methods, expiresAt, info.UserAgent, info.IP)
+		`INSERT INTO auth_challenges(user_id, token_hash, kind, methods, data, expires_at, user_agent, ip)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		user, tokenHash, string(kind), methods, data, expiresAt, info.UserAgent, info.IP)
 	if err != nil {
 		return fmt.Errorf("create challenge: %w", err)
 	}
@@ -58,13 +79,14 @@ func (s *Store) GetChallenge(ctx context.Context, tokenHash string, kind Challen
 	var codeHash sql.NullString
 	var codeExpires nullTime
 	var kindStr string
+	var userAgent sql.NullString
 	err := s.queryOne(ctx,
 		`SELECT `+challengeColumns+` FROM auth_challenges
 		 WHERE token_hash = $1 AND kind = $2
 		   AND consumed_at IS NULL AND expires_at > CURRENT_TIMESTAMP`,
 		tokenHash, string(kind)).
 		Scan(&c.ID, &userID, &c.TokenHash, &kindStr, &c.Methods, &codeHash,
-			&codeExpires, &c.Data, &c.Attempts, &c.ExpiresAt, &c.CreatedAt)
+			&codeExpires, &c.Data, &c.Attempts, &c.ExpiresAt, &c.CreatedAt, &userAgent)
 	if errors.Is(err, sql.ErrNoRows) {
 		return AuthChallenge{}, ErrChallengeInvalid
 	}
@@ -75,6 +97,7 @@ func (s *Store) GetChallenge(ctx context.Context, tokenHash string, kind Challen
 	c.Kind = ChallengeKind(kindStr)
 	c.CodeHash = codeHash.String
 	c.CodeExpiresAt = codeExpires.Ptr()
+	c.UserAgent = userAgent.String
 	return c, nil
 }
 

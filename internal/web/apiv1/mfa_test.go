@@ -1,10 +1,12 @@
 package apiv1
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/descope/virtualwebauthn"
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/billing"
 	"github.com/sbengtson/budget/internal/core/crypto"
 	"github.com/sbengtson/budget/internal/core/mail"
+	"github.com/sbengtson/budget/internal/core/passkey"
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
@@ -253,5 +256,129 @@ func TestSecurityEndpointRequiresAuth(t *testing.T) {
 	w := doJSON(t, r, http.MethodGet, "/api/v1/security", "", "", nil)
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", w.Code)
+	}
+}
+
+// A full passkey sign-in over the real HTTP surface, driven by a virtual
+// authenticator. The unit tests prove the ceremony; this proves the wiring —
+// options out, response in, session back.
+func TestPasskeyLoginOverTheAPI(t *testing.T) {
+	sealer, err := crypto.NewSealer(apiTestKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := store.New(openTestDB(t))
+	pk, err := passkey.New(st, passkey.Config{
+		RPID:          "pigglet.ca",
+		RPDisplayName: "Pigglet",
+		Origins:       []string{"https://pigglet.ca"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := auth.NewService(st, mail.NewConsole(), "http://localhost:8080",
+		auth.Config{Sealer: sealer, Passkeys: pk})
+	bill := billing.NewService(st, "", "", "", "http://localhost:8080", "")
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	New(st, svc, bill).Register(r.Group("/api/v1"))
+
+	uid := makeVerifiedUser(t, st, "passkey-api@example.com", "password1")
+
+	rp := virtualwebauthn.RelyingParty{Name: "Pigglet", ID: "pigglet.ca", Origin: "https://pigglet.ca"}
+	authr := virtualwebauthn.NewAuthenticator()
+	cred := virtualwebauthn.NewCredential(virtualwebauthn.KeyTypeEC2)
+
+	// Enrol directly through the service; the registration HTTP path needs a
+	// bearer token, which is what we are trying to obtain.
+	options, session, err := pk.BeginRegistration(t.Context(), uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attOpts, err := virtualwebauthn.ParseAttestationOptions(string(options))
+	if err != nil {
+		t.Fatal(err)
+	}
+	authr.Options.UserHandle = []byte(attOpts.UserID)
+	attestation := virtualwebauthn.CreateAttestationResponse(rp, authr, cred, *attOpts)
+	reg, err := pk.FinishRegistration(t.Context(), uid, session, []byte(attestation))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CreateCredential(t.Context(), store.WebAuthnCredential{
+		UserID: uid, CredentialID: reg.CredentialID, PublicKey: reg.PublicKey,
+		AAGUID: reg.AAGUID, SignCount: reg.SignCount, Transports: reg.Transports,
+		AttestationType: reg.AttestationType, BackupEligible: reg.BackupEligible,
+		BackupState: reg.BackupState, Name: "Test key",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	authr.AddCredential(cred)
+
+	// Now the actual HTTP sign-in.
+	var begin struct {
+		Ceremony string          `json:"ceremony"`
+		Options  json.RawMessage `json:"options"`
+	}
+	w := doJSON(t, r, http.MethodPost, "/api/v1/webauthn/login/begin", "", "", &begin)
+	if w.Code != http.StatusOK {
+		t.Fatalf("begin = %d, want 200", w.Code)
+	}
+	if begin.Ceremony == "" || len(begin.Options) == 0 {
+		t.Fatalf("incomplete begin payload: %+v", begin)
+	}
+
+	assertOpts, err := virtualwebauthn.ParseAssertionOptions(string(begin.Options))
+	if err != nil {
+		t.Fatalf("the options must be usable verbatim by a client: %v", err)
+	}
+	assertion := virtualwebauthn.CreateAssertionResponse(rp, authr, cred, *assertOpts)
+
+	body, err := json.Marshal(map[string]any{
+		"ceremony": begin.Ceremony,
+		"response": json.RawMessage(assertion),
+		"client":   "ios",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var done struct {
+		Status string `json:"status"`
+		Token  string `json:"token"`
+		User   struct {
+			Email string `json:"email"`
+		} `json:"user"`
+	}
+	w2 := doJSON(t, r, http.MethodPost, "/api/v1/webauthn/login/finish", "", string(body), &done)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("finish = %d, want 200", w2.Code)
+	}
+	// This authenticator verifies the user, so the assertion stands alone as
+	// both factors and a session is issued outright.
+	if done.Status != "ok" || done.Token == "" {
+		t.Fatalf("want an issued session, got %+v", done)
+	}
+	if done.User.Email != "passkey-api@example.com" {
+		t.Fatalf("signed in as %q", done.User.Email)
+	}
+
+	// And the token works.
+	var me struct {
+		User struct {
+			Email string `json:"email"`
+		} `json:"user"`
+	}
+	if w3 := doJSON(t, r, http.MethodGet, "/api/v1/me", done.Token, "", &me); w3.Code != http.StatusOK {
+		t.Fatalf("me = %d", w3.Code)
+	}
+
+	// The credential's last-used timestamp is recorded.
+	creds, err := st.ListCredentialsForUser(t.Context(), uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(creds) != 1 || creds[0].LastUsedAt == nil {
+		t.Fatal("a successful assertion should record the credential's use")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/format"
@@ -182,15 +183,22 @@ templ biLinesOf(lines []string) {
 templ LoginPage(email, errKey string) {
 	@authLayout(bi(ctx, "auth.sign_in")) {
 		@formError(errKey)
-		<form method="post" action="/login" class="space-y-4">
+		<form method="post" action="/login" class="space-y-4" data-passkey-autofill>
 			@emailField(email)
 			@passwordField(bi(ctx, "auth.password"), "password", "", "current-password", "")
 			@authButton(bi(ctx, "auth.sign_in"))
 		</form>
+		// Hidden by default and revealed by passkey.js only where WebAuthn
+		// exists. The page must stay a working password form with JS off, so
+		// nothing here may be required to sign in.
+		<button type="button" data-passkey-login hidden class="mt-3 inline-flex h-10 w-full items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent">
+			{ bi(ctx, "auth.sign_in_passkey") }
+		</button>
 		<p class="mt-4 text-center text-sm">
 			<a href="/forgot" class="text-muted-foreground underline underline-offset-4 hover:text-foreground">{ bi(ctx, "auth.forgot_password") }</a>
 		</p>
 		@authFooter(bi(ctx, "auth.need_account"), "/signup", bi(ctx, "auth.sign_up"))
+		<script src={ Asset("/static/passkey.js") } defer></script>
 	}
 }
 
@@ -316,6 +324,8 @@ type AccountData struct {
 	SessionsData SessionsData
 	// Security is the two-factor state for the Security tab.
 	Security SecurityView
+	// PasskeysData backs the Security tab's passkey card.
+	PasskeysData PasskeysData
 	// NewRecoveryCodes are shown exactly once, on the response that generated
 	// them. Only their hashes are stored, so there is nothing to show later.
 	NewRecoveryCodes []string
@@ -594,6 +604,7 @@ templ dangerButton(label string) {
 templ AccountSecuritySection(d AccountData) {
 	<div class="space-y-6">
 		@AccountPasswordCard(d)
+		@AccountPasskeysCard(d.PasskeysData)
 		@AccountTwoFactorCard(d)
 		@AccountRecoveryCard(d)
 		@AccountSessionsCard(d.SessionsData)
@@ -1046,5 +1057,90 @@ templ TwoFactorWithRecovery(d AccountData) {
 	@AccountTwoFactorCard(d)
 	<div hx-swap-oob="outerHTML:#account-recovery">
 		@AccountRecoveryCard(d)
+	</div>
+}
+
+// PasskeyView is one registered credential as the settings card shows it.
+type PasskeyView struct {
+	ID           int64
+	Name         string
+	Created      time.Time
+	LastUsed     *time.Time
+	CloneWarning bool
+	// SyncedBackup reports that the authenticator has this credential backed up.
+	// One that is not lives and dies with a single device.
+	SyncedBackup bool
+}
+
+// PasskeysData backs the passkey card.
+type PasskeysData struct {
+	Available  bool
+	Passkeys   []PasskeyView
+	PasskeyErr string
+	PasskeyOK  string
+}
+
+// AccountPasskeysCard lists the account's passkeys and offers to add one.
+templ AccountPasskeysCard(d PasskeysData) {
+	<section id="account-passkeys" data-inline-errors class="space-y-2">
+		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "settings.passkeys_heading") }</h2>
+		<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "settings.passkeys_intro") }</p>
+		<div class="overflow-hidden rounded-xl border bg-card">
+			if !d.Available {
+				<p class="p-4 text-sm text-muted-foreground sm:p-6">{ i18n.T(ctx, "settings.passkeys_unavailable") }</p>
+			} else {
+				if len(d.Passkeys) > 0 {
+					<div class="divide-y">
+						for _, p := range d.Passkeys {
+							@passkeyRow(p)
+						}
+					</div>
+				} else {
+					<p class="p-4 text-sm text-muted-foreground sm:p-6">{ i18n.T(ctx, "settings.passkeys_none") }</p>
+				}
+				<div class="space-y-3 border-t bg-muted/30 px-4 py-3 sm:px-6">
+					@settingsMessages(d.PasskeyErr, d.PasskeyOK)
+					// Progressive enhancement: the button is inert without
+					// WebAuthn, and passkey.js hides it when the browser has no
+					// support rather than offering something that cannot work.
+					<button type="button" data-passkey-register hidden class="inline-flex h-9 items-center rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent">
+						{ i18n.T(ctx, "settings.passkeys_add") }
+					</button>
+				</div>
+			}
+		</div>
+	</section>
+}
+
+templ passkeyRow(p PasskeyView) {
+	<div class="flex items-start justify-between gap-4 p-4 sm:px-6">
+		<div class="min-w-0 space-y-1">
+			<p class="text-sm font-medium">
+				if p.Name != "" {
+					{ p.Name }
+				} else {
+					{ i18n.T(ctx, "settings.passkey_unnamed") }
+				}
+			</p>
+			<p class="text-xs text-muted-foreground">
+				{ i18n.Tf(ctx, "settings.passkey_added", i18n.M{"When": format.DateMedium(ctx, p.Created)}) }
+				if p.LastUsed != nil {
+					{ " · " + i18n.Tf(ctx, "settings.passkey_last_used", i18n.M{"When": format.DateMedium(ctx, *p.LastUsed)}) }
+				}
+			</p>
+			if !p.SyncedBackup {
+				<p class="text-xs text-muted-foreground">{ i18n.T(ctx, "settings.passkey_not_backed_up") }</p>
+			}
+			if p.CloneWarning {
+				// The counter went backwards, which is the spec's signal that
+				// this credential may have been copied.
+				<p class="text-xs text-destructive">{ i18n.T(ctx, "settings.passkey_clone_warning") }</p>
+			}
+		</div>
+		<form hx-post={ fmt.Sprintf("/account/passkeys/%d/delete", p.ID) } hx-target="#account-passkeys" hx-swap="outerHTML" class="shrink-0">
+			@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm, Variant: button.VariantGhost}) {
+				{ i18n.T(ctx, "settings.passkey_remove") }
+			}
+		</form>
 	</div>
 }

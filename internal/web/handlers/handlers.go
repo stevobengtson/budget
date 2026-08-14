@@ -22,12 +22,21 @@ type Handlers struct {
 	secure        bool   // Secure flag on the session cookie
 	sessionMaxAge int    // session cookie Max-Age in seconds (mirrors auth session TTL)
 	baseURL       string // public origin, for the absolute URLs a sitemap requires
+	// assoc backs the /.well-known app-association documents.
+	assoc AssociationConfig
 }
 
 // New constructs a Handlers wired to the supplied store, auth, billing, and
 // plaid services. sessionMaxAge is the session cookie lifetime in seconds;
 // baseURL is the site's public origin, which the sitemap needs because
 // sitemaps.org requires absolute URLs.
+// SetAssociations supplies the app-association details for the two
+// /.well-known documents.
+//
+// A setter rather than another New parameter: New already takes seven, and
+// these are needed by exactly two handlers.
+func (h *Handlers) SetAssociations(cfg AssociationConfig) { h.assoc = cfg }
+
 func New(s *store.Store, a *auth.Service, b *billing.Service, p *plaid.Service, secure bool, sessionMaxAge int, baseURL string) *Handlers {
 	return &Handlers{
 		store: s, auth: a, billing: b, plaid: p,

@@ -57,6 +57,16 @@ func (h *Handlers) RevokeOtherSessions(c *gin.Context) {
 	render(c, http.StatusOK, views.AccountSessionsCard(d))
 }
 
+// ReauthPrompt renders the re-authentication card on demand.
+//
+// The HTMX settings forms get this card automatically, as the body of the 403
+// their own request produced. Script-driven actions (passkey enrolment) cannot
+// use that response, so they fetch the prompt here and swap it into the section
+// they were blocked from.
+func (h *Handlers) ReauthPrompt(c *gin.Context) {
+	render(c, http.StatusOK, views.ReauthCard(c.Query("next")))
+}
+
 // StepUp re-proves a factor, opening the window for the sensitive actions on
 // the security screen. It deliberately sits outside requireRecentAuth: proving
 // yourself cannot require having already proved yourself.

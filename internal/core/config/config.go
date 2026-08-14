@@ -102,6 +102,29 @@ type Config struct {
 		// regardless.
 		TracesSampleRate float64 `mapstructure:"traces_sample_rate"`
 	} `mapstructure:"sentry"`
+	// Passkeys configures WebAuthn. Empty RPID leaves the feature off rather
+	// than guessing a value that would permanently bind credentials.
+	Passkeys struct {
+		// RPID is the registrable domain, e.g. "pigglet.ca" — no scheme, no
+		// port, no subdomain. Changing it invalidates every existing passkey,
+		// so treat it as permanent.
+		RPID string `mapstructure:"rp_id"`
+		// RPDisplayName is what the operating system's prompt calls this site.
+		RPDisplayName string `mapstructure:"rp_display_name"`
+		// Origins may assert credentials. Web origins are full URLs; the
+		// Android app's is "android:apk-key-hash:<base64url sha256 of the
+		// signing certificate>", usually TWO of them (upload key and Play App
+		// Signing key). Omitting the Android entries fails only on Android.
+		Origins []string `mapstructure:"origins"`
+		// AppleAppIDs are "<TEAMID>.<bundle id>" entries for the
+		// apple-app-site-association file.
+		AppleAppIDs []string `mapstructure:"apple_app_ids"`
+		// AndroidPackage and AndroidFingerprints back assetlinks.json. The
+		// fingerprints are colon-separated hex — a DIFFERENT encoding from the
+		// base64url form used in Origins, for the same certificate.
+		AndroidPackage      string   `mapstructure:"android_package"`
+		AndroidFingerprints []string `mapstructure:"android_fingerprints"`
+	} `mapstructure:"passkeys"`
 	// Secrets holds cryptographic material shared by every feature that stores
 	// a reversible secret.
 	Secrets struct {
@@ -149,6 +172,12 @@ func Load(v *viper.Viper) (Config, error) {
 	v.SetDefault("plaid.environment", "sandbox")
 	v.SetDefault("plaid.encryption_key", "")
 	v.SetDefault("secrets.encryption_key", "")
+	v.SetDefault("passkeys.rp_id", "")
+	v.SetDefault("passkeys.rp_display_name", "Pigglet")
+	v.SetDefault("passkeys.origins", []string{})
+	v.SetDefault("passkeys.apple_app_ids", []string{})
+	v.SetDefault("passkeys.android_package", "")
+	v.SetDefault("passkeys.android_fingerprints", []string{})
 	v.SetDefault("plaid.poll_interval", "6h")
 	v.SetDefault("plaid.days_requested", 90)
 	v.SetDefault("log.level", "info")

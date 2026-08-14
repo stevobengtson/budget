@@ -55,6 +55,11 @@ func (s *Service) AvailableStepUpFactors(ctx context.Context, userID int64) ([]F
 	if u.PasswordHash != "" {
 		out = append(out, FactorPassword)
 	}
+	// A registered passkey re-proves the user in one gesture, and is the only
+	// answerable prompt for someone who signed up without a password.
+	if s.PasskeysAvailable() && s.passkeyCount(ctx, userID) > 0 {
+		out = append(out, FactorPasskey)
+	}
 	// Everything the user could use at sign-in also re-proves them here, which
 	// is what keeps the security screen reachable for someone with no password.
 	second, err := s.enabledFactors(ctx, userID)

@@ -24,6 +24,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/crypto"
 	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/mail"
+	"github.com/sbengtson/budget/internal/core/passkey"
 	"github.com/sbengtson/budget/internal/core/plaid"
 	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/apiv1"
@@ -95,8 +96,25 @@ func NewServer(s *store.Store, cfg config.Config) *Server {
 	} else {
 		slog.Warn("two-factor authentication disabled: secrets.encryption_key is not set")
 	}
+	// Passkeys are off unless a relying-party domain is configured. Guessing one
+	// would bind every credential permanently to the wrong domain, and the RP ID
+	// cannot be changed later without invalidating every registered passkey.
+	var passkeySvc *passkey.Service
+	if cfg.Passkeys.RPID != "" {
+		var err error
+		passkeySvc, err = passkey.New(s, passkey.Config{
+			RPID:          cfg.Passkeys.RPID,
+			RPDisplayName: cfg.Passkeys.RPDisplayName,
+			Origins:       cfg.Passkeys.Origins,
+		})
+		if err != nil {
+			slog.Warn("passkeys disabled", "err", err)
+			passkeySvc = nil
+		}
+	}
 	authSvc := auth.NewService(s, newMailer(cfg), cfg.Web.BaseURL, auth.Config{
 		Sealer:       sealer,
+		Passkeys:     passkeySvc,
 		SessionTTL:   cfg.Auth.SessionTTL,
 		TokenTTL:     cfg.Auth.TokenTTL,
 		ReauthWindow: cfg.Auth.ReauthWindow,
@@ -227,6 +245,11 @@ func newMailer(cfg config.Config) mail.Mailer {
 
 func (s *Server) routes(cfg config.Config) {
 	hs := handlers.New(s.store, s.auth, s.billing, s.plaid, cfg.Auth.CookieSecure, int(cfg.Auth.SessionTTL.Seconds()), cfg.Web.BaseURL)
+	hs.SetAssociations(handlers.AssociationConfig{
+		AppleAppIDs:         cfg.Passkeys.AppleAppIDs,
+		AndroidPackage:      cfg.Passkeys.AndroidPackage,
+		AndroidFingerprints: cfg.Passkeys.AndroidFingerprints,
+	})
 
 	// Ops readiness probe: pings the DB so an uptime monitor learns of a
 	// Postgres outage, not just a live HTTP process. (The mobile app's
@@ -305,6 +328,17 @@ func (s *Server) routes(cfg config.Config) {
 	s.engine.POST("/login/challenge", rateLimitIP(lim.loginIP), hs.Challenge)
 	s.engine.POST("/login/challenge/send", rateLimitIP(lim.forgotIP), hs.ChallengeSendCode)
 	s.engine.POST("/login/challenge/cancel", hs.ChallengeCancel)
+	// Passkey sign-in. Public, because the whole point is to sign in without a
+	// session, and rate limited on the same bucket as /login — a passkey
+	// ceremony is a sign-in attempt.
+	s.engine.POST("/webauthn/login/begin", rateLimitIP(lim.loginIP), hs.PasskeyLoginBegin)
+	s.engine.POST("/webauthn/login/finish", rateLimitIP(lim.loginIP), hs.PasskeyLoginFinish)
+
+	// App-association documents. Deliberately NOT in views.PublicPages: that
+	// slice drives the sitemap and the per-language route mirror, and these are
+	// machine-read JSON at one fixed path, not indexable pages.
+	s.engine.GET("/.well-known/apple-app-site-association", hs.AppleAppSiteAssociation)
+	s.engine.GET("/.well-known/assetlinks.json", hs.AssetLinks)
 	// Public: the language has to be switchable on the login and sign-up pages,
 	// before there is a session to attach the choice to. Persists to the user
 	// record as well when the request does carry one.
@@ -346,9 +380,16 @@ func (s *Server) routes(cfg config.Config) {
 	sec.POST("/2fa/totp/disable", hs.DisableTOTP)
 	sec.POST("/2fa/email", hs.ToggleEmailOTP)
 	sec.POST("/recovery-codes", hs.RegenerateRecoveryCodes)
+	sec.POST("/passkeys/register/begin", hs.PasskeyRegisterBegin)
+	sec.POST("/passkeys/register/finish", hs.PasskeyRegisterFinish)
+	sec.POST("/passkeys/:id/rename", hs.RenamePasskey)
+	sec.POST("/passkeys/:id/delete", hs.DeletePasskey)
 	// Step-up itself must NOT be behind requireRecentAuth, or proving yourself
 	// would require having already proved yourself.
 	app.POST("/account/reauth", rateLimitUser(lim.accountU), hs.StepUp)
+	// Fetching the prompt is not itself a sensitive action, and gating it would
+	// mean needing step-up to be offered step-up.
+	app.GET("/account/reauth", hs.ReauthPrompt)
 	// Reading the list is not a sensitive action — being told which devices are
 	// signed in is exactly what someone who suspects a compromise needs to see,
 	// and demanding a password first would gate the diagnosis behind the cure.
@@ -356,6 +397,7 @@ func (s *Server) routes(cfg config.Config) {
 	// The QR encodes the pending secret, and the download serves codes the user
 	// is already looking at, so neither adds a step-up prompt mid-flow.
 	app.GET("/account/2fa/qr", hs.TOTPQR)
+	app.GET("/account/passkeys", hs.AccountPasskeys)
 	app.GET("/account/recovery-codes.txt", hs.DownloadRecoveryCodes)
 	app.POST("/account/addons/:slug", hs.ToggleAddOn)
 	// Danger zone: wipe all budget data (keep account) / delete the account.

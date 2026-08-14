@@ -90,7 +90,11 @@ func requireRecentAuth(svc *auth.Service) gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+		// A fetch() caller cannot render an HTML card. Passkey enrolment is
+		// driven by script rather than by an HTMX form, so answering it with
+		// the card produced a 403 the script could not parse and swallowed —
+		// a console error and nothing on screen.
+		if wantsJSON(c) {
 			c.JSON(http.StatusForbidden, gin.H{"error": gin.H{
 				"code":    "reauth_required",
 				"message": i18n.T(c.Request.Context(), "auth.err_reauth_required"),
@@ -103,10 +107,17 @@ func requireRecentAuth(svc *auth.Service) gin.HandlerFunc {
 	}
 }
 
+// wantsJSON reports whether the caller expects a JSON body rather than HTML:
+// the mobile API, or a script that asked for it explicitly.
+func wantsJSON(c *gin.Context) bool {
+	return strings.HasPrefix(c.Request.URL.Path, "/api/") ||
+		strings.Contains(c.GetHeader("Accept"), "application/json")
+}
+
 // writeTooManyRequests answers a throttled request in the shape its caller
 // expects: JSON for the mobile API, an HTML page for a browser.
 func writeTooManyRequests(c *gin.Context) {
-	if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+	if wantsJSON(c) {
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": gin.H{
 			"code":    "rate_limited",
 			"message": i18n.T(c.Request.Context(), "auth.err_rate_limited"),

@@ -213,6 +213,7 @@ func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountDa
 	d.SessionsData = h.sessionsData(c)
 	// Enrolment is genuinely unavailable when the server has no encryption key,
 	// in which case the card says so rather than offering a dead button.
+	d.PasskeysData = h.passkeyData(c)
 	d.Security.Available = h.auth.TwoFactorAvailable()
 	if st, err := h.auth.SecurityOverview(c.Request.Context(), uid); err == nil {
 		d.Security.TOTPEnabled = st.TOTPEnabled

@@ -16,7 +16,7 @@ func migrateTestDSN() string {
 
 var migrateTestTables = []string{
 	"transactions", "budgets", "categories", "category_groups",
-	"incomes", "accounts", "verification_tokens", "auth_lockouts", "auth_challenges", "recovery_codes", "user_totp", "sessions", "users",
+	"incomes", "accounts", "verification_tokens", "auth_lockouts", "auth_challenges", "recovery_codes", "user_totp", "webauthn_credentials", "sessions", "users",
 }
 
 // migrateTestLockKey MUST match the store/web packages' advisory-lock key so

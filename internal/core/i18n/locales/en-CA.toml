@@ -345,6 +345,8 @@ one = "Your free trial is active — {{.Days}} day left, ending {{.Date}}. Add a
 other = "Your free trial is active — {{.Days}} days left, ending {{.Date}}. Add a payment method to keep access when the trial ends."
 
 [auth]
+sign_in_passkey = "Sign in with a passkey"
+err_passkey_failed = "That passkey could not be used. Please try again or sign in with your password."
 challenge_title = "Two-step verification"
 challenge_body_totp = "Enter the 6-digit code from your authenticator app."
 challenge_body_email = "We sent a 6-digit code to {{.Email}}. Enter it below."
@@ -410,6 +412,21 @@ email = "Email"
 msg_account_deleted_title = "Account deleted"
 msg_account_deleted_body = "Your account and all your data have been permanently deleted. We're sorry to see you go."
 [settings]
+passkeys_heading = "Passkeys"
+passkeys_intro = "Sign in with your fingerprint, face, or device PIN instead of a password. Passkeys cannot be phished or reused on another site."
+passkeys_none = "You have no passkeys yet."
+passkeys_add = "Add a passkey"
+passkeys_unavailable = "Passkeys are unavailable because the server has no relying-party domain configured."
+passkey_unnamed = "Unnamed passkey"
+passkey_added = "Added {{.When}}"
+passkey_last_used = "last used {{.When}}"
+passkey_remove = "Remove"
+passkey_not_backed_up = "This passkey is stored on one device only. If you lose that device you will need another way to sign in."
+passkey_clone_warning = "This passkey may have been copied. Remove it and register a new one."
+ok_passkey_renamed = "Passkey renamed."
+ok_passkey_removed = "Passkey removed."
+err_passkey_last = "That is the only way you can sign in. Add a password or another passkey first."
+err_passkey_generic = "Could not update that passkey. Please try again."
 twofa_last_factor_warning = "This is your only second step. Turning it off will also delete your recovery codes."
 ok_twofa_disabled_codes_cleared = "Two-step verification is off. Your recovery codes have been deleted — any you saved will no longer work."
 recovery_none_needed = "You have no recovery codes because two-step verification is off. Turning it on creates a new set."
@@ -691,6 +708,8 @@ terms_changes_body = "We may update these Terms from time to time. When we make 
 # the product name included, which is how "Verify your Pigglet email" and
 # "Reset your Budget password" drifted apart when these lived in Go literals.
 [email]
+change_passkey_added = "A passkey was added to your Pigglet account."
+change_passkey_removed = "A passkey was removed from your Pigglet account."
 change_totp_enabled = "Two-step verification with an authenticator app was turned ON for your Pigglet account."
 change_totp_disabled = "Two-step verification with an authenticator app was turned OFF for your Pigglet account."
 change_email_otp_enabled = "Two-step verification by email code was turned ON for your Pigglet account."

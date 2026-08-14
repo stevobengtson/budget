@@ -13,6 +13,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/mail"
 	emailtpl "github.com/sbengtson/budget/internal/core/mail/templates"
+	"github.com/sbengtson/budget/internal/core/passkey"
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
@@ -30,6 +31,9 @@ type Config struct {
 	Sealer *crypto.Sealer
 	// Brand names the app in authenticator apps and emails.
 	Brand string
+	// Passkeys performs WebAuthn ceremonies. Nil disables passkeys rather than
+	// half-configuring them.
+	Passkeys *passkey.Service
 }
 
 func (c Config) brand() string {
@@ -62,22 +66,24 @@ func (c Config) tokenTTL() time.Duration {
 
 // Service orchestrates the store + mailer for auth flows.
 type Service struct {
-	store   *store.Store
-	mailer  mail.Mailer
-	baseURL string
-	cfg     Config
-	sealer  *crypto.Sealer
-	brand   string
+	store    *store.Store
+	mailer   mail.Mailer
+	baseURL  string
+	cfg      Config
+	sealer   *crypto.Sealer
+	brand    string
+	passkeys *passkey.Service
 }
 
 func NewService(s *store.Store, m mail.Mailer, baseURL string, cfg Config) *Service {
 	return &Service{
-		store:   s,
-		mailer:  m,
-		baseURL: strings.TrimRight(baseURL, "/"),
-		cfg:     cfg,
-		sealer:  cfg.Sealer,
-		brand:   cfg.brand(),
+		store:    s,
+		mailer:   m,
+		baseURL:  strings.TrimRight(baseURL, "/"),
+		cfg:      cfg,
+		sealer:   cfg.Sealer,
+		brand:    cfg.brand(),
+		passkeys: cfg.Passkeys,
 	}
 }
 

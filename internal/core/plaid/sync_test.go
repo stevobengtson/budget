@@ -31,7 +31,7 @@ func testDSN() string {
 
 var testTables = []string{
 	"transactions", "budgets", "categories", "category_groups",
-	"incomes", "accounts", "plaid_items", "verification_tokens", "auth_lockouts", "auth_challenges", "recovery_codes", "user_totp", "sessions", "users",
+	"incomes", "accounts", "plaid_items", "verification_tokens", "auth_lockouts", "auth_challenges", "recovery_codes", "user_totp", "webauthn_credentials", "sessions", "users",
 }
 
 func openTestDB(t *testing.T) *sql.DB {
@@ -188,12 +188,12 @@ func TestSyncItemInitialBackfill(t *testing.T) {
 		// Two pages; second carries a pending tx, an out-of-window tx and an
 		// unmapped-account tx.
 		syncPage([]plaidapi.Transaction{
-			plaidTx("t1", "pa-1", "2026-08-01", 12.34, false, ""), // outflow, posted
+			plaidTx("t1", "pa-1", "2026-08-01", 12.34, false, ""),    // outflow, posted
 			plaidTx("t2", "pa-1", "2026-08-02", -1000.00, false, ""), // inflow (paycheque)
 		}, nil, nil, "c1", true),
 		syncPage([]plaidapi.Transaction{
-			plaidTx("t3", "pa-1", "2026-08-03", 5.00, true, ""),   // pending
-			plaidTx("t4", "pa-1", "2026-06-15", 9.99, false, ""),  // before syncFrom: skipped
+			plaidTx("t3", "pa-1", "2026-08-03", 5.00, true, ""),      // pending
+			plaidTx("t4", "pa-1", "2026-06-15", 9.99, false, ""),     // before syncFrom: skipped
 			plaidTx("t5", "pa-other", "2026-08-03", 7.77, false, ""), // unmapped: skipped
 		}, nil, nil, "c2", false),
 	}

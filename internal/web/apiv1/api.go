@@ -35,12 +35,19 @@ func (a *API) Register(r *gin.RouterGroup) {
 	// what authorizes these.
 	r.POST("/login/challenge", a.Challenge)
 	r.POST("/login/challenge/send", a.ChallengeSendCode)
+	// Passkey sign-in is public for the same reason as /login: the caller has
+	// no session yet. The ceremony token is what authorizes the finish call.
+	r.POST("/webauthn/login/begin", a.PasskeyLoginBegin)
+	r.POST("/webauthn/login/finish", a.PasskeyLoginFinish)
 
 	authed := r.Group("")
 	authed.Use(a.RequireBearerAuth())
 	authed.POST("/logout", a.Logout)
 	authed.GET("/me", a.Me)
 	authed.GET("/security", a.Security)
+	authed.GET("/passkeys", a.Passkeys)
+	authed.POST("/webauthn/register/begin", a.PasskeyRegisterBegin)
+	authed.POST("/webauthn/register/finish", a.PasskeyRegisterFinish)
 	authed.GET("/budget", a.Budget)
 	authed.POST("/budget/assign", a.Assign)
 	authed.GET("/accounts", a.Accounts)

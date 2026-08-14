@@ -124,6 +124,16 @@ func (s *Service) BeginLogin(ctx context.Context, email, password string, info s
 		return LoginResult{SessionToken: token, UserID: u.ID}, nil
 	}
 
+	return s.openChallenge(ctx, u, factors, info)
+}
+
+// openChallenge creates a second-factor challenge for a user who has already
+// proved a first factor.
+//
+// Shared by password sign-in and by an unverified passkey assertion, so both
+// arrive at the same prompt with the same rules — the alternative is two
+// almost-identical blocks that drift.
+func (s *Service) openChallenge(ctx context.Context, u store.User, factors []Factor, info store.SessionInfo) (LoginResult, error) {
 	raw, err := RandomToken()
 	if err != nil {
 		return LoginResult{}, err

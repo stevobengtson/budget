@@ -111,6 +111,8 @@ const (
 	SecurityEventEmailOTPEnabled     = "email_otp_enabled"
 	SecurityEventEmailOTPDisabled    = "email_otp_disabled"
 	SecurityEventRecoveryRegenerated = "recovery_regenerated"
+	SecurityEventPasskeyAdded        = "passkey_added"
+	SecurityEventPasskeyRemoved      = "passkey_removed"
 )
 
 // SecurityChanged reports a change to sign-in settings, so a change the account
