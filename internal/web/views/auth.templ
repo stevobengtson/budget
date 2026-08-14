@@ -314,6 +314,44 @@ type AccountData struct {
 	// SessionsData backs the Security tab's active-sessions card, which renders
 	// and re-renders independently of the rest of the tab.
 	SessionsData SessionsData
+	// Security is the two-factor state for the Security tab.
+	Security SecurityView
+	// NewRecoveryCodes are shown exactly once, on the response that generated
+	// them. Only their hashes are stored, so there is nothing to show later.
+	NewRecoveryCodes []string
+	TwoFactorErr     string
+	TwoFactorOK      string
+	RecoveryErr      string
+	RecoveryOK       string
+}
+
+// SecurityView is the Security tab's two-factor state.
+type SecurityView struct {
+	// Available is false when the server has no encryption key, in which case
+	// enrolment is refused rather than storing secrets in the clear.
+	Available         bool
+	TOTPEnabled       bool
+	EmailOTPEnabled   bool
+	RecoveryRemaining int
+	// PendingURI and PendingSecret are set only while an enrolment is waiting
+	// to be confirmed.
+	PendingURI    string
+	PendingSecret string
+}
+
+// OnlyFactor reports whether exactly one second factor is on, which is when
+// turning it off also destroys the recovery codes. The warning that gives is
+// the difference between an informed choice and a printout that silently stops
+// working.
+func (v SecurityView) OnlyFactor() bool {
+	n := 0
+	if v.TOTPEnabled {
+		n++
+	}
+	if v.EmailOTPEnabled {
+		n++
+	}
+	return n == 1 && v.RecoveryRemaining > 0
 }
 
 // sessionTitle names a device for the sessions list. The stored label is
@@ -338,7 +376,13 @@ templ AccountPage(d AccountData) {
 	@Layout(i18n.T(ctx, "menu.settings"), "account", d.Collapsed) {
 		<div class="mx-auto w-full max-w-2xl space-y-6">
 			<h1 class="text-2xl font-semibold tracking-tight">{ i18n.T(ctx, "menu.settings") }</h1>
-			@tabs.Tabs() {
+			// data-url-tabs makes tab-url.js mirror the selected tab into ?tab=,
+			// so a refresh or a shared link reopens the same panel. The default
+			// tab is written as no parameter, keeping a bare /account clean.
+			@tabs.Tabs(tabs.Props{Attributes: templ.Attributes{
+				"data-url-tabs":         "tab",
+				"data-url-tabs-default": "account",
+			}}) {
 				@tabs.List() {
 					@tabs.Trigger(tabs.TriggerProps{Value: "account", IsActive: d.ActiveTab == "account"}) {
 						@icon.User(icon.Props{Class: "size-4"})
@@ -550,6 +594,8 @@ templ dangerButton(label string) {
 templ AccountSecuritySection(d AccountData) {
 	<div class="space-y-6">
 		@AccountPasswordCard(d)
+		@AccountTwoFactorCard(d)
+		@AccountRecoveryCard(d)
 		@AccountSessionsCard(d.SessionsData)
 	</div>
 }
@@ -741,4 +787,264 @@ templ settingsMessages(errMsg, okMsg string) {
 	if okMsg != "" {
 		<p class="text-sm text-primary">{ okMsg }</p>
 	}
+}
+
+// ChallengeData backs the second-factor screen.
+type ChallengeData struct {
+	// Token is the opaque challenge id, carried in a hidden field rather than a
+	// cookie: it survives the form post without adding a second cookie surface,
+	// and the JSON API carries the same value in its body.
+	Token string
+	// Method is the factor currently being asked for.
+	Method auth.Factor
+	// Methods are every factor this user could switch to.
+	Methods []auth.Factor
+	// MaskedEmail tells the user which inbox to check without the page
+	// restating an address they have not finished proving they own.
+	MaskedEmail string
+	ErrKey      string
+}
+
+// ChallengePage asks for the second factor.
+//
+// A signed-out page, so it renders every supported language: the visitor has no
+// stored preference yet, and someone who cannot read a wrong guess cannot get
+// far enough to correct it. It therefore takes message KEYS, never rendered
+// strings.
+templ ChallengePage(d ChallengeData) {
+	@authLayout(bi(ctx, "auth.challenge_title")) {
+		@formError(d.ErrKey)
+		switch d.Method {
+			case auth.FactorEmailOTP:
+				@biLinesF("auth.challenge_body_email", i18n.M{"Email": d.MaskedEmail})
+			case auth.FactorRecovery:
+				@biLines("auth.challenge_body_recovery")
+			default:
+				@biLines("auth.challenge_body_totp")
+		}
+		<form method="post" action="/login/challenge" class="mt-4 space-y-4">
+			<input type="hidden" name="challenge" value={ d.Token }/>
+			<input type="hidden" name="method" value={ string(d.Method) }/>
+			@codeField(d.Method)
+			@authButton(bi(ctx, "auth.verify_code"))
+		</form>
+		<div class="mt-4 space-y-2 text-center text-sm">
+			if d.Method == auth.FactorEmailOTP {
+				@challengeAction(d.Token, "email_otp", "auth.resend_code", "/login/challenge/send")
+			}
+			for _, m := range d.Methods {
+				if m != d.Method {
+					@challengeSwitch(d.Token, m)
+				}
+			}
+			@challengeAction(d.Token, "", "auth.cancel_signin", "/login/challenge/cancel")
+		</div>
+	}
+}
+
+// codeField is a plain input, deliberately not a templui component:
+// autocomplete="one-time-code" is what makes iOS and Safari offer the emailed
+// code straight from the notification, and no component library exposes it.
+// A recovery code is alphanumeric, so only the numeric factors get the numeric
+// keypad hints.
+templ codeField(method auth.Factor) {
+	<div class="space-y-1.5">
+		<label for="code" class="text-sm font-medium leading-none">{ bi(ctx, "auth.code_label") }</label>
+		if method == auth.FactorRecovery {
+			<input id="code" name="code" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required class={ authInputClass }/>
+		} else {
+			<input
+				id="code"
+				name="code"
+				type="text"
+				inputmode="numeric"
+				pattern="[0-9]*"
+				maxlength="6"
+				autocomplete="one-time-code"
+				autocapitalize="none"
+				spellcheck="false"
+				required
+				class={ authInputClass + " text-center text-lg tracking-[0.4em]" }
+			/>
+		}
+	</div>
+}
+
+// challengeSwitch offers another factor. A POST, not a link, because switching
+// carries the challenge token and a GET would put it in the URL — and therefore
+// in logs and referrers.
+templ challengeSwitch(token string, m auth.Factor) {
+	switch m {
+		case auth.FactorTOTP:
+			@challengeAction(token, string(m), "auth.use_totp_instead", "/login/challenge")
+		case auth.FactorEmailOTP:
+			@challengeAction(token, string(m), "auth.use_email_instead", "/login/challenge/send")
+		case auth.FactorRecovery:
+			@challengeAction(token, string(m), "auth.use_recovery_instead", "/login/challenge")
+	}
+}
+
+templ challengeAction(token, method, labelKey, action string) {
+	<form method="post" action={ templ.SafeURL(action) }>
+		<input type="hidden" name="challenge" value={ token }/>
+		if method != "" {
+			<input type="hidden" name="method" value={ method }/>
+		}
+		<input type="hidden" name="switch" value="1"/>
+		<button type="submit" class="text-muted-foreground underline underline-offset-4 hover:text-foreground">{ bi(ctx, labelKey) }</button>
+	</form>
+}
+
+// AccountTwoFactorCard is the Security tab's two-step verification card.
+templ AccountTwoFactorCard(d AccountData) {
+	<section id="account-2fa" data-inline-errors class="space-y-2">
+		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "settings.twofa_heading") }</h2>
+		<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "settings.twofa_intro") }</p>
+		<div class="overflow-hidden rounded-xl border bg-card">
+			if !d.Security.Available {
+				<p class="p-4 text-sm text-muted-foreground sm:p-6">{ i18n.T(ctx, "settings.twofa_unavailable") }</p>
+			} else {
+				if d.Security.PendingURI != "" {
+					@twoFactorSetup(d)
+				} else {
+					@twoFactorRows(d)
+				}
+				<div class="border-t bg-muted/30 px-4 py-3 sm:px-6">
+					@settingsMessages(d.TwoFactorErr, d.TwoFactorOK)
+				</div>
+			}
+		</div>
+	</section>
+}
+
+// twoFactorSetup is the enrolment step: QR, manual key, and the confirm field.
+templ twoFactorSetup(d AccountData) {
+	<div class="space-y-4 p-4 sm:p-6">
+		<p class="text-sm">{ i18n.T(ctx, "settings.twofa_scan") }</p>
+		<img src="/account/2fa/qr" alt="" width="200" height="200" class="rounded-lg border bg-white p-2"/>
+		<p class="text-xs text-muted-foreground">{ i18n.T(ctx, "settings.twofa_manual_key") }</p>
+		<code class="block break-all rounded-md bg-muted px-3 py-2 font-mono text-xs">{ d.Security.PendingSecret }</code>
+		<form hx-post="/account/2fa/totp/confirm" hx-target="#account-2fa" hx-swap="outerHTML" class="space-y-3">
+			<input name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" required placeholder="000000" class="flex h-10 w-40 rounded-md border border-input bg-background px-3 py-2 text-center text-sm tracking-[0.3em]"/>
+			<div class="flex gap-2">
+				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm}) {
+					{ i18n.T(ctx, "settings.twofa_confirm") }
+				}
+				<button type="submit" formaction="/account/2fa/totp/cancel" hx-post="/account/2fa/totp/cancel" hx-target="#account-2fa" hx-swap="outerHTML" class="inline-flex h-9 items-center rounded-md px-3 text-sm text-muted-foreground hover:text-foreground">{ i18n.T(ctx, "settings.twofa_cancel") }</button>
+			</div>
+		</form>
+	</div>
+}
+
+templ twoFactorRows(d AccountData) {
+	<div class="divide-y">
+		<div class="flex items-start justify-between gap-4 p-4 sm:p-6">
+			<div class="min-w-0">
+				<p class="text-sm font-medium">{ i18n.T(ctx, "settings.twofa_app_heading") }</p>
+				<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "settings.twofa_app_desc") }</p>
+			</div>
+			if d.Security.TOTPEnabled {
+				<form hx-post="/account/2fa/totp/disable" hx-target="#account-2fa" hx-swap="outerHTML" class="shrink-0 text-right">
+					@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm, Variant: button.VariantOutline}) {
+						{ i18n.T(ctx, "settings.twofa_app_disable") }
+					}
+					if d.Security.OnlyFactor() {
+						@lastFactorWarning()
+					}
+				</form>
+			} else {
+				<form hx-post="/account/2fa/totp/begin" hx-target="#account-2fa" hx-swap="outerHTML">
+					@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm}) {
+						{ i18n.T(ctx, "settings.twofa_app_setup") }
+					}
+				</form>
+			}
+		</div>
+		<div class="flex items-start justify-between gap-4 p-4 sm:p-6">
+			<div class="min-w-0">
+				<p class="text-sm font-medium">{ i18n.T(ctx, "settings.twofa_email_heading") }</p>
+				<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "settings.twofa_email_desc") }</p>
+			</div>
+			<form hx-post="/account/2fa/email" hx-target="#account-2fa" hx-swap="outerHTML" class="shrink-0 text-right">
+				<input type="hidden" name="enabled" value={ toggleValue(d.Security.EmailOTPEnabled) }/>
+				@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm, Variant: button.VariantOutline}) {
+					if d.Security.EmailOTPEnabled {
+						{ i18n.T(ctx, "settings.twofa_app_disable") }
+					} else {
+						{ i18n.T(ctx, "settings.twofa_app_setup") }
+					}
+				}
+				if d.Security.EmailOTPEnabled && d.Security.OnlyFactor() {
+					@lastFactorWarning()
+				}
+			</form>
+		</div>
+	</div>
+}
+
+// lastFactorWarning tells the user, before they act, that turning this factor
+// off will also destroy their recovery codes — the one consequence they cannot
+// see from the button's label.
+templ lastFactorWarning() {
+	<p class="mt-2 max-w-[16rem] text-xs text-muted-foreground">{ i18n.T(ctx, "settings.twofa_last_factor_warning") }</p>
+}
+
+// AccountRecoveryCard shows recovery-code state, and the codes themselves the
+// one time they exist in memory.
+templ AccountRecoveryCard(d AccountData) {
+	<section id="account-recovery" data-inline-errors class="space-y-2">
+		<h2 class="text-sm font-semibold">{ i18n.T(ctx, "settings.recovery_heading") }</h2>
+		<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "settings.recovery_intro") }</p>
+		<div class="overflow-hidden rounded-xl border bg-card">
+			<div class="space-y-4 p-4 sm:p-6">
+				if len(d.NewRecoveryCodes) > 0 {
+					<p class="text-sm font-medium text-destructive">{ i18n.T(ctx, "settings.recovery_shown_once") }</p>
+					<ul class="grid grid-cols-2 gap-2 rounded-md bg-muted p-3 font-mono text-sm">
+						for _, c := range d.NewRecoveryCodes {
+							<li>{ c }</li>
+						}
+					</ul>
+					<a href="/account/recovery-codes.txt" download="pigglet-recovery-codes.txt" class="inline-block text-sm underline underline-offset-4">{ i18n.T(ctx, "settings.recovery_download") }</a>
+				} else if d.Security.RecoveryRemaining > 0 {
+					<p class="text-sm">{ i18n.Tnf(ctx, "settings.recovery_remaining", d.Security.RecoveryRemaining, i18n.M{"Count": d.Security.RecoveryRemaining}) }</p>
+				} else {
+					// "0 codes remaining" reads like something went wrong. With
+					// no second factor there is simply nothing to recover past,
+					// which is worth saying outright.
+					<p class="text-sm text-muted-foreground">{ i18n.T(ctx, "settings.recovery_none_needed") }</p>
+				}
+				@settingsMessages(d.RecoveryErr, d.RecoveryOK)
+			</div>
+			if d.Security.TOTPEnabled || d.Security.EmailOTPEnabled {
+				<div class="flex items-center border-t bg-muted/30 px-4 py-3 sm:px-6">
+					<form hx-post="/account/recovery-codes" hx-target="#account-recovery" hx-swap="outerHTML">
+						@button.Button(button.Props{Type: button.TypeSubmit, Size: button.SizeSm, Variant: button.VariantOutline}) {
+							{ i18n.T(ctx, "settings.recovery_regenerate") }
+						}
+					</form>
+				</div>
+			}
+		</div>
+	</section>
+}
+
+// toggleValue flips a boolean for a form that posts the DESIRED next state.
+func toggleValue(current bool) string {
+	if current {
+		return "off"
+	}
+	return "on"
+}
+
+// TwoFactorWithRecovery renders the two-factor card and pushes the recovery
+// card alongside it out-of-band.
+//
+// Both change together when enrolment completes, and the codes exist in memory
+// only on this one response — a second request to fetch them would find nothing
+// but hashes.
+templ TwoFactorWithRecovery(d AccountData) {
+	@AccountTwoFactorCard(d)
+	<div hx-swap-oob="outerHTML:#account-recovery">
+		@AccountRecoveryCard(d)
+	</div>
 }

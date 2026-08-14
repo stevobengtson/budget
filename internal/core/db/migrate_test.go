@@ -16,7 +16,7 @@ func migrateTestDSN() string {
 
 var migrateTestTables = []string{
 	"transactions", "budgets", "categories", "category_groups",
-	"incomes", "accounts", "verification_tokens", "auth_lockouts", "sessions", "users",
+	"incomes", "accounts", "verification_tokens", "auth_lockouts", "auth_challenges", "recovery_codes", "user_totp", "sessions", "users",
 }
 
 // migrateTestLockKey MUST match the store/web packages' advisory-lock key so
@@ -117,59 +117,24 @@ func TestMigrateAuthRoundTrip(t *testing.T) {
 		t.Fatalf("seed incomes: %v", err)
 	}
 
-	// 00008 (user name), 00009 (user avatar), 00010 (email change), 00011
-	// (add-ons), 00012 (subscriptions), 00013 (billing exempt), 00014 (admin),
-	// 00015 (user locale), 00016 (onboarded), 00017 (estimates), 00018
-	// (subscription items), 00019 (plaid), 00020 (estimate column repair) and
-	// 00021 (auth hardening) sit on top of the auth migration; peel them off
-	// first (21 -> ... -> 7) so 00007 is the current head for the roundtrip below.
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00021: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00020: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00019: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00018: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00017: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00016: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00015: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00014: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00013: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00012: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00011: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00010: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00009: %v", err)
-	}
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down 00008: %v", err)
+	// Every migration above 00007 is peeled off so the auth migration is the
+	// head for the roundtrip below. Looped rather than one call per migration:
+	// the hand-written list silently went stale every time a migration was
+	// added, and the failure it produced ("expected version 6, got 7") pointed
+	// nowhere near the actual cause.
+	for {
+		v, err := MigrateVersion(conn, dialect)
+		if err != nil {
+			t.Fatalf("read migration version: %v", err)
+		}
+		if v <= 6 {
+			break
+		}
+		if err := MigrateDown(conn, dialect); err != nil {
+			t.Fatalf("migrate down from version %d: %v", v, err)
+		}
 	}
 
-	// Roll back 00007 -> version 6.
-	if err := MigrateDown(conn, dialect); err != nil {
-		t.Fatalf("migrate down: %v", err)
-	}
 	if v, err := MigrateVersion(conn, dialect); err != nil || v != 6 {
 		t.Fatalf("expected version 6 after down, got %d (err %v)", v, err)
 	}

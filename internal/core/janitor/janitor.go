@@ -47,6 +47,9 @@ func (j *Janitor) Sweep(ctx context.Context) error {
 	if err := j.store.PruneExpiredLockouts(ctx, lockoutIdleFor); err != nil {
 		errs = append(errs, err)
 	}
+	if err := j.store.PruneExpiredChallenges(ctx); err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(errs...)
 }
 

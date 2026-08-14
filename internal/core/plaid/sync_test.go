@@ -31,7 +31,7 @@ func testDSN() string {
 
 var testTables = []string{
 	"transactions", "budgets", "categories", "category_groups",
-	"incomes", "accounts", "plaid_items", "verification_tokens", "auth_lockouts", "sessions", "users",
+	"incomes", "accounts", "plaid_items", "verification_tokens", "auth_lockouts", "auth_challenges", "recovery_codes", "user_totp", "sessions", "users",
 }
 
 func openTestDB(t *testing.T) *sql.DB {

@@ -1248,19 +1248,6 @@ func TestBillingLivesInSettings(t *testing.T) {
 		}
 	}
 
-	activeTab := func(body string) string {
-		m := regexp.MustCompile(`data-tui-tabs-value="([a-z-]+)"[^>]*data-tui-tabs-state="active"`).
-			FindStringSubmatch(body)
-		if m == nil {
-			// templUI may order the attributes the other way round.
-			m = regexp.MustCompile(`data-tui-tabs-state="active"[^>]*data-tui-tabs-value="([a-z-]+)"`).
-				FindStringSubmatch(body)
-		}
-		if m == nil {
-			return ""
-		}
-		return m[1]
-	}
 	if got := activeTab(page); got != "" && got != "billing" {
 		t.Errorf("?tab=billing opened %q", got)
 	}

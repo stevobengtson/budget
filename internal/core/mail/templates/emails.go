@@ -56,6 +56,23 @@ func EmailChange(l i18n.Locale, link string, ttl time.Duration) (mail.Message, e
 	return linkMessage(l, "email_change", link, ttl)
 }
 
+// LoginCode carries a one-time sign-in code. No link at all: the recipient
+// types the code into a device that is already waiting for it, which may not be
+// the device reading the mail — and a mail that could itself complete a sign-in
+// would make every one of these a phishing target.
+func LoginCode(l i18n.Locale, code string, ttl time.Duration) (mail.Message, error) {
+	ctx := ctxFor(l)
+	d := codeData{
+		Heading: i18n.T(ctx, "email.login_code_heading"),
+		Intro:   i18n.T(ctx, "email.login_code_intro"),
+		Code:    code,
+		Expiry:  codeExpiryLine(ctx, ttl),
+		Ignore:  i18n.T(ctx, "email.login_code_ignore"),
+	}
+	text := joinText(d.Intro, code, d.Expiry+" "+d.Ignore)
+	return render(ctx, codeEmail(d), i18n.T(ctx, "email.login_code_subject"), text)
+}
+
 // LockoutAlert tells someone their account is being hammered. It is sent once
 // per lock, when the lock is applied — never on the blocked attempts that
 // follow, or the lockout would become a way to flood the victim's inbox.
@@ -69,6 +86,53 @@ func LockoutAlert(l i18n.Locale, resetLink string) (mail.Message, error) {
 	}
 	text := joinText(d.Intro, d.Detail, d.Advice)
 	return render(ctx, alertEmail(d), i18n.T(ctx, "email.lockout_subject"), text)
+}
+
+// SecurityEvent describes a change to sign-in settings precisely enough for the
+// notification to name it.
+//
+// A generic "your settings changed" is close to useless in the case that
+// matters: someone whose account was taken over needs to know WHAT changed to
+// judge whether it was them, and losing recovery codes is the change they are
+// least likely to notice on their own.
+type SecurityEvent struct {
+	// Kind selects the catalog line describing the change. Must be one of the
+	// SecurityEvent* constants.
+	Kind string
+	// CodesCleared reports that the change also invalidated the account's
+	// recovery codes.
+	CodesCleared bool
+}
+
+// Recognised SecurityEvent kinds. The value is the catalog key suffix.
+const (
+	SecurityEventTOTPEnabled         = "totp_enabled"
+	SecurityEventTOTPDisabled        = "totp_disabled"
+	SecurityEventEmailOTPEnabled     = "email_otp_enabled"
+	SecurityEventEmailOTPDisabled    = "email_otp_disabled"
+	SecurityEventRecoveryRegenerated = "recovery_regenerated"
+)
+
+// SecurityChanged reports a change to sign-in settings, so a change the account
+// holder did not make is visible to them.
+func SecurityChanged(l i18n.Locale, ev SecurityEvent) (mail.Message, error) {
+	ctx := ctxFor(l)
+	kind := ev.Kind
+	if kind == "" {
+		kind = SecurityEventRecoveryRegenerated
+	}
+	d := alertData{
+		Heading: i18n.T(ctx, "email.security_changed_heading"),
+		Intro:   i18n.T(ctx, "email.change_"+kind),
+		Advice:  i18n.T(ctx, "email.security_changed_advice"),
+	}
+	// Spelled out rather than left for the user to discover: a printout of
+	// recovery codes gives no sign that it has stopped working.
+	if ev.CodesCleared {
+		d.Detail = i18n.T(ctx, "email.security_codes_cleared")
+	}
+	return render(ctx, alertEmail(d), i18n.T(ctx, "email.security_changed_subject"),
+		joinText(d.Intro, d.Detail, d.Advice))
 }
 
 // PasswordChanged confirms a password rotation after the fact, so a rotation
@@ -109,6 +173,16 @@ func expiryLine(ctx context.Context, ttl time.Duration) string {
 		return i18n.Tn(ctx, "email.expires_in_hours", int(ttl/time.Hour))
 	}
 	return i18n.Tn(ctx, "email.expires_in_minutes", int(ttl.Minutes()))
+}
+
+// codeExpiryLine is expiryLine for a one-time code. Separate wording because a
+// code email contains no link, and telling the reader "this link expires" sends
+// them hunting for one that is not there.
+func codeExpiryLine(ctx context.Context, ttl time.Duration) string {
+	if ttl >= time.Hour && ttl%time.Hour == 0 {
+		return i18n.Tn(ctx, "email.code_expires_in_hours", int(ttl/time.Hour))
+	}
+	return i18n.Tn(ctx, "email.code_expires_in_minutes", int(ttl.Minutes()))
 }
 
 // ctxFor makes a context carrying just the locale, which is all the i18n

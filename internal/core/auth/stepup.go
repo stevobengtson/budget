@@ -55,7 +55,38 @@ func (s *Service) AvailableStepUpFactors(ctx context.Context, userID int64) ([]F
 	if u.PasswordHash != "" {
 		out = append(out, FactorPassword)
 	}
+	// Everything the user could use at sign-in also re-proves them here, which
+	// is what keeps the security screen reachable for someone with no password.
+	second, err := s.enabledFactors(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, second...)
 	return out, nil
+}
+
+// StepUpWithFactor re-proves a second factor and opens the window. It is the
+// path for accounts where a password prompt is not an answerable question.
+func (s *Service) StepUpWithFactor(ctx context.Context, userID int64, rawSessionToken string, factor Factor, code string) error {
+	var (
+		ok  bool
+		err error
+	)
+	switch factor {
+	case FactorTOTP:
+		ok, err = s.verifyTOTPCode(ctx, userID, code)
+	case FactorRecovery:
+		ok, err = s.store.ConsumeRecoveryCode(ctx, userID, HashToken(normalizeCode(code)))
+	default:
+		return ErrNoSuchFactor
+	}
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrInvalidCredentials
+	}
+	return s.MarkReauthenticated(ctx, rawSessionToken)
 }
 
 // StepUpWithPassword re-proves the password and opens the window.

@@ -21,6 +21,7 @@ import (
 	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/billing"
 	"github.com/sbengtson/budget/internal/core/config"
+	"github.com/sbengtson/budget/internal/core/crypto"
 	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/mail"
 	"github.com/sbengtson/budget/internal/core/plaid"
@@ -81,7 +82,21 @@ func NewServer(s *store.Store, cfg config.Config) *Server {
 	// stored preference.
 	r.Use(resolveLocale())
 
+	// A missing or malformed key leaves TOTP enrolment unavailable rather than
+	// storing secrets in the clear; the same key already protects Plaid tokens,
+	// whose service warns on the same condition.
+	var sealer *crypto.Sealer
+	if cfg.Secrets.EncryptionKey != "" {
+		var err error
+		if sealer, err = crypto.NewSealer(cfg.Secrets.EncryptionKey); err != nil {
+			slog.Warn("two-factor authentication disabled: bad secrets.encryption_key", "err", err)
+			sealer = nil
+		}
+	} else {
+		slog.Warn("two-factor authentication disabled: secrets.encryption_key is not set")
+	}
 	authSvc := auth.NewService(s, newMailer(cfg), cfg.Web.BaseURL, auth.Config{
+		Sealer:       sealer,
 		SessionTTL:   cfg.Auth.SessionTTL,
 		TokenTTL:     cfg.Auth.TokenTTL,
 		ReauthWindow: cfg.Auth.ReauthWindow,
@@ -284,6 +299,12 @@ func (s *Server) routes(cfg config.Config) {
 	s.engine.GET("/reset", hs.ResetForm)
 	s.engine.POST("/reset", hs.Reset)
 	s.engine.POST("/logout", hs.Logout)
+	// Second-factor challenge. Rate limited on the same per-IP bucket as
+	// /login: a challenge is a sign-in attempt, and metering only the password
+	// half would leave the code half open to guessing at full speed.
+	s.engine.POST("/login/challenge", rateLimitIP(lim.loginIP), hs.Challenge)
+	s.engine.POST("/login/challenge/send", rateLimitIP(lim.forgotIP), hs.ChallengeSendCode)
+	s.engine.POST("/login/challenge/cancel", hs.ChallengeCancel)
 	// Public: the language has to be switchable on the login and sign-up pages,
 	// before there is a session to attach the choice to. Persists to the user
 	// record as well when the request does carry one.
@@ -319,6 +340,12 @@ func (s *Server) routes(cfg config.Config) {
 	sec.POST("/password", hs.ChangePassword)
 	sec.POST("/sessions/:id/revoke", hs.RevokeSession)
 	sec.POST("/sessions/revoke-others", hs.RevokeOtherSessions)
+	sec.POST("/2fa/totp/begin", hs.BeginTOTP)
+	sec.POST("/2fa/totp/confirm", hs.ConfirmTOTP)
+	sec.POST("/2fa/totp/cancel", hs.CancelTOTP)
+	sec.POST("/2fa/totp/disable", hs.DisableTOTP)
+	sec.POST("/2fa/email", hs.ToggleEmailOTP)
+	sec.POST("/recovery-codes", hs.RegenerateRecoveryCodes)
 	// Step-up itself must NOT be behind requireRecentAuth, or proving yourself
 	// would require having already proved yourself.
 	app.POST("/account/reauth", rateLimitUser(lim.accountU), hs.StepUp)
@@ -326,6 +353,10 @@ func (s *Server) routes(cfg config.Config) {
 	// signed in is exactly what someone who suspects a compromise needs to see,
 	// and demanding a password first would gate the diagnosis behind the cure.
 	app.GET("/account/sessions", hs.AccountSessions)
+	// The QR encodes the pending secret, and the download serves codes the user
+	// is already looking at, so neither adds a step-up prompt mid-flow.
+	app.GET("/account/2fa/qr", hs.TOTPQR)
+	app.GET("/account/recovery-codes.txt", hs.DownloadRecoveryCodes)
 	app.POST("/account/addons/:slug", hs.ToggleAddOn)
 	// Danger zone: wipe all budget data (keep account) / delete the account.
 	app.POST("/account/start-fresh", hs.StartFresh)

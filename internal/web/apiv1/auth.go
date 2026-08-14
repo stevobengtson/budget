@@ -21,6 +21,14 @@ type loginRequest struct {
 	// ("ios", "android"). Optional: builds already in the stores do not send
 	// it, and those sessions simply show as a generic mobile client.
 	Client string `json:"client"`
+	// MFA opts the client in to the two-step sign-in contract.
+	//
+	// Builds already shipped to TestFlight and Play decode a flat
+	// {token,user,...} and have no concept of a challenge. They do not send
+	// this, so they get a 401 whose message tells the user to update, rather
+	// than a response shape they would fail to parse or, worse, misread as a
+	// successful sign-in.
+	MFA bool `json:"mfa"`
 }
 
 // userPayload is the public shape of a user in API responses (never the hash).
@@ -36,10 +44,24 @@ type userPayload struct {
 // AddOns are the user's enabled add-on slugs (e.g. "paydown"), which drive
 // optional nav in the apps.
 type authResponse struct {
+	// Status discriminates the two outcomes for MFA-aware clients: "ok" or
+	// "mfa_required". Additive — the fields an older client reads stay exactly
+	// where they were on the success path.
+	Status     string      `json:"status,omitempty"`
 	Token      string      `json:"token"`
 	User       userPayload `json:"user"`
 	Subscribed bool        `json:"subscribed"`
 	AddOns     []string    `json:"addOns"`
+}
+
+// challengeResponse is returned to an MFA-aware client when a second factor is
+// outstanding. The challenge token is the API's equivalent of the hidden form
+// field the web flow uses — same value, same lifetime, same service call.
+type challengeResponse struct {
+	Status      string   `json:"status"`
+	Challenge   string   `json:"challenge"`
+	Methods     []string `json:"methods"`
+	MaskedEmail string   `json:"maskedEmail"`
 }
 
 // Login validates credentials and issues a session token. It reuses the exact
@@ -55,7 +77,7 @@ func (a *API) Login(c *gin.Context) {
 	if client != "ios" && client != "android" {
 		client = "mobile"
 	}
-	raw, err := a.auth.Login(c.Request.Context(), req.Email, req.Password, store.SessionInfo{
+	r, err := a.auth.BeginLogin(c.Request.Context(), req.Email, req.Password, store.SessionInfo{
 		UserAgent: c.Request.UserAgent(),
 		IP:        c.ClientIP(),
 		Client:    client,
@@ -81,17 +103,117 @@ func (a *API) Login(c *gin.Context) {
 		writeError(c, http.StatusUnauthorized, "invalid_credentials", "Invalid email or password.")
 		return
 	}
+
+	if r.NeedsChallenge() {
+		if !req.MFA {
+			// An older build cannot finish this. Abandon the challenge so it
+			// does not sit open, and return the remedy as the message — both
+			// clients already surface error.message verbatim.
+			_ = a.auth.AbandonChallenge(c.Request.Context(), r.ChallengeToken)
+			writeError(c, http.StatusUnauthorized, "mfa_required",
+				i18n.T(c.Request.Context(), "auth.err_mfa_required_update_app"))
+			return
+		}
+		c.JSON(http.StatusOK, challengeResponse{
+			Status:      "mfa_required",
+			Challenge:   r.ChallengeToken,
+			Methods:     factorStrings(r.Methods),
+			MaskedEmail: r.MaskedEmail,
+		})
+		return
+	}
+
+	a.writeSession(c, r.SessionToken)
+}
+
+// Challenge completes a second-factor sign-in for the mobile apps.
+func (a *API) Challenge(c *gin.Context) {
+	var req struct {
+		Challenge string `json:"challenge"`
+		Method    string `json:"method"`
+		Code      string `json:"code"`
+		Client    string `json:"client"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "Expected a JSON body with challenge, method and code.")
+		return
+	}
+	client := req.Client
+	if client != "ios" && client != "android" {
+		client = "mobile"
+	}
+	raw, err := a.auth.CompleteChallenge(c.Request.Context(), req.Challenge, auth.Factor(req.Method), req.Code,
+		store.SessionInfo{UserAgent: c.Request.UserAgent(), IP: c.ClientIP(), Client: client})
+	if err != nil {
+		ctx := c.Request.Context()
+		switch {
+		case errors.Is(err, auth.ErrTooManyAttempts):
+			writeError(c, http.StatusUnauthorized, "too_many_attempts", i18n.T(ctx, "auth.err_too_many_attempts"))
+		case errors.Is(err, auth.ErrChallengeExpired):
+			writeError(c, http.StatusUnauthorized, "challenge_expired", i18n.T(ctx, "auth.err_challenge_expired"))
+		default:
+			writeError(c, http.StatusUnauthorized, "invalid_code", i18n.T(ctx, "auth.err_code_invalid"))
+		}
+		return
+	}
+	a.writeSession(c, raw)
+}
+
+// ChallengeSendCode emails a fresh one-time code for an open challenge.
+func (a *API) ChallengeSendCode(c *gin.Context) {
+	var req struct {
+		Challenge string `json:"challenge"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, http.StatusBadRequest, "invalid_request", "Expected a JSON body with challenge.")
+		return
+	}
+	if err := a.auth.SendChallengeCode(c.Request.Context(), req.Challenge); err != nil {
+		writeError(c, http.StatusUnauthorized, "challenge_expired",
+			i18n.T(c.Request.Context(), "auth.err_challenge_expired"))
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// Security reports the account's two-factor state for the app's settings screen.
+func (a *API) Security(c *gin.Context) {
+	st, err := a.auth.SecurityOverview(c.Request.Context(), c.GetInt64(contextUserID))
+	if err != nil {
+		writeError(c, http.StatusInternalServerError, "internal", "Could not load your security settings.")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"totpEnabled":       st.TOTPEnabled,
+		"emailOtpEnabled":   st.EmailOTPEnabled,
+		"recoveryRemaining": st.RecoveryRemaining,
+		"hasPassword":       st.HasPassword,
+	})
+}
+
+// writeSession renders the successful sign-in payload.
+func (a *API) writeSession(c *gin.Context, raw string) {
 	user, err := a.auth.AuthenticateSession(c.Request.Context(), raw)
 	if err != nil {
 		writeError(c, http.StatusInternalServerError, "internal", "Could not establish the session.")
 		return
 	}
 	c.JSON(http.StatusOK, authResponse{
+		Status:     "ok",
 		Token:      raw,
 		User:       userPayload{ID: user.ID, Email: user.Email, Name: user.Name},
 		Subscribed: a.subscribed(c.Request.Context(), user.ID),
 		AddOns:     a.enabledAddOns(c.Request.Context(), user.ID),
 	})
+}
+
+// factorStrings renders factor identifiers for JSON.
+func factorStrings(fs []auth.Factor) []string {
+	out := make([]string, len(fs))
+	for i, f := range fs {
+		out[i] = string(f)
+	}
+	return out
 }
 
 // Logout revokes the presented session token. Idempotent: an already-invalid

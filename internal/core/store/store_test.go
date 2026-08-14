@@ -25,7 +25,7 @@ func testDSN() string {
 // TRUNCATE ... CASCADE resets identities cleanly.
 var testTables = []string{
 	"transactions", "budgets", "categories", "category_groups",
-	"incomes", "accounts", "verification_tokens", "auth_lockouts", "sessions", "users",
+	"incomes", "accounts", "verification_tokens", "auth_lockouts", "auth_challenges", "recovery_codes", "user_totp", "sessions", "users",
 	"estimate_incomes", "estimate_categories", "estimate_groups", "estimates",
 }
 

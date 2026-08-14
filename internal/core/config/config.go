@@ -78,8 +78,10 @@ type Config struct {
 		SecretKey string `mapstructure:"secret_key"`
 		// Environment selects the Plaid API host: "sandbox" or "production".
 		Environment string `mapstructure:"environment"`
-		// EncryptionKey encrypts Plaid access tokens at rest (AES-256-GCM).
-		// 64 hex characters (32 bytes). Unset leaves the bank-sync feature inert.
+		// EncryptionKey is the pre-P1 home of the sealing key, kept for one
+		// release so an existing budget.yaml keeps working. Read
+		// Secrets.EncryptionKey instead; Load copies this across when the new
+		// key is unset.
 		EncryptionKey string `mapstructure:"encryption_key"`
 		// PollInterval is the fallback sync cadence when webhooks don't arrive.
 		PollInterval time.Duration `mapstructure:"poll_interval"`
@@ -100,6 +102,18 @@ type Config struct {
 		// regardless.
 		TracesSampleRate float64 `mapstructure:"traces_sample_rate"`
 	} `mapstructure:"sentry"`
+	// Secrets holds cryptographic material shared by every feature that stores
+	// a reversible secret.
+	Secrets struct {
+		// EncryptionKey backs crypto.Sealer: Plaid access tokens and TOTP
+		// secrets. 64 hex characters (32 bytes).
+		//
+		// LOSING THIS KEY IS UNRECOVERABLE for anything sealed with it — every
+		// TOTP enrolment stops verifying and every bank link must be redone.
+		// Recovery codes are hashed rather than sealed precisely so they still
+		// work in that case. Keep it in the backup runbook.
+		EncryptionKey string `mapstructure:"encryption_key"`
+	} `mapstructure:"secrets"`
 }
 
 // Load reads from the supplied viper instance (which the caller has
@@ -134,6 +148,7 @@ func Load(v *viper.Viper) (Config, error) {
 	v.SetDefault("plaid.secret_key", "")
 	v.SetDefault("plaid.environment", "sandbox")
 	v.SetDefault("plaid.encryption_key", "")
+	v.SetDefault("secrets.encryption_key", "")
 	v.SetDefault("plaid.poll_interval", "6h")
 	v.SetDefault("plaid.days_requested", 90)
 	v.SetDefault("log.level", "info")
@@ -148,6 +163,13 @@ func Load(v *viper.Viper) (Config, error) {
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return cfg, fmt.Errorf("unmarshal config: %w", err)
+	}
+	// The sealing key moved out of the plaid block when TOTP secrets started
+	// using it too — a TOTP secret is not a Plaid thing. Fall back to the old
+	// location so an existing deployment's budget.yaml keeps working across one
+	// release; drop this once the servers are updated.
+	if cfg.Secrets.EncryptionKey == "" && cfg.Plaid.EncryptionKey != "" {
+		cfg.Secrets.EncryptionKey = cfg.Plaid.EncryptionKey
 	}
 	return cfg, nil
 }

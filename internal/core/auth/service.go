@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sbengtson/budget/internal/core/crypto"
 	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/mail"
 	emailtpl "github.com/sbengtson/budget/internal/core/mail/templates"
@@ -24,6 +25,18 @@ type Config struct {
 	ReauthWindow time.Duration
 	// Lockout is the password-failure escalation curve (see lockout.go).
 	Lockout LockoutPolicy
+	// Sealer encrypts TOTP secrets at rest. Nil leaves authenticator enrolment
+	// unavailable rather than storing secrets in the clear.
+	Sealer *crypto.Sealer
+	// Brand names the app in authenticator apps and emails.
+	Brand string
+}
+
+func (c Config) brand() string {
+	if c.Brand == "" {
+		return "Pigglet"
+	}
+	return c.Brand
 }
 
 func (c Config) reauthWindow() time.Duration {
@@ -53,10 +66,19 @@ type Service struct {
 	mailer  mail.Mailer
 	baseURL string
 	cfg     Config
+	sealer  *crypto.Sealer
+	brand   string
 }
 
 func NewService(s *store.Store, m mail.Mailer, baseURL string, cfg Config) *Service {
-	return &Service{store: s, mailer: m, baseURL: strings.TrimRight(baseURL, "/"), cfg: cfg}
+	return &Service{
+		store:   s,
+		mailer:  m,
+		baseURL: strings.TrimRight(baseURL, "/"),
+		cfg:     cfg,
+		sealer:  cfg.Sealer,
+		brand:   cfg.brand(),
+	}
 }
 
 func normalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
@@ -121,64 +143,23 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
 	return s.store.SetEmailVerified(ctx, userID)
 }
 
-// Login validates credentials, requires a verified email, and returns a new raw
-// session token (store its hash server-side; hand the raw value to the cookie).
+// Login performs a password-only sign-in.
 //
-// info records where the session came from; its Label is filled in from the
-// user agent when the caller leaves it empty.
+// Deprecated: it cannot express a second factor and returns ErrMFARequired for
+// any account that has one. New callers use BeginLogin, which returns either a
+// session or a challenge.
 func (s *Service) Login(ctx context.Context, email, password string, info store.SessionInfo) (string, error) {
-	email = normalizeEmail(email)
-
-	// Checked before anything expensive: the point of the lock is to stop
-	// spending argon2id cycles on an address already known to be under attack.
-	wait, err := s.checkLockout(ctx, email)
+	r, err := s.BeginLogin(ctx, email, password, info)
 	if err != nil {
 		return "", err
 	}
-	if wait > 0 {
-		return "", LockedOutError{RetryAfter: wait}
+	if r.NeedsChallenge() {
+		// Abandoned rather than left open: this caller has no way to finish it,
+		// and a dangling challenge is a credential with nobody holding it.
+		_ = s.AbandonChallenge(ctx, r.ChallengeToken)
+		return "", ErrMFARequired
 	}
-
-	u, err := s.store.GetUserByEmail(ctx, email)
-	if errors.Is(err, sql.ErrNoRows) {
-		// Spend the same time a real verification would, so the response time
-		// does not reveal whether the address is registered, and count the
-		// attempt so unknown addresses lock exactly like known ones do.
-		BurnPasswordTime(password)
-		_ = s.recordLoginFailure(ctx, email)
-		return "", ErrInvalidCredentials
-	}
-	if err != nil {
-		return "", err
-	}
-	ok, err := VerifyPassword(u.PasswordHash, password)
-	if err != nil || !ok {
-		_ = s.recordLoginFailure(ctx, email)
-		return "", ErrInvalidCredentials
-	}
-	if u.EmailVerifiedAt == nil {
-		return "", ErrEmailNotVerified
-	}
-	// Checked after the password so a suspended account is not revealed to
-	// someone who does not already hold its credentials.
-	if u.Disabled() {
-		return "", ErrAccountDisabled
-	}
-	raw, err := RandomToken()
-	if err != nil {
-		return "", err
-	}
-	exp := time.Now().Add(s.cfg.sessionTTL())
-	if info.Label == "" {
-		info.Label = DeviceLabel(info.UserAgent)
-	}
-	if err := s.store.CreateSession(ctx, u.ID, HashToken(raw), exp, info); err != nil {
-		return "", err
-	}
-	// Only a completed sign-in clears the counter. Doing it any earlier would
-	// let an attacker reset their own budget by interleaving valid usernames.
-	_ = s.clearLoginFailures(ctx, email)
-	return raw, nil
+	return r.SessionToken, nil
 }
 
 func (s *Service) Logout(ctx context.Context, rawToken string) error {

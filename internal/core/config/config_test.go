@@ -97,3 +97,34 @@ func TestResendKeyFromEnv(t *testing.T) {
 		t.Errorf("resend key from env: %q, %q", cfg.Mail.ResendAPIKey, cfg.Mail.Driver)
 	}
 }
+
+// The sealing key moved from plaid.encryption_key to secrets.encryption_key in
+// P1. An existing deployment's budget.yaml must keep working for one release —
+// silently reading an empty key would leave bank sync inert and TOTP unable to
+// enrol, with no error to explain why.
+func TestLegacyPlaidEncryptionKeyFallsBackToSecrets(t *testing.T) {
+	const key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	v := viper.New()
+	v.Set("plaid.encryption_key", key)
+	cfg, err := Load(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Secrets.EncryptionKey != key {
+		t.Fatalf("legacy key not carried over: got %q", cfg.Secrets.EncryptionKey)
+	}
+
+	// The new location wins when both are set.
+	const newer = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	v2 := viper.New()
+	v2.Set("plaid.encryption_key", key)
+	v2.Set("secrets.encryption_key", newer)
+	cfg2, err := Load(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg2.Secrets.EncryptionKey != newer {
+		t.Fatalf("new key should win, got %q", cfg2.Secrets.EncryptionKey)
+	}
+}

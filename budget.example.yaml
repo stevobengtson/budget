@@ -10,14 +10,34 @@ db:
   #   postgres://postgres:postgres@127.0.0.1:5432/budget?sslmode=disable
   dsn: "./data/budget.db"
 
+mail:
+  # Mail driver to use, "console", "resend"
+  driver: "console"
+  from: "Pigglet <support@pigglet.ca>"
+  resend_api_key: ""
+
 web:
   # Listen address for `budget web`.
   addr: ":8080"
+  base_url: "http://localhost:8080"
+  # Gin Level "debug", "release", "test"
+  level: "debug"
 
 log:
   level: "info"
 
+auth:
+  session_ttl: "720h"
+  token_ttl: "1h"
+  cookie_secure: false
+
+secrets:
+  encryption_key: ""
+
 stripe:
+  secret_key: ""
+  publishable_key: ""
+  webhook_secret: ""
   price_ids:
     # Stripe Price of the base plan, and of the Bank Sync add-on (billed as a
     # second item on the base subscription). Empty disables the paid gate.

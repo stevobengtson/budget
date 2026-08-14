@@ -30,11 +30,17 @@ func New(s *store.Store, a *auth.Service, b *billing.Service) *API {
 func (a *API) Register(r *gin.RouterGroup) {
 	r.GET("/health", a.Health)
 	r.POST("/login", a.Login)
+	// Public, like /login: a challenge is the second half of a sign-in, so the
+	// caller has no session to authenticate with yet. The challenge token is
+	// what authorizes these.
+	r.POST("/login/challenge", a.Challenge)
+	r.POST("/login/challenge/send", a.ChallengeSendCode)
 
 	authed := r.Group("")
 	authed.Use(a.RequireBearerAuth())
 	authed.POST("/logout", a.Logout)
 	authed.GET("/me", a.Me)
+	authed.GET("/security", a.Security)
 	authed.GET("/budget", a.Budget)
 	authed.POST("/budget/assign", a.Assign)
 	authed.GET("/accounts", a.Accounts)

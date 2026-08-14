@@ -25,7 +25,7 @@ func (h *Handlers) LoginForm(c *gin.Context) { render(c, http.StatusOK, views.Lo
 func (h *Handlers) Login(c *gin.Context) {
 	email := c.PostForm("email")
 	pw := c.PostForm("password")
-	raw, err := h.auth.Login(c.Request.Context(), email, pw, store.SessionInfo{
+	r, err := h.auth.BeginLogin(c.Request.Context(), email, pw, store.SessionInfo{
 		UserAgent: c.Request.UserAgent(),
 		IP:        c.ClientIP(),
 		Client:    "web",
@@ -51,7 +51,19 @@ func (h *Handlers) Login(c *gin.Context) {
 		render(c, http.StatusUnauthorized, views.LoginPage(email, errKey))
 		return
 	}
-	SetSessionCookie(c, raw, h.sessionMaxAge, h.secure)
+	// The password was right but a second factor is outstanding. No cookie is
+	// set: the challenge token lives in the form, so a half-finished sign-in
+	// cannot be mistaken for a session by anything downstream.
+	if r.NeedsChallenge() {
+		render(c, http.StatusOK, views.ChallengePage(views.ChallengeData{
+			Token:       r.ChallengeToken,
+			Method:      r.Methods[0],
+			Methods:     r.Methods,
+			MaskedEmail: r.MaskedEmail,
+		}))
+		return
+	}
+	SetSessionCookie(c, r.SessionToken, h.sessionMaxAge, h.secure)
 	c.Redirect(http.StatusSeeOther, "/budget")
 }
 
@@ -193,8 +205,19 @@ func (h *Handlers) accountData(c *gin.Context, activeTab string) views.AccountDa
 	}
 	// Only the Security tab renders the sessions card, and listing sessions is a
 	// query per render — so it is loaded for that tab and skipped for the rest.
-	if activeTab == "security" {
-		d.SessionsData = h.sessionsData(c)
+	// Loaded regardless of which tab is selected. The tabs are client-side, so
+	// one page load renders every panel into the DOM and clicking a tab only
+	// reveals what is already there — gating this on activeTab meant arriving
+	// at plain /account and clicking Security showed a card built from an empty
+	// view model, which reads as "two-step verification is unavailable".
+	d.SessionsData = h.sessionsData(c)
+	// Enrolment is genuinely unavailable when the server has no encryption key,
+	// in which case the card says so rather than offering a dead button.
+	d.Security.Available = h.auth.TwoFactorAvailable()
+	if st, err := h.auth.SecurityOverview(c.Request.Context(), uid); err == nil {
+		d.Security.TOTPEnabled = st.TOTPEnabled
+		d.Security.EmailOTPEnabled = st.EmailOTPEnabled
+		d.Security.RecoveryRemaining = st.RecoveryRemaining
 	}
 	return d
 }

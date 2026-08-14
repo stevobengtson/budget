@@ -10,7 +10,10 @@ import (
 
 	"github.com/spf13/viper"
 
+	"github.com/sbengtson/budget/internal/core/auth"
 	"github.com/sbengtson/budget/internal/core/config"
+	"github.com/sbengtson/budget/internal/core/crypto"
+	"github.com/sbengtson/budget/internal/core/mail"
 	"github.com/sbengtson/budget/internal/core/store"
 )
 
@@ -138,5 +141,64 @@ func TestBillingPaywallIsNotBilingual(t *testing.T) {
 	b, _ := io.ReadAll(resp.Body)
 	if body := string(b); strings.Contains(body, "Subscribe / S&#39;abonner") {
 		t.Error("the billing page should render in the user's language only")
+	}
+}
+
+// The challenge page is signed-out too: the visitor has proved a password but
+// still has no stored language preference, so it must render both languages
+// like every other pre-auth screen.
+func TestChallengePageIsBilingual(t *testing.T) {
+	s := store.New(openTestDB(t))
+	ts, _, _ := serveAuthed(t, s)
+
+	sealer, err := crypto.NewSealer("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := auth.NewService(s, mail.NewConsole(), ts.URL, auth.Config{Sealer: sealer})
+
+	ctx := t.Context()
+	hash, err := auth.HashPassword("password1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uid, err := s.CreateUser(ctx, "twofa@example.com", hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetEmailVerified(ctx, uid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetEmailOTPEnabled(ctx, uid, true); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, accept := range []string{"en-CA", "fr-CA"} {
+		req, err := http.NewRequest(http.MethodPost, ts.URL+"/login",
+			strings.NewReader("email=twofa@example.com&password=password1"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept-Language", accept)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		page := string(body)
+		for _, want := range []string{"Two-step verification", "Vérification en deux étapes", "Verify", "Vérifier"} {
+			if !strings.Contains(page, want) {
+				t.Errorf("challenge page (Accept-Language: %s) missing %q", accept, want)
+			}
+		}
+		// The one-time-code affordance is what makes iOS offer the emailed code.
+		if !strings.Contains(page, `autocomplete="one-time-code"`) {
+			t.Error("the code field must carry autocomplete=one-time-code")
+		}
 	}
 }

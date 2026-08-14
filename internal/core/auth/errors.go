@@ -14,6 +14,15 @@ var (
 	ErrSameEmail          = errors.New("that is already your email")
 	ErrAccountDisabled    = errors.New("this account has been disabled")
 	ErrReauthRequired     = errors.New("re-authentication required")
+	// ErrSealerUnavailable means no encryption key is configured, so TOTP
+	// secrets cannot be stored safely. Enrolment refuses rather than falling
+	// back to plaintext.
+	ErrSealerUnavailable = errors.New("encryption key is not configured")
+	// ErrSealedSecretUnreadable means a stored secret will not decrypt — almost
+	// always a rotated or lost encryption key.
+	ErrSealedSecretUnreadable = errors.New("stored secret cannot be decrypted")
+	// ErrAlreadyEnrolled rejects confirming an enrolment that is already active.
+	ErrAlreadyEnrolled = errors.New("already set up")
 	// ErrSamePassword rejects a "change" that changes nothing — usually a sign
 	// the user believes they have rotated a credential when they have not.
 	ErrSamePassword = errors.New("new password must differ from the current one")

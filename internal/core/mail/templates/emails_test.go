@@ -46,6 +46,10 @@ func TestEveryMessageRendersInEveryLocale(t *testing.T) {
 				m, err := PasswordChanged(l)
 				return m.Subject, m.HTML, m.Text, err
 			}},
+			{"security_changed", func() (string, string, string, error) {
+				m, err := SecurityChanged(l, SecurityEvent{Kind: SecurityEventTOTPDisabled})
+				return m.Subject, m.HTML, m.Text, err
+			}},
 		} {
 			t.Run(string(l)+"/"+tc.name, func(t *testing.T) {
 				subject, html, text, err := tc.run()
@@ -126,5 +130,95 @@ func TestPasswordChangedAlertCarriesNoActionLink(t *testing.T) {
 	}
 	if strings.Contains(m.HTML, "token=") {
 		t.Fatal("an alert email must not contain a credential-bearing link")
+	}
+}
+
+// A code email contains no link, so telling the reader "this link expires"
+// sends them looking for one that is not there.
+func TestCodeEmailDoesNotMentionALink(t *testing.T) {
+	for _, l := range i18n.Supported {
+		m, err := LoginCode(l, "123456", 10*time.Minute)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, part := range []string{m.HTML, m.Text} {
+			lower := strings.ToLower(part)
+			if strings.Contains(lower, "this link expires") || strings.Contains(lower, "ce lien expire") {
+				t.Errorf("%s: code email must not talk about a link: %q", l, part)
+			}
+		}
+		if !strings.Contains(m.Text, "123456") {
+			t.Errorf("%s: the code itself is missing from the plaintext", l)
+		}
+		// And it must not carry anything clickable that could sign someone in.
+		if strings.Contains(m.HTML, "<a ") {
+			t.Errorf("%s: a code email must contain no links at all", l)
+		}
+	}
+}
+
+// The notification has to name WHAT changed. "Your settings changed" is close
+// to useless in the case that matters: someone judging whether a change was
+// theirs needs to know which one it was.
+func TestSecurityChangedNamesTheChange(t *testing.T) {
+	for _, tc := range []struct{ kind, want string }{
+		{SecurityEventTOTPEnabled, "turned ON"},
+		{SecurityEventTOTPDisabled, "turned OFF"},
+		{SecurityEventEmailOTPEnabled, "turned ON"},
+		{SecurityEventEmailOTPDisabled, "turned OFF"},
+		{SecurityEventRecoveryRegenerated, "New recovery codes"},
+	} {
+		m, err := SecurityChanged(i18n.EnCA, SecurityEvent{Kind: tc.kind})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(m.Text, tc.want) {
+			t.Errorf("%s: want %q in the body, got %q", tc.kind, tc.want, m.Text)
+		}
+		// Without CodesCleared it must not claim codes were deleted.
+		if strings.Contains(m.Text, "recovery codes were deleted") {
+			t.Errorf("%s: must not claim codes were deleted", tc.kind)
+		}
+	}
+}
+
+// Losing recovery codes is the change a user is least likely to notice on their
+// own — a saved printout gives no sign it has stopped working — so the email
+// has to say it outright.
+func TestSecurityChangedSpellsOutClearedCodes(t *testing.T) {
+	for _, l := range i18n.Supported {
+		m, err := SecurityChanged(l, SecurityEvent{Kind: SecurityEventTOTPDisabled, CodesCleared: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id := untranslatedID.FindString(m.HTML); id != "" {
+			t.Fatalf("%s: untranslated id %q", l, id)
+		}
+		if len(m.Text) == 0 {
+			t.Fatalf("%s: empty body", l)
+		}
+	}
+
+	en, err := SecurityChanged(i18n.EnCA, SecurityEvent{Kind: SecurityEventTOTPDisabled, CodesCleared: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(en.Text, "recovery codes were deleted") {
+		t.Errorf("the email must say the codes are gone, got: %q", en.Text)
+	}
+	if !strings.Contains(en.Text, "no longer work") {
+		t.Errorf("it must say a saved copy is now useless, got: %q", en.Text)
+	}
+}
+
+// An unrecognised kind must still produce a sendable email rather than leaking
+// a raw message id to the reader.
+func TestSecurityChangedFallsBackForUnknownKind(t *testing.T) {
+	m, err := SecurityChanged(i18n.EnCA, SecurityEvent{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id := untranslatedID.FindString(m.HTML); id != "" {
+		t.Fatalf("untranslated id leaked: %q", id)
 	}
 }

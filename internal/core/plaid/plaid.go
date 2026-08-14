@@ -65,9 +65,9 @@ func NewService(st *store.Store, cfg config.Config) (*Service, error) {
 	if cfg.Plaid.ClientID == "" || cfg.Plaid.SecretKey == "" {
 		return s, nil
 	}
-	sealer, err := crypto.NewSealer(cfg.Plaid.EncryptionKey)
+	sealer, err := crypto.NewSealer(cfg.Secrets.EncryptionKey)
 	if err != nil {
-		return s, fmt.Errorf("plaid.encryption_key: %w", err)
+		return s, fmt.Errorf("secrets.encryption_key: %w", err)
 	}
 
 	apiCfg := plaidapi.NewConfiguration()
