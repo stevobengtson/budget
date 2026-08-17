@@ -57,9 +57,10 @@ web:
   level: "release"            # Gin release mode
 
 mail:
-  driver: "resend"            # "console" only logs; use resend to actually send auth mail
-  from: "Pigglet <support@pigglet.ca>"
-  resend_api_key: "re_..."    # ROTATED key — the old one was committed to git
+  driver: "mesend"            # "console" only logs; mesend/resend actually send
+  from: "support@pigglet.ca"  # BARE address — see the note below
+  mesend_api_key: "ms_..."
+  mesend_base_url: "https://mesend.plainlysoftware.com"
 
 auth:
   session_ttl: "720h"
@@ -79,6 +80,22 @@ log:
 `web.trusted_proxies` defaults to loopback, which is correct here: nginx
 terminates TLS on the same host and proxies to `127.0.0.1:8080`. Leave it unset
 unless that changes.
+
+### Mail: `mail.from` must be a bare address
+
+MeSend validates `from` as a plain address, so the display-name form Resend
+accepted — `Pigglet <support@pigglet.ca>` — is rejected with a 400 before the
+mail is attempted, and **every** auth email fails. Use `support@pigglet.ca`.
+
+MeSend runs on this box today; `mesend_base_url` exists so moving it elsewhere
+is a one-value change rather than a code change.
+
+To confirm the transport end to end, trigger a password reset for a real
+account and check the send was logged:
+
+```bash
+ssh pigglet-ca-1 "journalctl -u pigglet -n 50 | grep -i mesend"   # errors only; a send is silent
+```
 
 ## Auth features
 

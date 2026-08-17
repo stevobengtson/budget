@@ -267,10 +267,14 @@ func (s *Server) healthz(c *gin.Context) {
 // newMailer builds the configured mail driver: resend in production, console
 // (logs the link) for local dev.
 func newMailer(cfg config.Config) mail.Mailer {
-	if cfg.Mail.Driver == "resend" {
+	switch cfg.Mail.Driver {
+	case "mesend":
+		return mail.NewMeSend(cfg.Mail.MeSendBaseURL, cfg.Mail.MeSendAPIKey, cfg.Mail.From)
+	case "resend":
 		return mail.NewResend(cfg.Mail.ResendAPIKey, cfg.Mail.From)
+	default:
+		return mail.NewConsole()
 	}
-	return mail.NewConsole()
 }
 
 func (s *Server) routes(cfg config.Config) {

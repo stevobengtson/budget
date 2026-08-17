@@ -40,9 +40,21 @@ type Config struct {
 		TrustedProxies []string `mapstructure:"trusted_proxies"`
 	} `mapstructure:"web"`
 	Mail struct {
-		Driver       string `mapstructure:"driver"`
+		// Driver selects the transport: "mesend", "resend", or "console"
+		// (logs only, the dev default).
+		Driver string `mapstructure:"driver"`
+		// From is the sender address.
+		//
+		// MeSend validates this as a bare address, so a display-name form
+		// ("Pigglet <support@pigglet.ca>") is rejected with a 400 before the
+		// mail is ever attempted. Resend accepts either.
 		From         string `mapstructure:"from"`
 		ResendAPIKey string `mapstructure:"resend_api_key"`
+		// MeSendBaseURL is the self-hosted server's public origin. It is
+		// configurable rather than fixed because the service shares a box with
+		// the app today and may not later.
+		MeSendBaseURL string `mapstructure:"mesend_base_url"`
+		MeSendAPIKey  string `mapstructure:"mesend_api_key"`
 	} `mapstructure:"mail"`
 	Auth struct {
 		SessionTTL   time.Duration `mapstructure:"session_ttl"`
@@ -174,6 +186,8 @@ func Load(v *viper.Viper) (Config, error) {
 	v.SetDefault("mail.driver", "console")
 	v.SetDefault("mail.from", "Budget <noreply@example.com>")
 	v.SetDefault("mail.resend_api_key", "")
+	v.SetDefault("mail.mesend_base_url", "https://mesend.plainlysoftware.com")
+	v.SetDefault("mail.mesend_api_key", "")
 	v.SetDefault("auth.session_ttl", "720h")
 	v.SetDefault("auth.token_ttl", "1h")
 	v.SetDefault("auth.cookie_secure", false)
