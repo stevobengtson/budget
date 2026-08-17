@@ -193,3 +193,8 @@ tasks:
     cmds:
       - task: db:migrate
       - '{{.BIN_WEB}} --db "${BUDGET_DB_DSN:-{{.DEFAULT_DSN}}}" db seed'
+
+  deploy:
+    desc: Deploy the application to production
+    cmds:
+      - ./deploy/deploy.sh
