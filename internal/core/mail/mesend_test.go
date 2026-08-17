@@ -137,31 +137,43 @@ func TestMeSendNormalizesTheBaseURL(t *testing.T) {
 	}
 }
 
-// MeSend validates `from` as a bare address, so the display-name form Resend
-// accepts is rejected with a 400 before any mail is attempted.
+// Whatever is configured as `from` is what gets sent, verbatim.
 //
-// This is a configuration trap, not a code path: the driver passes `from`
-// through untouched, and the failure appears only against a real server. The
-// test documents the constraint next to the code that depends on it, so the
-// next person to set mail.from finds it here rather than in a support ticket.
-func TestMeSendFromMustBeABareAddress(t *testing.T) {
+// MeSend accepts both a bare address and the display form, but only from
+// commit 711715c — earlier builds refused the display form with a 400 before
+// attempting the send, which failed every email. The driver deliberately does
+// not normalise or rewrite the value: passing it through means a server that
+// refuses it says so in its own words, and the fix is visibly a configuration
+// or deployment one rather than something the driver silently papered over.
+func TestMeSendPassesFromThroughVerbatim(t *testing.T) {
 	const displayName = "Pigglet <support@pigglet.ca>"
 
+	c := &capture{}
+	srv := c.server(t)
+
+	m := NewMeSend(srv.URL, "k", displayName)
+	if err := m.Send(context.Background(), Message{To: "a@b.com", Subject: "s", Text: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := c.body["from"].(string); got != displayName {
+		t.Errorf("from = %q, want it passed through unchanged", got)
+	}
+}
+
+// An older MeSend refuses the display form. The driver must surface that
+// refusal intact rather than reporting a bare status, because the remedy —
+// deploy MeSend, or use a bare address — is only visible from the reason.
+func TestMeSendReportsAnOlderServersRefusal(t *testing.T) {
 	c := &capture{status: http.StatusBadRequest,
 		reply: `{"error":"Key: 'SendEmailRequest.From' Error:Field validation for 'From' failed on the 'email' tag"}`}
 	srv := c.server(t)
 
-	m := NewMeSend(srv.URL, "k", displayName)
+	m := NewMeSend(srv.URL, "k", "Pigglet <support@pigglet.ca>")
 	err := m.Send(context.Background(), Message{To: "a@b.com", Subject: "s", Text: "t"})
 	if err == nil {
-		t.Fatal("a display-name From is refused by MeSend; the driver must report that")
+		t.Fatal("a 400 must be an error")
 	}
 	if !strings.Contains(err.Error(), "'email' tag") {
 		t.Errorf("the validation reason should reach the caller, got: %v", err)
-	}
-	// And the driver must not have quietly rewritten it — what is configured is
-	// what gets sent, so the fix is visibly a config one.
-	if got, _ := c.body["from"].(string); got != displayName {
-		t.Errorf("from = %q, want it passed through verbatim", got)
 	}
 }

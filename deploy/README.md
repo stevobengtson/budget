@@ -58,7 +58,7 @@ web:
 
 mail:
   driver: "mesend"            # "console" only logs; mesend/resend actually send
-  from: "support@pigglet.ca"  # BARE address — see the note below
+  from: "Pigglet <support@pigglet.ca>"   # display form needs mesend >= 711715c
   mesend_api_key: "ms_..."
   mesend_base_url: "https://mesend.plainlysoftware.com"
 
@@ -81,11 +81,13 @@ log:
 terminates TLS on the same host and proxies to `127.0.0.1:8080`. Leave it unset
 unless that changes.
 
-### Mail: `mail.from` must be a bare address
+### Mail: `mail.from` and the MeSend version
 
-MeSend validates `from` as a plain address, so the display-name form Resend
-accepted — `Pigglet <support@pigglet.ca>` — is rejected with a 400 before the
-mail is attempted, and **every** auth email fails. Use `support@pigglet.ca`.
+Either form works — `support@pigglet.ca` or `Pigglet <support@pigglet.ca>` —
+but the display form needs MeSend at commit `711715c` or later. Earlier builds
+validated `from` as a plain address and refused the display form with a 400
+*before* attempting the send, which failed every auth email. Deploy MeSend
+first if you want the friendly sender name in recipients' inboxes.
 
 MeSend runs on this box today; `mesend_base_url` exists so moving it elsewhere
 is a one-value change rather than a code change.
@@ -106,7 +108,7 @@ is set, and each feature can be switched on independently.
 
 Already working with no configuration at all: rate limiting, account lockout,
 the active-sessions list, step-up re-authentication, the expired-row sweeper,
-and every new email (they use the Resend setup above).
+and every new email (they use the mail setup above).
 
 ### Verify these first
 
