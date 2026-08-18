@@ -60,6 +60,20 @@ templ PaydownPage(d PaydownData, collapsed bool) {
 						{ i18n.T(ctx, "paydown.apply") }
 					}
 				</form>
+				// Adding a debt to the plan lives here rather than on the account
+				// form: the add-on owns its own data, so turning it off leaves the
+				// base account screens exactly as they were.
+				@button.Button(button.Props{
+					Size:  button.SizeSm,
+					Class: "rounded-pill",
+					Attributes: templ.Attributes{
+						"hx-get":    "/paydown/add-form",
+						"hx-target": "#modal",
+						"hx-swap":   "innerHTML",
+					},
+				}) {
+					{ i18n.T(ctx, "paydown.add_account") }
+				}
 			</div>
 			<div class="grid grid-cols-1 gap-s3 sm:grid-cols-3">
 				@pdStat(i18n.T(ctx, "paydown.stat_monthly"), money.Format(ctx, d.TotalMonthly), "bg-surface-ready", "text-surface-ready-fg")
@@ -165,12 +179,12 @@ templ pdSectionMenu(acct store.AccountWithBalance) {
 		@dropdown.Content() {
 			@dropdown.Item(dropdown.ItemProps{
 				Attributes: templ.Attributes{
-					"hx-get":    fmt.Sprintf("/paydown/%d/payment-form", acct.ID),
+					"hx-get":    fmt.Sprintf("/paydown/%d/terms-form", acct.ID),
 					"hx-target": "#modal",
 					"hx-swap":   "innerHTML",
 				},
 			}) {
-				{ i18n.T(ctx, "paydown.menu_edit_payment") }
+				{ i18n.T(ctx, "paydown.menu_edit_terms") }
 			}
 			@dropdown.Item(dropdown.ItemProps{
 				Attributes: templ.Attributes{
@@ -309,16 +323,29 @@ templ paydownSpinner(acctID int64) {
 	</div>
 }
 
-// PaymentModal renders a centered card with a single-input form for
-// updating the fallback monthly payment on an account.
-templ PaymentModal(acct store.AccountWithBalance) {
+// TermsModal edits the two numbers the projection runs on: the interest rate
+// and the fallback monthly payment. Both used to be fields on the account form
+// behind an add-on check; they live here now so the account form has no
+// paydown in it at all.
+templ TermsModal(acct store.AccountWithBalance) {
 	@dialogPanel("") {
 		@dialog.Header() {
 			@dialog.Title() {
-				{ i18n.Tf(ctx, "paydown.payment_modal_title", i18n.M{"Name": acct.Name}) }
+				{ i18n.Tf(ctx, "paydown.terms_modal_title", i18n.M{"Name": acct.Name}) }
 			}
 		}
-		<form hx-post={ fmt.Sprintf("/paydown/%d/payment", acct.ID) } hx-target="body" hx-swap="outerHTML" class="grid gap-4">
+		<form hx-post={ fmt.Sprintf("/paydown/%d/terms", acct.ID) } hx-target="body" hx-swap="outerHTML" class="grid gap-4">
+			// The rate lives here, not on the account form: it is only ever read by
+			// the projection, so it belongs to the add-on that needs it.
+			@formRow("pd-apr", i18n.T(ctx, "accounts.apr_field")) {
+				@input.Input(input.Props{
+					ID:          "pd-apr",
+					Name:        "apr",
+					Value:       aprValue(ctx, acct),
+					Placeholder: "19.99",
+					Class:       "tabular-nums",
+				})
+			}
 			@formRow("pd-payment", i18n.T(ctx, "accounts.monthly_payment_field")) {
 				if acct.MonthlyPaymentCents != nil {
 					@input.Input(input.Props{
@@ -327,7 +354,6 @@ templ PaymentModal(acct store.AccountWithBalance) {
 						Value:       money.Format(ctx, *acct.MonthlyPaymentCents),
 						Placeholder: "200.00",
 						Class:       "tabular-nums",
-						Attributes:  templ.Attributes{"autofocus": ""},
 					})
 				} else {
 					@input.Input(input.Props{
@@ -335,7 +361,6 @@ templ PaymentModal(acct store.AccountWithBalance) {
 						Name:        "amount",
 						Placeholder: "200.00",
 						Class:       "tabular-nums",
-						Attributes:  templ.Attributes{"autofocus": ""},
 					})
 				}
 			}
@@ -399,24 +424,110 @@ templ CategoryModal(acct store.AccountWithBalance, cats []store.Category, groups
 	}
 }
 
-// categoryOptGroups buckets categories under their category group, dropping any
-// group that ended up empty so the dropdown shows no bare headings.
-func categoryOptGroups(cats []store.Category, groups []store.CategoryGroup, selected *int64) []OptGroup {
-	out := make([]OptGroup, 0, len(groups))
-	for _, g := range groups {
-		og := OptGroup{Label: g.Name}
-		for _, c := range cats {
-			if c.GroupID != g.ID {
-				continue
+// aprValue renders a stored rate for the terms form, blank when unset. Basis
+// points are hundredths of a percent, and the decimal separator follows the
+// locale — a French user types and reads 19,99.
+func aprValue(ctx context.Context, acct store.AccountWithBalance) string {
+	if acct.AprBps == nil {
+		return ""
+	}
+	return format.Decimal(ctx, float64(*acct.AprBps)/100.0, 2)
+}
+
+// AddDebtModal adds an account to the paydown plan. It replaces the
+// "Include in paydown" checkbox that used to sit on the account form: the plan
+// is add-on data, so it is gathered on the add-on's own page.
+//
+// The rate is required — PaydownIndex only projects accounts that have one, so
+// an account added without it would join the plan and then not appear.
+templ AddDebtModal(eligible []store.AccountWithBalance) {
+	@dialogPanel("") {
+		@dialog.Header() {
+			@dialog.Title() {
+				{ i18n.T(ctx, "paydown.add_modal_title") }
 			}
-			og.Opts = append(og.Opts, Opt{
-				Value:    strconv.FormatInt(c.ID, 10),
-				Label:    c.Name,
-				Selected: selected != nil && *selected == c.ID,
-			})
 		}
-		if len(og.Opts) > 0 {
-			out = append(out, og)
+		if len(eligible) == 0 {
+			<p class="text-[15px] text-muted-foreground">{ i18n.T(ctx, "paydown.none_eligible") }</p>
+			@dialog.Footer() {
+				@button.Button(button.Props{
+					Variant:    button.VariantOutline,
+					Type:       "button",
+					Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+				}) {
+					{ i18n.T(ctx, "common.close") }
+				}
+			}
+		} else {
+			<form hx-post="/paydown/add" hx-target="body" hx-swap="outerHTML" class="grid gap-4">
+				@formRow("pd-add-account", i18n.T(ctx, "paydown.account_field")) {
+					@SelectField(SelectFieldProps{
+						ID:       "pd-add-account",
+						Name:     "account_id",
+						Required: true,
+						Class:    "w-full",
+					}, debtAccountOptions(eligible))
+				}
+				@formRow("pd-add-apr", i18n.T(ctx, "accounts.apr_field")) {
+					@input.Input(input.Props{
+						ID:          "pd-add-apr",
+						Name:        "apr",
+						Required:    true,
+						Placeholder: "19.99",
+						Class:       "tabular-nums",
+					})
+				}
+				@formRow("pd-add-payment", i18n.T(ctx, "accounts.monthly_payment_field")) {
+					@input.Input(input.Props{
+						ID:          "pd-add-payment",
+						Name:        "amount",
+						Placeholder: i18n.T(ctx, "common.optional_placeholder"),
+						Class:       "tabular-nums",
+					})
+				}
+				<p class="text-[14px] text-muted-foreground">
+					{ i18n.T(ctx, "paydown.add_modal_note") }
+				</p>
+				@dialog.Footer() {
+					@button.Button(button.Props{
+						Variant:    button.VariantOutline,
+						Type:       "button",
+						Attributes: templ.Attributes{"hx-on:click": "document.getElementById('modal').replaceChildren()"},
+					}) {
+						{ i18n.T(ctx, "common.cancel") }
+					}
+					@button.Button(button.Props{Type: "submit"}) {
+						{ i18n.T(ctx, "common.save") }
+					}
+				}
+			</form>
+		}
+	}
+}
+
+// debtAccountOptions lists the accounts that can join the plan, first one
+// preselected so the required select always posts a value.
+func debtAccountOptions(accts []store.AccountWithBalance) []Opt {
+	out := make([]Opt, 0, len(accts))
+	for i, a := range accts {
+		out = append(out, Opt{
+			Value:    strconv.FormatInt(a.ID, 10),
+			Label:    a.Name,
+			Selected: i == 0,
+		})
+	}
+	return out
+}
+
+// EligibleDebtAccounts are the liability accounts the plan is not already
+// projecting — either never added, or added without a rate and therefore
+// invisible on the page. Exported so the handler can build the modal's list
+// with the same rule PaydownIndex uses to decide what it shows.
+func EligibleDebtAccounts(all []store.AccountWithBalance) []store.AccountWithBalance {
+	out := make([]store.AccountWithBalance, 0, len(all))
+	for _, a := range all {
+		if a.Type.IsLiability() && !(a.IncludeInPaydown && a.AprBps != nil) {
+			out = append(out, a)
 		}
 	}
 	return out

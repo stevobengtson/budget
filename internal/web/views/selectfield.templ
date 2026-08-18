@@ -1,7 +1,10 @@
 package views
 
 import (
+	"strconv"
+
 	"github.com/sbengtson/budget/internal/core/i18n"
+	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/templui/templui/components/selectbox"
 )
 
@@ -105,7 +108,14 @@ templ SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) {
 			}
 			for _, g := range groups {
 				@selectbox.Group() {
-					@selectbox.Label() {
+					// templUI's default group label is text-sm font-medium — near
+					// enough to an item that a grouped list reads as a flat one. This
+					// is the app's section-heading idiom (budget table column head,
+					// sidebar account groups), so the dropdown groups read the same
+					// way the budget page's do.
+					@selectbox.Label(selectbox.LabelProps{
+						Class: "block px-2 py-1 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground",
+					}) {
 						{ g.Label }
 					}
 					for _, o := range g.Opts {
@@ -133,4 +143,33 @@ func selectFieldAttrs(p SelectFieldProps) templ.Attributes {
 		attrs["required"] = true
 	}
 	return attrs
+}
+
+// categoryOptGroups buckets categories under their category group, dropping any
+// group that ended up empty so the dropdown shows no bare headings. Every
+// category picker in the app uses it, so a category is found in the same place
+// in a dropdown as it sits on the budget page.
+//
+// Group order comes from the groups slice (ListGroups sorts by sort_order) and
+// within a group from the cats slice (ListCategories does the same), which is
+// the budget page's ordering.
+func categoryOptGroups(cats []store.Category, groups []store.CategoryGroup, selected *int64) []OptGroup {
+	out := make([]OptGroup, 0, len(groups))
+	for _, g := range groups {
+		og := OptGroup{Label: g.Name}
+		for _, c := range cats {
+			if c.GroupID != g.ID {
+				continue
+			}
+			og.Opts = append(og.Opts, Opt{
+				Value:    strconv.FormatInt(c.ID, 10),
+				Label:    c.Name,
+				Selected: selected != nil && *selected == c.ID,
+			})
+		}
+		if len(og.Opts) > 0 {
+			out = append(out, og)
+		}
+	}
+	return out
 }

@@ -298,3 +298,23 @@
 [data-tx-form]:has(.tx-type-select [data-tui-selectbox-value="transfer"][data-tui-selectbox-selected="true"]) .tx-label-from { display: inline; }
 
 
+
+/* Grouped select: hide a group heading once search has filtered away every
+   item under it. templUI's selectbox search sets `display: none` inline on the
+   non-matching .select-item and never touches the enclosing group, so typing
+   into a grouped dropdown would otherwise leave a column of bare headings.
+   The inline style is what makes this readable in CSS — an item hidden by JS
+   carries `style="display: none"`, an untouched one carries no style attribute
+   at all, so a group with no still-visible item matches. */
+[data-tui-selectbox-content] [role="group"]:not(:has(.select-item:not([style*="display: none"]))) { display: none; }
+
+/* A hairline between groups, so the headings read as dividing the list rather
+   than floating in it. :not(:first-child) rather than group+group so the rule
+   also separates a leading ungrouped option — the filter bar's "All
+   categories" — from the first group, while a picker that opens straight into
+   its first group gets no stray line under the search box. */
+[data-tui-selectbox-content] [role="group"]:not(:first-child) {
+  border-top: 1px solid var(--border);
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+}

@@ -210,13 +210,13 @@ templ TxQuickAdd(d TransactionsData, oob bool) {
 			// read straight from the selected option's type in CSS.
 			<div class="tx-transfer-category w-full md:w-[210px]">
 				@quickField("qa-transfer-category", i18n.T(ctx, "tx.field_budget_category"), "w-full") {
-					@SelectField(SelectFieldProps{
+					@SelectFieldGrouped(SelectFieldProps{
 						ID:           "qa-transfer-category",
 						Name:         "transfer_category_id",
 						Placeholder:  i18n.T(ctx, "common.none_placeholder"),
 						Class:        "w-full",
 						TriggerClass: "h-9 rounded-pill border-primary bg-surface-sunk text-[15px]",
-					}, categoryOptions(d.Categories, nil))
+					}, nil, categoryOptGroups(d.Categories, d.Groups, nil))
 				}
 			</div>
 			// Category, Payee and Notes close the row, in that order. Payee holds a
@@ -224,13 +224,13 @@ templ TxQuickAdd(d TransactionsData, oob bool) {
 			// it takes the flexible remainder rather than Payee.
 			<div class="tx-plain-only w-full md:w-[170px]">
 				@quickField("qa-category", i18n.T(ctx, "tx.field_category"), "w-full") {
-					@SelectField(SelectFieldProps{
+					@SelectFieldGrouped(SelectFieldProps{
 						ID:           "qa-category",
 						Name:         "category_id",
 						Placeholder:  i18n.T(ctx, "common.none_placeholder"),
 						Class:        "w-full",
 						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
-					}, categoryOptions(d.Categories, d.FilterCategory))
+					}, nil, categoryOptGroups(d.Categories, d.Groups, d.FilterCategory))
 				}
 			</div>
 			<div class="tx-plain-only w-full md:w-[200px]">
@@ -317,17 +317,24 @@ templ TxFilterBar(d TransactionsData) {
 				Attributes:   templ.Attributes{"onchange": "this.form.requestSubmit()"},
 			}, accountFilterOptions(ctx, d.Accounts, d.FilterAccount))
 		</div>
+		// Led by an empty-valued "All categories" entry that clears the filter, then
+		// the categories under their group headings so the list reads like the budget
+		// page. Archived categories are included: they still label historical
+		// transactions, so a filter arriving from the budget stays correctly
+		// labelled after the category is archived.
 		<div class="flex items-center gap-s2">
 			@label.Label(label.Props{For: "filter-category", Class: "text-[13px] text-muted-foreground"}) {
 				{ i18n.T(ctx, "tx.filter_category") }
 			}
-			@SelectField(SelectFieldProps{
+			@SelectFieldGrouped(SelectFieldProps{
 				ID:           "filter-category",
 				Name:         "category",
 				Class:        "w-56",
 				TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
 				Attributes:   templ.Attributes{"onchange": "this.form.requestSubmit()"},
-			}, categoryFilterOptions(ctx, d.Categories, d.FilterCategory))
+			}, []Opt{
+				{Value: "", Label: i18n.T(ctx, "tx.all_categories"), Selected: d.FilterCategory == nil},
+			}, categoryOptGroups(d.Categories, d.Groups, d.FilterCategory))
 		</div>
 		// The needs-review chip appears only while there is something to review
 		// (or the filter is already on, so it can be turned off). A link, not a
@@ -407,23 +414,6 @@ func accountFilterOptions(ctx context.Context, accts []store.AccountWithBalance,
 	return out
 }
 
-// categoryFilterOptions lists the categories for the filter bar, led by an
-// empty-valued "All categories" entry that clears the filter. Archived
-// categories are included: they still label historical transactions, so a
-// filter arriving from the budget stays correctly labelled after the category
-// is archived.
-func categoryFilterOptions(ctx context.Context, cats []store.Category, selected *int64) []Opt {
-	out := make([]Opt, 0, len(cats)+1)
-	out = append(out, Opt{Value: "", Label: i18n.T(ctx, "tx.all_categories"), Selected: selected == nil})
-	for _, c := range cats {
-		out = append(out, Opt{
-			Value:    strconv.FormatInt(c.ID, 10),
-			Label:    c.Name,
-			Selected: selected != nil && *selected == c.ID,
-		})
-	}
-	return out
-}
 
 // TxRows renders the rows grouped by day, each group under a date header
 // carrying that day's net. Shared by the initial page render and the htmx
@@ -704,26 +694,26 @@ templ TransactionEditRow(d TxFormData) {
 			}
 			<div class="tx-transfer-category w-full md:w-[210px]">
 				@quickField("tx-edit-transfer-category", i18n.T(ctx, "tx.field_budget_category"), "w-full") {
-					@SelectField(SelectFieldProps{
+					@SelectFieldGrouped(SelectFieldProps{
 						ID:           "tx-edit-transfer-category",
 						Name:         "transfer_category_id",
 						Placeholder:  i18n.T(ctx, "common.none_placeholder"),
 						Class:        "w-full",
 						TriggerClass: "h-9 rounded-pill border-primary bg-surface-sunk text-[15px]",
-					}, categoryOptions(d.Categories, d.CategoryID))
+					}, nil, categoryOptGroups(d.Categories, d.Groups, d.CategoryID))
 				}
 			</div>
 			// Same tail as the quick-add row — Category, Payee, Notes — so an edit
 			// reads as the row it replaces rather than as a different form.
 			<div class="tx-plain-only w-full md:w-[170px]">
 				@quickField("tx-edit-category", i18n.T(ctx, "tx.field_category"), "w-full") {
-					@SelectField(SelectFieldProps{
+					@SelectFieldGrouped(SelectFieldProps{
 						ID:           "tx-edit-category",
 						Name:         "category_id",
 						Placeholder:  i18n.T(ctx, "common.none_placeholder"),
 						Class:        "w-full",
 						TriggerClass: "h-9 rounded-pill border-input bg-surface-sunk text-[15px]",
-					}, categoryOptions(d.Categories, d.CategoryID))
+					}, nil, categoryOptGroups(d.Categories, d.Groups, d.CategoryID))
 				}
 			</div>
 			<div class="tx-plain-only w-full md:w-[200px]">
@@ -856,6 +846,7 @@ type TxFormData struct {
 	Amount            string
 	Accounts          []store.AccountWithBalance
 	Categories        []store.Category
+	Groups            []store.CategoryGroup
 }
 
 func accountOptions(accts []store.AccountWithBalance, selectedID int64) []Opt {
@@ -865,18 +856,6 @@ func accountOptions(accts []store.AccountWithBalance, selectedID int64) []Opt {
 			Value:    strconv.FormatInt(a.ID, 10),
 			Label:    a.Name,
 			Selected: a.ID == selectedID,
-		})
-	}
-	return out
-}
-
-func categoryOptions(cats []store.Category, selected *int64) []Opt {
-	out := make([]Opt, 0, len(cats))
-	for _, c := range cats {
-		out = append(out, Opt{
-			Value:    strconv.FormatInt(c.ID, 10),
-			Label:    c.Name,
-			Selected: selected != nil && *selected == c.ID,
 		})
 	}
 	return out

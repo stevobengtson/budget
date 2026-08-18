@@ -576,9 +576,11 @@ func (s *Server) routes(cfg config.Config) {
 	paydown.GET("/:acctID/rows", hs.PaydownRows)
 	paydown.POST("/:acctID/include", hs.PaydownInclude)
 	paydown.POST("/:acctID/exclude", hs.PaydownExclude)
-	paydown.GET("/:acctID/payment-form", hs.PaydownPaymentForm)
+	paydown.GET("/add-form", hs.PaydownAddForm)
+	paydown.POST("/add", hs.PaydownAdd)
+	paydown.GET("/:acctID/terms-form", hs.PaydownTermsForm)
 	paydown.GET("/:acctID/category-form", hs.PaydownCategoryForm)
-	paydown.POST("/:acctID/payment", hs.PaydownSetPayment)
+	paydown.POST("/:acctID/terms", hs.PaydownSetTerms)
 	paydown.POST("/:acctID/category", hs.PaydownSetCategory)
 
 	// Bank Sync (Plaid) is an opt-in add-on. The whole group sits behind its

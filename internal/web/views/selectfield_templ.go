@@ -9,7 +9,10 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"strconv"
+
 	"github.com/sbengtson/budget/internal/core/i18n"
+	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/templui/templui/components/selectbox"
 )
 
@@ -153,7 +156,7 @@ func SelectField(p SelectFieldProps, opts []Opt) templ.Component {
 						var templ_7745c5c3_Var6 string
 						templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 69, Col: 14}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 72, Col: 14}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 						if templ_7745c5c3_Err != nil {
@@ -288,7 +291,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 						var templ_7745c5c3_Var12 string
 						templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 103, Col: 14}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 106, Col: 14}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 						if templ_7745c5c3_Err != nil {
@@ -314,6 +317,10 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "     ")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
 						templ_7745c5c3_Var14 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
@@ -329,7 +336,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 							var templ_7745c5c3_Var15 string
 							templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(g.Label)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 109, Col: 15}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 119, Col: 15}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 							if templ_7745c5c3_Err != nil {
@@ -337,7 +344,9 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = selectbox.Label().Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = selectbox.Label(selectbox.LabelProps{
+							Class: "block px-2 py-1 text-[12px] font-bold uppercase tracking-[0.08em] text-muted-foreground",
+						}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -357,7 +366,7 @@ func SelectFieldGrouped(p SelectFieldProps, lead []Opt, groups []OptGroup) templ
 								var templ_7745c5c3_Var17 string
 								templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 113, Col: 16}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/selectfield.templ`, Line: 123, Col: 16}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 								if templ_7745c5c3_Err != nil {
@@ -407,6 +416,35 @@ func selectFieldAttrs(p SelectFieldProps) templ.Attributes {
 		attrs["required"] = true
 	}
 	return attrs
+}
+
+// categoryOptGroups buckets categories under their category group, dropping any
+// group that ended up empty so the dropdown shows no bare headings. Every
+// category picker in the app uses it, so a category is found in the same place
+// in a dropdown as it sits on the budget page.
+//
+// Group order comes from the groups slice (ListGroups sorts by sort_order) and
+// within a group from the cats slice (ListCategories does the same), which is
+// the budget page's ordering.
+func categoryOptGroups(cats []store.Category, groups []store.CategoryGroup, selected *int64) []OptGroup {
+	out := make([]OptGroup, 0, len(groups))
+	for _, g := range groups {
+		og := OptGroup{Label: g.Name}
+		for _, c := range cats {
+			if c.GroupID != g.ID {
+				continue
+			}
+			og.Opts = append(og.Opts, Opt{
+				Value:    strconv.FormatInt(c.ID, 10),
+				Label:    c.Name,
+				Selected: selected != nil && *selected == c.ID,
+			})
+		}
+		if len(og.Opts) > 0 {
+			out = append(out, og)
+		}
+	}
+	return out
 }
 
 var _ = templruntime.GeneratedTemplate

@@ -122,6 +122,7 @@ func (h *Handlers) TransactionsCreate(c *gin.Context) {
 func (h *Handlers) txFormData(ctx context.Context, uid int64, t *store.Transaction) views.TxFormData {
 	accts, _ := h.store.ListAccounts(ctx, uid, true)
 	cats, _ := h.store.ListCategories(ctx, uid, true)
+	groups, _ := h.store.ListGroups(ctx, uid)
 	d := views.TxFormData{
 		Editing:    true,
 		ID:         t.ID,
@@ -130,6 +131,7 @@ func (h *Handlers) txFormData(ctx context.Context, uid int64, t *store.Transacti
 		CategoryID: t.CategoryID,
 		Accounts:   accts,
 		Categories: cats,
+		Groups:     groups,
 	}
 	switch {
 	case t.TransferAccountID != nil:
@@ -482,9 +484,11 @@ func (h *Handlers) renderTxRows(c *gin.Context, resetQuickAdd bool) {
 	if resetQuickAdd {
 		// Only the fields the row actually reads — it is being re-rendered for its
 		// defaults, not for the list.
+		groups, _ := h.store.ListGroups(ctx, uid)
 		_ = views.TxQuickAdd(views.TransactionsData{
 			Accounts:       accts,
 			Categories:     cats,
+			Groups:         groups,
 			FilterAccount:  acctPtr,
 			FilterCategory: catPtr,
 		}, true).Render(ctx, c.Writer)

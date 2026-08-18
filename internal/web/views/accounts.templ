@@ -2,13 +2,10 @@ package views
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/sbengtson/budget/internal/core/i18n"
-	"github.com/sbengtson/budget/internal/core/store"
 	"github.com/sbengtson/budget/internal/web/components/ui/button"
 	"github.com/sbengtson/budget/internal/web/components/ui/buttongroup"
-	"github.com/templui/templui/components/checkbox"
 	"github.com/templui/templui/components/dialog"
 	"github.com/templui/templui/components/input"
 	"github.com/templui/templui/components/label"
@@ -21,11 +18,6 @@ type AccountFormData struct {
 	Type              string
 	StartingBalance   string
 	CreditLimit       string
-	APR               string
-	MonthlyPayment    string
-	IncludeInPaydown  bool
-	PaymentCategoryID *int64
-	Categories        []store.Category
 }
 
 templ AccountForm(d AccountFormData) {
@@ -78,43 +70,14 @@ templ AccountForm(d AccountFormData) {
 					@formRow("acct-limit", i18n.T(ctx, "accounts.credit_limit_field")) {
 						@input.Input(input.Props{ID: "acct-limit", Name: "credit_limit", Value: d.CreditLimit, Placeholder: i18n.T(ctx, "common.optional_placeholder"), Class: "tabular-nums"})
 					}
-					// APR + monthly payment feed the paydown projection, so they only
-					// show while that add-on is on. Stored values survive a save with
-					// the add-on off — the handler carries them forward.
-					if AddOnEnabled(ctx, "paydown") {
-						@formRow("acct-apr", i18n.T(ctx, "accounts.apr_field")) {
-							@input.Input(input.Props{ID: "acct-apr", Name: "apr", Value: d.APR, Placeholder: "19.99", Class: "tabular-nums"})
-						}
-						@formRow("acct-pay", i18n.T(ctx, "accounts.monthly_payment_field")) {
-							@input.Input(input.Props{ID: "acct-pay", Name: "monthly_payment", Value: d.MonthlyPayment, Placeholder: i18n.T(ctx, "common.optional_placeholder"), Class: "tabular-nums"})
-						}
-					}
 				</div>
-				if AddOnEnabled(ctx, "paydown") {
-					<div class="flex items-center gap-2">
-						@checkbox.Checkbox(checkbox.Props{
-							ID:      "acct-paydown",
-							Name:    "include_in_paydown",
-							Value:   "1",
-							Checked: d.IncludeInPaydown,
-						})
-						@label.Label(label.Props{For: "acct-paydown"}) {
-							{ i18n.T(ctx, "accounts.include_in_paydown") }
-						}
-					</div>
-				}
+				// Interest rate, monthly payment, plan membership and the payment
+				// category used to live here behind an AddOnEnabled check. They are
+				// paydown's data, read by nothing else, so they moved to the paydown
+				// page — enabling or disabling the add-on now leaves this form alone.
 				<p class="text-[13px] text-muted-foreground">
 					{ i18n.T(ctx, "wizard.account_sign_note") }
 				</p>
-				if AddOnEnabled(ctx, "paydown") {
-					@formRow("acct-paycat", i18n.T(ctx, "accounts.payment_category_field")) {
-						@SelectField(SelectFieldProps{
-							ID:          "acct-paycat",
-							Name:        "payment_category_id",
-							Placeholder: i18n.T(ctx, "common.none_placeholder"),
-						}, paymentCategoryOptions(d.Categories, d.PaymentCategoryID))
-					}
-				}
 			</div>
 			@dialog.Footer() {
 				@button.Button(button.Props{
@@ -140,18 +103,6 @@ func accountTypeOptions(selected string) []Opt {
 			Value:    t,
 			Label:    t,
 			Selected: t == selected,
-		})
-	}
-	return out
-}
-
-func paymentCategoryOptions(cats []store.Category, selected *int64) []Opt {
-	out := make([]Opt, 0, len(cats))
-	for _, c := range cats {
-		out = append(out, Opt{
-			Value:    strconv.FormatInt(c.ID, 10),
-			Label:    c.Name,
-			Selected: selected != nil && *selected == c.ID,
 		})
 	}
 	return out

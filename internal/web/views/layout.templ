@@ -131,6 +131,9 @@ templ appShell(active string, collapsed bool) {
 					}
 					@accountsPanel("sidebar-overview")
 				}
+				@sidebar.Group() {
+					@AddOnsNav(active, false)
+				}
 			}
 			@sidebar.Footer() {
 				@sidebar.Menu() {
@@ -177,14 +180,42 @@ templ PrimaryNav(active string, oob bool) {
 			// is hidden in the collapsed icon rail though, so the rail keeps its own
 			// way in.
 			@collapsedOnlyNavItem("transactions", i18n.T(ctx, "nav.all_accounts"), icon.List(icon.Props{Class: "size-[18px]"}), active)
-			if AddOnEnabled(ctx, "paydown") {
-				@navItem("paydown", i18n.T(ctx, "nav.paydown"), icon.TrendingDown(icon.Props{Class: "size-[18px]"}), active)
-			}
-			// Sidebar only, no tab-bar entry: the mobile bar is designed around
-			// three tabs and paydown already claims the fourth when enabled.
-			if AddOnEnabled(ctx, "estimates") {
-				@navItem("estimates", i18n.T(ctx, "nav.estimates"), icon.Calculator(icon.Props{Class: "size-[18px]"}), active)
-			}
+		}
+	</div>
+}
+
+// AddOnsNav is the sidebar's add-on section. It sits below the account list,
+// separated by a rule, rather than mixed into the primary nav — add-ons read as
+// what they are, optional extras, instead of as core budgeting.
+//
+// Same out-of-band contract as PrimaryNav: the id'd wrapper always renders, so
+// an add-on toggle can swap it even when the section is currently empty. The
+// heading and the rule sit inside the wrapper so they appear and disappear with
+// the entries rather than labelling — or underlining — nothing.
+templ AddOnsNav(active string, oob bool) {
+	{{ attrs := templ.Attributes{"id": "addons-nav"} }}
+	if oob {
+		{{ attrs["hx-swap-oob"] = "true" }}
+	}
+	<div { attrs... }>
+		if AddOnEnabled(ctx, "paydown") || AddOnEnabled(ctx, "estimates") {
+			<div class="mt-s2 border-t border-border pt-s3">
+				@sidebar.GroupLabel(sidebar.GroupLabelProps{
+					Class: "group-data-[tui-sidebar-state=collapsed]:group-data-[tui-sidebar-collapsible=icon]:hidden",
+				}) {
+					{ i18n.T(ctx, "nav.addons_group") }
+				}
+				@sidebar.Menu() {
+					if AddOnEnabled(ctx, "paydown") {
+						@navItem("paydown", i18n.T(ctx, "nav.paydown"), icon.TrendingDown(icon.Props{Class: "size-[18px]"}), active)
+					}
+					// Sidebar only, no tab-bar entry: the mobile bar is designed around
+					// three tabs and paydown already claims the fourth when enabled.
+					if AddOnEnabled(ctx, "estimates") {
+						@navItem("estimates", i18n.T(ctx, "nav.estimates"), icon.Calculator(icon.Props{Class: "size-[18px]"}), active)
+					}
+				}
+			</div>
 		}
 	</div>
 }

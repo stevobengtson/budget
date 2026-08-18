@@ -8,6 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/sbengtson/budget/internal/core/format"
+	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/paydown"
 	"github.com/sbengtson/budget/internal/core/store"
@@ -122,9 +124,9 @@ func (h *Handlers) computePlan(ctx context.Context, userID int64, a store.Accoun
 	return paydown.Compute(a.ID, a.Name, *a.AprBps, startCents, schedule, now)
 }
 
-// PaydownPaymentForm renders the modal contents for editing the
-// fallback monthly payment on a paydown account.
-func (h *Handlers) PaydownPaymentForm(c *gin.Context) {
+// PaydownTermsForm renders the modal contents for editing a paydown account's
+// terms — its interest rate and the fallback monthly payment.
+func (h *Handlers) PaydownTermsForm(c *gin.Context) {
 	ctx := c.Request.Context()
 	id, _ := strconv.ParseInt(c.Param("acctID"), 10, 64)
 	a, err := h.store.GetAccount(ctx, currentUserID(c), id)
@@ -132,7 +134,64 @@ func (h *Handlers) PaydownPaymentForm(c *gin.Context) {
 		c.String(http.StatusNotFound, err.Error())
 		return
 	}
-	render(c, http.StatusOK, views.PaymentModal(store.AccountWithBalance{Account: a}))
+	render(c, http.StatusOK, views.TermsModal(store.AccountWithBalance{Account: a}))
+}
+
+// PaydownAddForm renders the modal for adding an account to the plan. The
+// candidate list is the accounts the page is not already projecting.
+func (h *Handlers) PaydownAddForm(c *gin.Context) {
+	all, _ := h.store.ListAccounts(c.Request.Context(), currentUserID(c), false)
+	render(c, http.StatusOK, views.AddDebtModal(views.EligibleDebtAccounts(all)))
+}
+
+// PaydownAdd puts an account into the plan with the rate the modal collected.
+// This is the add-on's own entry point: the account form no longer carries any
+// paydown field, so nothing outside /paydown writes this data.
+func (h *Handlers) PaydownAdd(c *gin.Context) {
+	ctx := c.Request.Context()
+	uid := currentUserID(c)
+	id, _ := strconv.ParseInt(c.PostForm("account_id"), 10, 64)
+	a, err := h.store.GetAccount(ctx, uid, id)
+	if err != nil {
+		c.String(http.StatusNotFound, err.Error())
+		return
+	}
+	bps, err := parseAprBps(ctx, c.PostForm("apr"))
+	if err != nil || bps == nil {
+		c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.invalid_amount"))
+		return
+	}
+	a.AprBps = bps
+	if v := c.PostForm("amount"); v != "" {
+		cents, err := money.Parse(ctx, v)
+		if err != nil {
+			c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.invalid_amount"))
+			return
+		}
+		a.MonthlyPaymentCents = &cents
+	}
+	a.IncludeInPaydown = true
+	if err := h.store.UpdateAccount(ctx, uid, a); err != nil {
+		writeStoreErr(c, err)
+		return
+	}
+	c.Header("HX-Redirect", "/paydown")
+	c.Writer.WriteHeader(http.StatusOK)
+}
+
+// parseAprBps reads a percentage into basis points. Locale-aware: a French user
+// types 19,99, which strconv alone would silently truncate. An empty string is
+// not an error — it clears the rate — so the nil return is meaningful.
+func parseAprBps(ctx context.Context, v string) (*int64, error) {
+	if v == "" {
+		return nil, nil
+	}
+	f, err := format.ParseDecimal(ctx, v)
+	if err != nil {
+		return nil, err
+	}
+	bps := int64(f * 100)
+	return &bps, nil
 }
 
 // PaydownCategoryForm renders the modal contents for linking a budget
@@ -171,7 +230,11 @@ func (h *Handlers) toggleInclude(c *gin.Context, include bool) {
 	c.Writer.WriteHeader(http.StatusOK)
 }
 
-func (h *Handlers) PaydownSetPayment(c *gin.Context) {
+// PaydownSetTerms saves the rate and fallback payment from the terms modal.
+// Clearing the rate drops the account off the page — PaydownIndex only projects
+// accounts that have one — but leaves it in the plan, so it comes back through
+// the add modal, which lists exactly those accounts.
+func (h *Handlers) PaydownSetTerms(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid := currentUserID(c)
 	id, _ := strconv.ParseInt(c.Param("acctID"), 10, 64)
@@ -180,6 +243,12 @@ func (h *Handlers) PaydownSetPayment(c *gin.Context) {
 		c.String(http.StatusNotFound, err.Error())
 		return
 	}
+	bps, err := parseAprBps(ctx, c.PostForm("apr"))
+	if err != nil {
+		c.String(http.StatusBadRequest, "%s", i18n.T(ctx, "err.invalid_amount"))
+		return
+	}
+	a.AprBps = bps
 	if v := c.PostForm("amount"); v != "" {
 		cents, err := money.Parse(ctx, v)
 		if err != nil {

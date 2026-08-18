@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/sbengtson/budget/internal/core/format"
 	"github.com/sbengtson/budget/internal/core/i18n"
 	"github.com/sbengtson/budget/internal/core/money"
 	"github.com/sbengtson/budget/internal/core/store"
@@ -51,10 +50,7 @@ func (h *Handlers) AccountsOverviewPartial(c *gin.Context) {
 }
 
 func (h *Handlers) AccountsNew(c *gin.Context) {
-	cats, _ := h.store.ListCategories(c.Request.Context(), currentUserID(c), false)
-	d := views.AccountFormData{
-		Type: string(store.TypeChecking), Categories: cats,
-	}
+	d := views.AccountFormData{Type: string(store.TypeChecking)}
 	render(c, http.StatusOK, views.AccountForm(d))
 }
 
@@ -67,22 +63,12 @@ func (h *Handlers) AccountsEdit(c *gin.Context) {
 		c.String(http.StatusNotFound, err.Error())
 		return
 	}
-	cats, _ := h.store.ListCategories(ctx, uid, false)
 	d := views.AccountFormData{
 		Editing: true, ID: a.ID, Name: a.Name, Type: string(a.Type),
-		StartingBalance:   money.Format(ctx, a.StartingBalanceCents),
-		IncludeInPaydown:  a.IncludeInPaydown,
-		PaymentCategoryID: a.PaymentCategoryID,
-		Categories:        cats,
+		StartingBalance: money.Format(ctx, a.StartingBalanceCents),
 	}
 	if a.CreditLimitCents != nil {
 		d.CreditLimit = money.Format(ctx, *a.CreditLimitCents)
-	}
-	if a.AprBps != nil {
-		d.APR = format.Decimal(ctx, float64(*a.AprBps)/100.0, 2)
-	}
-	if a.MonthlyPaymentCents != nil {
-		d.MonthlyPayment = money.Format(ctx, *a.MonthlyPaymentCents)
 	}
 	render(c, http.StatusOK, views.AccountForm(d))
 }
@@ -126,30 +112,11 @@ func (h *Handlers) upsertAccount(c *gin.Context, id int64) {
 			a.CreditLimitCents = &cents
 		}
 	}
-	if views.AddOnEnabled(ctx, "paydown") {
-		if v := c.PostForm("apr"); v != "" {
-			// Locale-aware: a French user types 19,99. Parsing with strconv alone
-			// silently dropped the rate for them, since the error is ignored here.
-			if f, err := format.ParseDecimal(ctx, v); err == nil {
-				bps := int64(f * 100)
-				a.AprBps = &bps
-			}
-		}
-		if v := c.PostForm("monthly_payment"); v != "" {
-			if cents, err := money.Parse(ctx, v); err == nil {
-				a.MonthlyPaymentCents = &cents
-			}
-		}
-		a.IncludeInPaydown = c.PostForm("include_in_paydown") == "1"
-		if v := c.PostForm("payment_category_id"); v != "" {
-			if cid, err := strconv.ParseInt(v, 10, 64); err == nil {
-				a.PaymentCategoryID = &cid
-			}
-		}
-	} else if id != 0 {
-		// The paydown add-on is off, so the form carried none of its fields.
-		// Preserve what the account already has rather than zeroing it, so
-		// re-enabling the add-on finds everything intact.
+	// The paydown add-on owns rate, payment, plan membership and payment
+	// category, and edits them on its own page — this form never carries them.
+	// UpdateAccount writes the whole row, so they have to be read back and
+	// passed through or an ordinary rename would wipe the plan.
+	if id != 0 {
 		if cur, err := h.store.GetAccount(ctx, uid, id); err == nil {
 			a.AprBps = cur.AprBps
 			a.MonthlyPaymentCents = cur.MonthlyPaymentCents
